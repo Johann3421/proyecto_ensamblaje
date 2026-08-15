@@ -1,24 +1,46 @@
-const { useState, useEffect, useMemo, useRef } = React;
+import React, { useState, useEffect, useMemo } from 'react';
+import confetti from 'canvas-confetti';
+import {
+  Check,
+  CheckCircle,
+  AlertTriangle,
+  AlertCircle,
+  Plus,
+  Edit,
+  Download,
+  Upload,
+  Loader2,
+  Play,
+  Coffee,
+  Inbox,
+  Shield,
+  Cpu,
+  RefreshCw,
+  X,
+  Columns,
+  Grid,
+  ShieldCheck,
+  FileText,
+  PlusCircle,
+  CheckSquare,
+  Image as ImageIcon,
+  PlayCircle,
+  ArrowRightCircle,
+  Search
+} from 'lucide-react';
 
-// API Base URL - dinámico según host
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-  ? 'http://127.0.0.1:8000/api' 
-  : '/api';
+const API_BASE = '/api';
 
-// Iconos utilitarios estilo Lucide
-const Icon = ({ name, className = "w-5 h-5", ...props }) => {
-  useEffect(() => {
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
-  }, [name]);
-  return <i data-lucide={name} className={className} {...props}></i>;
-};
+const DEFAULT_USERS_FALLBACK = [
+  { id: "ADM-01", name: "Ing. Carlos Mendoza (Admin QC)", role: "ADMIN", avatar: "CM" },
+  { id: "OP-101", name: "Carlos Mendoza (Estación 1)", role: "OPERATOR", avatar: "CM" },
+  { id: "OP-102", name: "Ana Quispe (Estación 2)", role: "OPERATOR", avatar: "AQ" },
+  { id: "OP-103", name: "Roberto Diaz (Estación 3)", role: "OPERATOR", avatar: "RD" },
+  { id: "OP-104", name: "Elena Ramos (Estación 4)", role: "OPERATOR", avatar: "ER" },
+  { id: "OP-105", name: "Marco Solis (Estación 5)", role: "OPERATOR", avatar: "MS" },
+];
 
-// ====================================================================
-// COMPONENTES UI GENERALES (ESTILO MICROSOFT FLUENT)
-// ====================================================================
-
+// Badge component
 const Badge = ({ children, variant = "neutral", className = "" }) => {
   const styles = {
     neutral: "bg-gray-100 text-gray-700 border-gray-200",
@@ -34,21 +56,17 @@ const Badge = ({ children, variant = "neutral", className = "" }) => {
   );
 };
 
+// Card component
 const Card = ({ children, className = "", ...props }) => (
   <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`} {...props}>
     {children}
   </div>
 );
 
-// ====================================================================
-// APLICACIÓN PRINCIPAL
-// ====================================================================
-
-function App() {
-  // Estado Global
+export default function App() {
   const [currentUser, setCurrentUser] = useState({ id: "ADM-01", name: "Ing. Carlos Mendoza", role: "ADMIN" });
-  const [activeTab, setActiveTab] = useState("matrix"); // "matrix" | "create-order" | "checklists" | "audit" | "operator"
-  const [users, setUsers] = useState([]);
+  const [activeTab, setActiveTab] = useState("matrix");
+  const [users, setUsers] = useState(DEFAULT_USERS_FALLBACK);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -56,37 +74,36 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
 
-  // Estados de Operario
   const [operatorWorkspace, setOperatorWorkspace] = useState(null);
   const [activeMediaModal, setActiveMediaModal] = useState(null);
   const [activeIssueModal, setActiveIssueModal] = useState(null);
   const [emergencyModalOpen, setEmergencyModalOpen] = useState(false);
   const [selectedUnitDetail, setSelectedUnitDetail] = useState(null);
 
-  // Notificación flotante
   const notify = (message, type = "success") => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Cargar datos iniciales
   const loadInitialData = async () => {
     try {
       setLoading(true);
       const [resUsers, resModels, resOrders] = await Promise.all([
-        fetch(`${API_BASE}/users`).then(r => r.json()),
-        fetch(`${API_BASE}/models`).then(r => r.json()),
-        fetch(`${API_BASE}/orders`).then(r => r.json()),
+        fetch(`${API_BASE}/users`).then(r => r.ok ? r.json() : DEFAULT_USERS_FALLBACK).catch(() => DEFAULT_USERS_FALLBACK),
+        fetch(`${API_BASE}/models`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
-      setUsers(resUsers);
-      setModels(resModels);
-      setOrders(resOrders);
 
-      if (resOrders.length > 0 && !selectedOrder) {
-        setSelectedOrder(resOrders[0].order_id);
+      if (Array.isArray(resUsers) && resUsers.length > 0) setUsers(resUsers);
+      if (Array.isArray(resModels)) setModels(resModels);
+      if (Array.isArray(resOrders)) {
+        setOrders(resOrders);
+        if (resOrders.length > 0 && !selectedOrder) {
+          setSelectedOrder(resOrders[0].order_id);
+        }
       }
     } catch (err) {
-      console.warn("API offline o error de red, usando fallback local:", err);
+      console.warn("API loading note:", err);
     } finally {
       setLoading(false);
     }
@@ -96,22 +113,20 @@ function App() {
     loadInitialData();
   }, []);
 
-  // Cargar datos de la matriz cuando cambia la orden seleccionada
   useEffect(() => {
     if (selectedOrder) {
       fetch(`${API_BASE}/orders/${selectedOrder}/matrix`)
-        .then(r => r.json())
-        .then(data => setMatrixData(data))
-        .catch(err => console.error("Error cargando matriz:", err));
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setMatrixData(data); })
+        .catch(err => console.error("Error matriz:", err));
     }
   }, [selectedOrder]);
 
-  // Cargar workspace de operario si el usuario es operador o está en la pestaña de operario
   const loadOperatorWorkspace = () => {
     fetch(`${API_BASE}/operator/${currentUser.id}/station`)
-      .then(r => r.json())
-      .then(data => setOperatorWorkspace(data))
-      .catch(err => console.error("Error cargando workspace de operario:", err));
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setOperatorWorkspace(data); })
+      .catch(err => console.error("Error workspace operario:", err));
   };
 
   useEffect(() => {
@@ -120,7 +135,6 @@ function App() {
     }
   }, [activeTab, currentUser]);
 
-  // Manejar cambio de usuario rápido
   const handleUserChange = (userId) => {
     const u = users.find(x => x.id === userId);
     if (u) {
@@ -135,9 +149,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      {/* ======================================================= */}
-      {/* NAVBAR SUPERIOR ESTILO MICROSOFT FLUENT */}
-      {/* ======================================================= */}
+      {/* NAVBAR SUPERIOR */}
       <header className="bg-[#0078d4] text-white shadow-md flex-shrink-0 z-30">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -153,7 +165,6 @@ function App() {
             </h1>
           </div>
 
-          {/* Navegación según Rol */}
           <div className="hidden md:flex items-center space-x-1">
             {currentUser.role === "ADMIN" ? (
               <>
@@ -163,7 +174,7 @@ function App() {
                     activeTab === "matrix" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
                   }`}
                 >
-                  <Icon name="grid" className="w-4 h-4" />
+                  <Grid className="w-4 h-4" />
                   <span>Monitoreo Pipeline</span>
                 </button>
                 <button
@@ -172,7 +183,7 @@ function App() {
                     activeTab === "create-order" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
                   }`}
                 >
-                  <Icon name="plus-circle" className="w-4 h-4" />
+                  <PlusCircle className="w-4 h-4" />
                   <span>Nueva Orden (Lote)</span>
                 </button>
                 <button
@@ -181,7 +192,7 @@ function App() {
                     activeTab === "checklists" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
                   }`}
                 >
-                  <Icon name="file-text" className="w-4 h-4" />
+                  <FileText className="w-4 h-4" />
                   <span>Modelos & Checklists</span>
                 </button>
                 <button
@@ -190,7 +201,7 @@ function App() {
                     activeTab === "audit" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
                   }`}
                 >
-                  <Icon name="shield-check" className="w-4 h-4" />
+                  <ShieldCheck className="w-4 h-4" />
                   <span>Auditoría Forense</span>
                 </button>
               </>
@@ -199,13 +210,12 @@ function App() {
                 onClick={() => setActiveTab("operator")}
                 className="px-3 py-1.5 bg-white/20 rounded-md text-xs font-semibold text-white flex items-center gap-1.5"
               >
-                <Icon name="check-square" className="w-4 h-4" />
+                <CheckSquare className="w-4 h-4" />
                 <span>Mi Estación de Trabajo</span>
               </button>
             )}
           </div>
 
-          {/* Selector de Usuario / Rol Rápido */}
           <div className="flex items-center space-x-3">
             <div className="flex items-center gap-2 bg-blue-900/40 px-3 py-1 rounded-lg border border-blue-400/30 text-xs">
               <span className="text-blue-200 hidden sm:inline">Sesión:</span>
@@ -214,7 +224,7 @@ function App() {
                 onChange={(e) => handleUserChange(e.target.value)}
                 className="bg-transparent text-white font-medium focus:outline-none cursor-pointer text-xs"
               >
-                {users.map(u => (
+                {Array.isArray(users) && users.map(u => (
                   <option key={u.id} value={u.id} className="text-gray-900 bg-white">
                     {u.role === "ADMIN" ? "👑 Admin: " : "🔧 Op: "}{u.name}
                   </option>
@@ -222,7 +232,6 @@ function App() {
               </select>
             </div>
 
-            {/* Avatar */}
             <div className="w-8 h-8 rounded-full bg-white text-[#0078d4] font-bold text-xs flex items-center justify-center shadow">
               {currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}
             </div>
@@ -237,14 +246,12 @@ function App() {
             ? "bg-emerald-600 text-white border-emerald-700" 
             : "bg-rose-600 text-white border-rose-700"
         }`}>
-          <Icon name={notification.type === "success" ? "check-circle" : "alert-triangle"} className="w-5 h-5" />
+          {notification.type === "success" ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
           <span>{notification.message}</span>
         </div>
       )}
 
-      {/* ======================================================= */}
-      {/* CONTENIDO PRINCIPAL POR VISTA */}
-      {/* ======================================================= */}
+      {/* CONTENIDO PRINCIPAL */}
       <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#f3f2f1]">
         <div className="max-w-7xl mx-auto space-y-6">
           {activeTab === "matrix" && (
@@ -297,19 +304,11 @@ function App() {
         </div>
       </main>
 
-      {/* ======================================================= */}
-      {/* MODALES DEL SISTEMA */}
-      {/* ======================================================= */}
-
-      {/* Modal Visor Multimedia HD */}
+      {/* MODALES */}
       {activeMediaModal && (
-        <MediaViewerModal
-          item={activeMediaModal}
-          onClose={() => setActiveMediaModal(null)}
-        />
+        <MediaViewerModal item={activeMediaModal} onClose={() => setActiveMediaModal(null)} />
       )}
 
-      {/* Modal Reporte de Fallas / Incidencias */}
       {activeIssueModal && (
         <IssueReportModal
           data={activeIssueModal}
@@ -325,7 +324,6 @@ function App() {
         />
       )}
 
-      {/* Modal Reasignación de Emergencia */}
       {emergencyModalOpen && matrixData && (
         <EmergencyReassignModal
           order={matrixData.order}
@@ -340,7 +338,6 @@ function App() {
         />
       )}
 
-      {/* Modal Detalle de PC Individual */}
       {selectedUnitDetail && matrixData && (
         <UnitDetailModal
           unit={selectedUnitDetail}
@@ -353,23 +350,18 @@ function App() {
   );
 }
 
-// ====================================================================
-// VISTA 1: MATRIZ DE PIPELINE EN TIEMPO REAL (ADMIN)
-// ====================================================================
-
+// 1. MATRIZ DE PIPELINE
 function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh }) {
   if (!matrixData || !matrixData.order) {
     return (
       <Card className="p-8 text-center">
-        <Icon name="loader" className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-3" />
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-3" />
         <p className="text-gray-600 font-medium">Cargando matriz de producción en tiempo real...</p>
       </Card>
     );
   }
 
-  const { order, stations, units, logs_count, issues } = matrixData;
-
-  // Estadísticas calculadas en tiempo real
+  const { order, stations = [], units = [], logs_count = 0, issues = [] } = matrixData;
   const total = units.length;
   const passed = units.filter(u => u.overall_status === "PASSED").length;
   const failed = units.filter(u => u.overall_status === "FAILED").length;
@@ -379,11 +371,10 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
 
   return (
     <div className="space-y-6 fade-in">
-      {/* Barra de Control de Orden & Selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-blue-50 text-[#0078d4] flex items-center justify-center font-bold">
-            <Icon name="cpu" className="w-6 h-6" />
+            <Cpu className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -397,7 +388,7 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
 
         <div className="flex items-center gap-2 flex-wrap">
           <select
-            value={selectedOrder}
+            value={selectedOrder || ""}
             onChange={(e) => setSelectedOrder(e.target.value)}
             className="text-xs border border-gray-300 rounded px-2.5 py-1.5 bg-gray-50 font-medium text-gray-700"
           >
@@ -412,7 +403,7 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
             onClick={onOpenEmergency}
             className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded font-semibold flex items-center gap-1.5 transition"
           >
-            <Icon name="alert-circle" className="w-4 h-4 text-amber-600" />
+            <AlertCircle className="w-4 h-4 text-amber-600" />
             <span>Reasignación de Emergencia</span>
           </button>
 
@@ -420,13 +411,12 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
             onClick={onRefresh}
             className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium flex items-center gap-1 transition"
           >
-            <Icon name="refresh-cw" className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5" />
             <span>Actualizar</span>
           </button>
         </div>
       </div>
 
-      {/* Tarjetas KPI de Estado */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Card className="p-3.5 border-l-4 border-l-blue-600">
           <p className="text-xs font-semibold text-gray-500 uppercase">Total Lote</p>
@@ -469,12 +459,11 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
         </Card>
       </div>
 
-      {/* Matriz de Pipeline en Cadena (PC x Estación) */}
       <Card className="p-5 overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-200 mb-4 gap-2">
           <div>
             <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-              <Icon name="columns" className="w-4 h-4 text-blue-600" />
+              <Columns className="w-4 h-4 text-blue-600" />
               <span>Matriz de Trazabilidad en Cadena (Pipeline Matrix)</span>
             </h3>
             <p className="text-xs text-gray-500">Visualice la posición exacta de cada una de las {total} PCs a lo largo de las estaciones</p>
@@ -500,7 +489,6 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
           </div>
         </div>
 
-        {/* Tabla Grid */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -536,9 +524,8 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
                       {unit.serial_number || `KEN-2026-${unit.unit_number.toString().padStart(3, '0')}`}
                     </td>
 
-                    {/* Celdas por estación */}
                     {stations.map(st => {
-                      let cellState = "queue"; // "passed" | "active" | "failed" | "queue"
+                      let cellState = "queue";
                       if (isUnitFailed && unit.current_station === st.station_number) {
                         cellState = "failed";
                       } else if (unit.current_station > st.station_number) {
@@ -551,7 +538,7 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
                         <td key={st.station_number} className="py-2 px-3 border-l border-gray-200">
                           {cellState === "passed" && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                              <Icon name="check" className="w-3 h-3 text-emerald-600" />
+                              <Check className="w-3 h-3 text-emerald-600" />
                               <span>OK</span>
                             </span>
                           )}
@@ -563,27 +550,22 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
                           )}
                           {cellState === "failed" && (
                             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
-                              <Icon name="x" className="w-3 h-3 text-rose-600" />
+                              <X className="w-3 h-3 text-rose-600" />
                               <span>Falla</span>
                             </span>
                           )}
                           {cellState === "queue" && (
-                            <span className="text-[11px] text-gray-400 font-mono">
-                              •••
-                            </span>
+                            <span className="text-[11px] text-gray-400 font-mono">•••</span>
                           )}
                         </td>
                       );
                     })}
 
-                    {/* Estado Global */}
                     <td className="py-2 px-3 border-l border-gray-200 text-center">
                       {isUnitFinished && <Badge variant="success">EMPACADO</Badge>}
                       {isUnitFailed && <Badge variant="danger">BLOQUEADO</Badge>}
                       {!isUnitFinished && !isUnitFailed && (
-                        <Badge variant="warning">
-                          Estación {unit.current_station}
-                        </Badge>
+                        <Badge variant="warning">Estación {unit.current_station}</Badge>
                       )}
                     </td>
                   </tr>
@@ -597,10 +579,7 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
   );
 }
 
-// ====================================================================
-// VISTA 2: CREADOR DE ÓRDENES Y PARTICIÓN INTELIGENTE (ADMIN)
-// ====================================================================
-
+// 2. CREADOR DE ORDEN
 function CreateOrderView({ models, users, onSuccess }) {
   const [modelName, setModelName] = useState(models[0]?.name || "PROWORK");
   const [orderId, setOrderId] = useState(`ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -611,15 +590,13 @@ function CreateOrderView({ models, users, onSuccess }) {
   const [modelSteps, setModelSteps] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Cargar pasos del modelo para calcular la partición
   useEffect(() => {
     fetch(`${API_BASE}/models/${modelName}/checklist`)
-      .then(r => r.json())
-      .then(data => setModelSteps(data))
-      .catch(err => console.error("Error cargando pasos:", err));
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setModelSteps(data); })
+      .catch(err => console.error("Error pasos:", err));
   }, [modelName]);
 
-  // Inicializar lista de operarios
   useEffect(() => {
     const initial = [];
     for (let i = 0; i < stationCount; i++) {
@@ -628,13 +605,13 @@ function CreateOrderView({ models, users, onSuccess }) {
         station_number: i + 1,
         user_id: op.id,
         user_name: op.name,
-        station_name: getStationDefaultName(i + 1, stationCount)
+        station_name: getStationDefaultName(i + 1)
       });
     }
     setSelectedOperators(initial);
   }, [stationCount, users]);
 
-  function getStationDefaultName(idx, total) {
+  function getStationDefaultName(idx) {
     const names = [
       "Chasis, Montaje y Placas",
       "Protecciones, Discos y GPU",
@@ -645,7 +622,6 @@ function CreateOrderView({ models, users, onSuccess }) {
     return names[idx - 1] || `Estación ${idx} de Ensamblaje`;
   }
 
-  // Cálculo de división inteligente
   const partitionPreview = useMemo(() => {
     const totalSteps = modelSteps.length || 52;
     const baseCount = Math.floor(totalSteps / stationCount);
@@ -706,7 +682,7 @@ function CreateOrderView({ models, users, onSuccess }) {
     <div className="max-w-4xl mx-auto space-y-6 fade-in">
       <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
         <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
-          <Icon name="plus-circle" className="w-5 h-5 text-blue-600" />
+          <PlusCircle className="w-5 h-5 text-blue-600" />
           <span>Lanzar Nueva Orden de Producción y Control de Calidad</span>
         </h2>
         <p className="text-xs text-gray-500 mb-6">
@@ -714,7 +690,6 @@ function CreateOrderView({ models, users, onSuccess }) {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* 1. Datos del Lote */}
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">1. Parámetros del Lote</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -768,7 +743,6 @@ function CreateOrderView({ models, users, onSuccess }) {
             </div>
           </div>
 
-          {/* 2. Asignación de Estaciones */}
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">2. Asignación de Operarios por Estación</h3>
@@ -842,7 +816,6 @@ function CreateOrderView({ models, users, onSuccess }) {
             </div>
           </div>
 
-          {/* 3. Visualizador de la División Inteligente */}
           <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-200 space-y-2">
             <div className="flex justify-between items-center text-xs">
               <span className="font-bold text-blue-900">Distribución de Carga del Checklist ({modelSteps.length} Pasos Totales)</span>
@@ -865,7 +838,6 @@ function CreateOrderView({ models, users, onSuccess }) {
             </div>
           </div>
 
-          {/* Botones de acción */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
             <button
               type="submit"
@@ -874,12 +846,12 @@ function CreateOrderView({ models, users, onSuccess }) {
             >
               {submitting ? (
                 <>
-                  <Icon name="loader" className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Creando Orden...</span>
                 </>
               ) : (
                 <>
-                  <Icon name="play" className="w-4 h-4 fill-white" />
+                  <Play className="w-4 h-4 fill-white" />
                   <span>Iniciar Cadena de Producción</span>
                 </>
               )}
@@ -891,10 +863,7 @@ function CreateOrderView({ models, users, onSuccess }) {
   );
 }
 
-// ====================================================================
-// VISTA 3: EDITOR DE CHECKLISTS Y GESTOR MULTIMEDIA (ADMIN)
-// ====================================================================
-
+// 3. EDITOR DE CHECKLISTS
 function ChecklistEditorView({ models, notify, onRefreshModels }) {
   const [selectedModel, setSelectedModel] = useState(models[0]?.name || "PROWORK");
   const [steps, setSteps] = useState([]);
@@ -905,9 +874,9 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   const loadSteps = () => {
     setLoading(true);
     fetch(`${API_BASE}/models/${selectedModel}/checklist`)
-      .then(r => r.json())
-      .then(data => setSteps(data))
-      .catch(err => console.error("Error cargando pasos:", err))
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setSteps(data); })
+      .catch(err => console.error("Error pasos:", err))
       .finally(() => setLoading(false));
   };
 
@@ -915,13 +884,11 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
     loadSteps();
   }, [selectedModel]);
 
-  // Exportar a Excel
   const handleExportExcel = () => {
     window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank");
     notify("Descargando archivo Excel oficial...");
   };
 
-  // Importar desde Excel
   const handleImportExcel = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -945,13 +912,12 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   };
 
   const filteredSteps = steps.filter(s =>
-    s.operation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.qc_criteria.toLowerCase().includes(searchTerm.toLowerCase())
+    (s.operation || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.qc_criteria || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6 fade-in">
-      {/* Barra superior de herramientas */}
       <Card className="p-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -973,7 +939,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
               onClick={() => setEditingItem({ model_name: selectedModel, step_number: steps.length + 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
               className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 shadow transition"
             >
-              <Icon name="plus" className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
               <span>Nuevo Paso</span>
             </button>
 
@@ -981,12 +947,12 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
               onClick={handleExportExcel}
               className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 shadow transition"
             >
-              <Icon name="download" className="w-4 h-4" />
+              <Download className="w-4 h-4" />
               <span>Exportar Excel (.xlsx)</span>
             </button>
 
             <label className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 cursor-pointer transition">
-              <Icon name="upload" className="w-4 h-4" />
+              <Upload className="w-4 h-4" />
               <span>Importar Excel</span>
               <input type="file" accept=".xlsx, .xls" onChange={handleImportExcel} className="hidden" />
             </label>
@@ -994,9 +960,8 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
         </div>
       </Card>
 
-      {/* Buscador */}
       <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
-        <Icon name="search" className="w-4 h-4 text-gray-400" />
+        <Search className="w-4 h-4 text-gray-400" />
         <input
           type="text"
           placeholder="Buscar por operación, descripción o criterio de calidad..."
@@ -1006,7 +971,6 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
         />
       </div>
 
-      {/* Tabla de Pasos */}
       <Card className="p-4 overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
@@ -1028,13 +992,11 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
                   {st.operation}
                   {st.description && <p className="text-[11px] text-gray-500 font-normal mt-0.5">{st.description}</p>}
                 </td>
-                <td className="py-2.5 px-3 text-gray-700">
-                  {st.qc_criteria}
-                </td>
+                <td className="py-2.5 px-3 text-gray-700">{st.qc_criteria}</td>
                 <td className="py-2.5 px-3 text-center">
                   {st.media_url ? (
                     <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">
-                      <Icon name="image" className="w-3 h-3" />
+                      <ImageIcon className="w-3 h-3" />
                       <span>{st.media_type === "gif" ? "GIF Animado" : "Foto HD"}</span>
                     </span>
                   ) : (
@@ -1045,9 +1007,9 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
                   <button
                     onClick={() => setEditingItem(st)}
                     className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
-                    title="Editar paso y multimedia"
+                    title="Editar paso"
                   >
-                    <Icon name="edit" className="w-4 h-4" />
+                    <Edit className="w-4 h-4" />
                   </button>
                 </td>
               </tr>
@@ -1056,7 +1018,6 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
         </table>
       </Card>
 
-      {/* Modal Editor / Multimedia */}
       {editingItem && (
         <ChecklistStepModal
           item={editingItem}
@@ -1077,15 +1038,12 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   );
 }
 
-// ====================================================================
-// VISTA 4: ESPACIO DE TRABAJO DEL OPERARIO (TOUCH-FIRST MOBILE/TABLET)
-// ====================================================================
-
+// 4. ESPACIO DE TRABAJO DEL OPERARIO
 function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
     return (
       <Card className="p-8 text-center max-w-lg mx-auto">
-        <Icon name="coffee" className="w-12 h-12 text-amber-500 mx-auto mb-3" />
+        <Coffee className="w-12 h-12 text-amber-500 mx-auto mb-3" />
         <h3 className="text-base font-bold text-gray-900">Sin Tareas Asignadas en este Momento</h3>
         <p className="text-xs text-gray-500 mt-1">El administrador aún no ha lanzado un lote o no estás asignado a una estación activa.</p>
         <button onClick={onRefresh} className="mt-4 text-xs bg-blue-600 text-white px-4 py-2 rounded font-semibold">
@@ -1095,7 +1053,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
     );
   }
 
-  const { assignment, order, station_steps, active_unit, completed_step_numbers, queue_units, completed_units } = workspace;
+  const { assignment, order, station_steps = [], active_unit, completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
   const [completedSteps, setCompletedSteps] = useState(completed_step_numbers || []);
   const [submittingStep, setSubmittingStep] = useState(null);
   const [finishingUnit, setFinishingUnit] = useState(false);
@@ -1104,14 +1062,12 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
     setCompletedSteps(completed_step_numbers || []);
   }, [completed_step_numbers]);
 
-  // Total de pasos que corresponden a esta estación
   const totalStationSteps = station_steps.length;
   const currentStationApprovedCount = completedSteps.length;
   const isStationComplete = totalStationSteps > 0 && currentStationApprovedCount >= totalStationSteps;
 
-  // Registrar un paso de control
   const handleToggleStep = async (step) => {
-    if (completedSteps.includes(step.step_number)) return; // Ya está validado
+    if (completedSteps.includes(step.step_number)) return;
 
     try {
       setSubmittingStep(step.step_number);
@@ -1137,9 +1093,8 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
       setCompletedSteps(prev => [...prev, step.step_number]);
       notify(`Paso #${step.step_number} verificado y auditado`);
 
-      // Si fue el último paso, lanzar confetti suave
-      if (currentStationApprovedCount + 1 >= totalStationSteps && window.confetti) {
-        window.confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
+      if (currentStationApprovedCount + 1 >= totalStationSteps && confetti) {
+        confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
       }
     } catch (err) {
       alert("Error: " + err.message);
@@ -1148,7 +1103,6 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
     }
   };
 
-  // Finalizar estación y enviar a la siguiente en la cadena
   const handleFinishStation = async () => {
     try {
       setFinishingUnit(true);
@@ -1177,7 +1131,6 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 fade-in pb-12">
-      {/* Banner de Estación del Operario */}
       <div className="bg-white p-4 rounded-lg border-l-4 border-l-[#0078d4] border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -1199,7 +1152,6 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
         </div>
       </div>
 
-      {/* PC ACTUAL EN REVISIÓN */}
       {active_unit ? (
         <Card className="p-5 border-2 border-blue-400 shadow-md">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-200 gap-3">
@@ -1220,13 +1172,12 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                 onClick={() => onOpenIssue(active_unit, station_steps[0])}
                 className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition"
               >
-                <Icon name="alert-triangle" className="w-4 h-4 text-rose-600" />
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
                 <span>Reportar Falla</span>
               </button>
             </div>
           </div>
 
-          {/* Barra de Progreso de la Estación */}
           <div className="py-4 space-y-1.5">
             <div className="flex justify-between text-xs font-bold">
               <span className="text-gray-700">Progreso en tu Estación</span>
@@ -1240,7 +1191,6 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             </div>
           </div>
 
-          {/* LISTA DE PASOS INTERACTIVOS (TOUCH-FRIENDLY) */}
           <div className="space-y-3 pt-2">
             {station_steps.map((st) => {
               const isDone = completedSteps.includes(st.step_number);
@@ -1281,18 +1231,17 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                             onClick={() => onOpenMedia(st)}
                             className="text-xs text-blue-700 hover:text-blue-900 bg-blue-100/70 hover:bg-blue-100 px-2.5 py-1 rounded font-semibold flex items-center gap-1 transition"
                           >
-                            <Icon name="play-circle" className="w-3.5 h-3.5" />
+                            <PlayCircle className="w-3.5 h-3.5" />
                             <span>Ver Guía (GIF/Foto)</span>
                           </button>
                         )}
                       </div>
                     </div>
 
-                    {/* BOTÓN TOUCH GIGANTE PARA CONFIRMAR */}
                     <div className="flex-shrink-0 pt-2 sm:pt-0">
                       {isDone ? (
                         <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-100 px-4 py-2.5 rounded-lg font-bold text-xs">
-                          <Icon name="check-circle" className="w-5 h-5 text-emerald-600" />
+                          <CheckCircle className="w-5 h-5 text-emerald-600" />
                           <span>VALIDADO OK</span>
                         </div>
                       ) : (
@@ -1302,10 +1251,10 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                           className="w-full sm:w-auto min-h-[48px] px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow flex items-center justify-center gap-2 transition"
                         >
                           {submittingStep === st.step_number ? (
-                            <Icon name="loader" className="w-4 h-4 animate-spin" />
+                            <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <>
-                              <Icon name="check" className="w-4 h-4" />
+                              <Check className="w-4 h-4" />
                               <span>Marcar Conforme</span>
                             </>
                           )}
@@ -1318,7 +1267,6 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             })}
           </div>
 
-          {/* BOTÓN DE AVANCE EN CADENA */}
           <div className="mt-6 pt-4 border-t border-gray-200">
             {isStationComplete ? (
               <button
@@ -1328,12 +1276,12 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
               >
                 {finishingUnit ? (
                   <>
-                    <Icon name="loader" className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Despachando PC...</span>
                   </>
                 ) : (
                   <>
-                    <Icon name="arrow-right-circle" className="w-6 h-6" />
+                    <ArrowRightCircle className="w-6 h-6" />
                     <span>
                       FINALIZAR MI PARTE Y ENVIAR PC #{active_unit.unit_number} A SIGUIENTE ESTACIÓN
                     </span>
@@ -1349,18 +1297,16 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
         </Card>
       ) : (
         <Card className="p-8 text-center">
-          <Icon name="inbox" className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+          <Inbox className="w-12 h-12 text-gray-400 mx-auto mb-2" />
           <h3 className="text-sm font-bold text-gray-700">No hay computadoras pendientes en tu estación</h3>
           <p className="text-xs text-gray-500">Tan pronto la estación anterior finalice una PC, aparecerá automáticamente aquí.</p>
         </Card>
       )}
 
-      {/* COLA DE ENTRADA Y COMPUTADORAS EN ESPERA */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Cola Próximas */}
         <Card className="p-4">
           <h4 className="text-xs font-bold text-gray-700 uppercase mb-3 flex items-center gap-1.5">
-            <Icon name="clock" className="w-4 h-4 text-blue-600" />
+            <RefreshCw className="w-4 h-4 text-blue-600" />
             <span>Cola de Entrada ({queue_units.length} PCs en espera)</span>
           </h4>
           {queue_units.length > 0 ? (
@@ -1378,10 +1324,9 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
           )}
         </Card>
 
-        {/* Historial Despachadas */}
         <Card className="p-4">
           <h4 className="text-xs font-bold text-gray-700 uppercase mb-3 flex items-center gap-1.5">
-            <Icon name="check-check" className="w-4 h-4 text-emerald-600" />
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
             <span>Despachadas en tu Turno ({completed_units.length})</span>
           </h4>
           {completed_units.length > 0 ? (
@@ -1403,10 +1348,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   );
 }
 
-// ====================================================================
-// VISTA 5: AUDITORÍA FORENSE INMUTABLE (ADMIN)
-// ====================================================================
-
+// 5. AUDITORÍA FORENSE
 function AuditLogsView({ selectedOrder, orders }) {
   const [logs, setLogs] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(selectedOrder || orders[0]?.order_id);
@@ -1417,15 +1359,15 @@ function AuditLogsView({ selectedOrder, orders }) {
     if (activeOrderId) {
       setLoading(true);
       fetch(`${API_BASE}/orders/${activeOrderId}/logs`)
-        .then(r => r.json())
-        .then(data => setLogs(data))
-        .catch(err => console.error("Error cargando logs:", err))
+        .then(r => r.ok ? r.json() : [])
+        .then(data => { if (Array.isArray(data)) setLogs(data); })
+        .catch(err => console.error("Error logs:", err))
         .finally(() => setLoading(false));
     }
   }, [activeOrderId]);
 
   const filteredLogs = logs.filter(l =>
-    !filterUser || l.user_name.toLowerCase().includes(filterUser.toLowerCase()) || l.user_id.toLowerCase().includes(filterUser.toLowerCase())
+    !filterUser || (l.user_name || "").toLowerCase().includes(filterUser.toLowerCase()) || (l.user_id || "").toLowerCase().includes(filterUser.toLowerCase())
   );
 
   return (
@@ -1434,7 +1376,7 @@ function AuditLogsView({ selectedOrder, orders }) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-              <Icon name="shield" className="w-4 h-4 text-blue-600" />
+              <Shield className="w-4 h-4 text-blue-600" />
               <span>Registro de Auditoría e Integridad Forense</span>
             </h3>
             <p className="text-xs text-gray-500">Trazabilidad inmutable de cada 'check' realizado con fecha, hora exacta y operador responsable.</p>
@@ -1442,7 +1384,7 @@ function AuditLogsView({ selectedOrder, orders }) {
 
           <div className="flex items-center gap-3">
             <select
-              value={activeOrderId}
+              value={activeOrderId || ""}
               onChange={(e) => setActiveOrderId(e.target.value)}
               className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-gray-50 font-semibold"
             >
@@ -1504,11 +1446,7 @@ function AuditLogsView({ selectedOrder, orders }) {
   );
 }
 
-// ====================================================================
-// MODALES COMPLEMENTARIOS
-// ====================================================================
-
-// 1. Visor Multimedia HD
+// MODAL VISOR MULTIMEDIA
 function MediaViewerModal({ item, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
@@ -1519,7 +1457,7 @@ function MediaViewerModal({ item, onClose }) {
             <h3 className="text-sm font-bold">Paso #{item.step_number}: {item.operation}</h3>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
-            <Icon name="x" className="w-5 h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -1533,7 +1471,7 @@ function MediaViewerModal({ item, onClose }) {
               />
             ) : (
               <div className="text-gray-400 text-center p-8">
-                <Icon name="image" className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p className="text-xs">No hay imagen o GIF asignado para este paso</p>
               </div>
             )}
@@ -1556,7 +1494,7 @@ function MediaViewerModal({ item, onClose }) {
   );
 }
 
-// 2. Reporte de Fallas / Incidencias
+// MODAL REPORTE DE FALLAS
 function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, onSuccess }) {
   const { unit, step } = data;
   const [issueTitle, setIssueTitle] = useState("");
@@ -1596,14 +1534,12 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
     <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
       <div className="bg-white rounded-xl max-w-md w-full overflow-hidden shadow-2xl">
         <div className="bg-rose-600 text-white p-4 flex justify-between items-center">
-          <div>
-            <h3 className="text-sm font-bold flex items-center gap-1.5">
-              <Icon name="alert-triangle" className="w-4 h-4" />
-              <span>Reportar Falla en PC #{unit.unit_number}</span>
-            </h3>
-          </div>
+          <h3 className="text-sm font-bold flex items-center gap-1.5">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Reportar Falla en PC #{unit.unit_number}</span>
+          </h3>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
-            <Icon name="x" className="w-5 h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -1668,7 +1604,7 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
   );
 }
 
-// 3. Reasignación de Emergencia
+// MODAL REASIGNACIÓN DE EMERGENCIA
 function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess }) {
   const [stationNumber, setStationNumber] = useState(stations[0]?.station_number || 1);
   const [newUserId, setNewUserId] = useState(operators[0]?.id || "");
@@ -1709,11 +1645,11 @@ function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess
       <div className="bg-white rounded-xl max-w-lg w-full overflow-hidden shadow-2xl">
         <div className="bg-amber-600 text-white p-4 flex justify-between items-center">
           <h3 className="text-sm font-bold flex items-center gap-2">
-            <Icon name="alert-circle" className="w-5 h-5" />
+            <AlertCircle className="w-5 h-5" />
             <span>Reasignación de Emergencia de Estación</span>
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
-            <Icon name="x" className="w-5 h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -1788,7 +1724,7 @@ function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess
   );
 }
 
-// 4. Modal de Edición de Paso de Checklist y Multimedia
+// MODAL EDICIÓN PASO CHECKLIST
 function ChecklistStepModal({ item, onClose, onSave }) {
   const [formData, setFormData] = useState({ ...item });
   const [uploading, setUploading] = useState(false);
@@ -1828,7 +1764,7 @@ function ChecklistStepModal({ item, onClose, onSave }) {
             {formData.id ? `Editar Paso #${formData.step_number}` : "Nuevo Paso de Control"}
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
-            <Icon name="x" className="w-5 h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -1877,7 +1813,6 @@ function ChecklistStepModal({ item, onClose, onSave }) {
             ></textarea>
           </div>
 
-          {/* Subir GIF / Imagen */}
           <div className="p-3 bg-gray-50 rounded border border-gray-200 space-y-2">
             <label className="block text-xs font-bold text-gray-700">Recurso Multimedia Instructivo (GIF o Imagen HD)</label>
             <div className="flex items-center gap-3">
@@ -1922,7 +1857,7 @@ function ChecklistStepModal({ item, onClose, onSave }) {
   );
 }
 
-// 5. Detalle de PC
+// MODAL DETALLE PC
 function UnitDetailModal({ unit, order, stations, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
@@ -1930,7 +1865,7 @@ function UnitDetailModal({ unit, order, stations, onClose }) {
         <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
           <h3 className="text-sm font-bold">Ficha de Trazabilidad: PC #{unit.unit_number}</h3>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
-            <Icon name="x" className="w-5 h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -1967,7 +1902,3 @@ function UnitDetailModal({ unit, order, stations, onClose }) {
     </div>
   );
 }
-
-// Renderizar la aplicación React
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);

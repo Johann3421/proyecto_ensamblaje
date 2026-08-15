@@ -23,7 +23,7 @@ services:
       - qc_network_15
 
   # Aplicación QC KENYA (Frontend React Compilado + Backend FastAPI)
-  app:
+  frontend:
     build:
       context: .
       dockerfile: Dockerfile

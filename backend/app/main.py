@@ -7,6 +7,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, SessionLocal, get_db
@@ -52,6 +53,30 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "upl
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+def auto_migrate_schema():
+    """Migración automática de columnas para PostgreSQL / SQLite sin romper datos existentes"""
+    try:
+        with engine.begin() as conn:
+            migrations = [
+                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS email VARCHAR(150);",
+                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);",
+                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS avatar VARCHAR(255);",
+                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
+            ]
+            for sql in migrations:
+                try:
+                    conn.execute(text(sql))
+                except Exception:
+                    try:
+                        # Fallback sintaxis sin IF NOT EXISTS (ej. SQLite)
+                        sql_fallback = sql.replace(" IF NOT EXISTS", "")
+                        conn.execute(text(sql_fallback))
+                    except Exception:
+                        pass
+        print("[DB Migration] Esquema de base de datos verificado y actualizado.")
+    except Exception as e:
+        print(f"[DB Migration Warning] {e}")
+
 # Inicialización de base de datos en startup
 @app.on_event("startup")
 def startup_db_init():
@@ -60,6 +85,7 @@ def startup_db_init():
         db_session = None
         try:
             Base.metadata.create_all(bind=engine)
+            auto_migrate_schema()
             db_session = SessionLocal()
             seed_database(db_session)
             print(f"[DB] Base de datos y orden inicial sembrada correctamente.")

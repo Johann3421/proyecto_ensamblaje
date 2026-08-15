@@ -12,16 +12,6 @@ import {
 
 const API_BASE = '/api';
 
-const DEFAULT_USERS_FALLBACK = [
-  { id: "ADM-01", name: "Ing. Carlos Mendoza (Admin QC)", role: "ADMIN", avatar: "CM" },
-  { id: "OP-101", name: "Carlos Mendoza (Estación 1)", role: "OPERATOR", avatar: "CM" },
-  { id: "OP-102", name: "Ana Quispe (Estación 2)", role: "OPERATOR", avatar: "AQ" },
-  { id: "OP-103", name: "Roberto Diaz (Estación 3)", role: "OPERATOR", avatar: "RD" },
-  { id: "OP-104", name: "Elena Ramos (Estación 4)", role: "OPERATOR", avatar: "ER" },
-  { id: "OP-105", name: "Marco Solis (Estación 5)", role: "OPERATOR", avatar: "MS" },
-  { id: "OP-106", name: "Jorge Valdivia (Suplente/Apoyo)", role: "OPERATOR", avatar: "JV" },
-];
-
 const Badge = ({ children, variant = "neutral", className = "" }) => {
   const styles = {
     neutral: "bg-gray-100 text-gray-700 border-gray-200",
@@ -132,7 +122,7 @@ export default function App() {
   const loadInitialData = async () => {
     try {
       const [resUsers, resModels, resOrders] = await Promise.all([
-        fetch(`${API_BASE}/users`).then(r => r.ok ? r.json() : DEFAULT_USERS_FALLBACK).catch(() => DEFAULT_USERS_FALLBACK),
+        fetch(`${API_BASE}/users`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/models`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);

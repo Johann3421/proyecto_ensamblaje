@@ -350,6 +350,114 @@ export default function LoginPage({ onLogin }) {
                 </>
               )}
             </button>
+            {/* Quick Access Account Selector */}
+            {mode === 'login' && (
+              <div className="mt-2 pt-3 border-t border-white/10">
+                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>Acceso Rápido por Estación:</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('admin@sekaitech.com.pe');
+                      setPassword('admin123');
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 border border-blue-500/20 text-left text-xs text-blue-200 transition"
+                  >
+                    <span>👑</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white text-[11px]">Admin QC</div>
+                      <div className="text-[9px] text-blue-300 truncate">admin@sekaitech...</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('estacion1@sekaitech.com.pe');
+                      setPassword('kenya123');
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
+                  >
+                    <span>🔧</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white text-[11px]">Estación 1 (Carlos)</div>
+                      <div className="text-[9px] text-slate-400 truncate">estacion1@sekaitech...</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('estacion2@sekaitech.com.pe');
+                      setPassword('kenya123');
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
+                  >
+                    <span>🔧</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white text-[11px]">Estación 2 (Ana)</div>
+                      <div className="text-[9px] text-slate-400 truncate">estacion2@sekaitech...</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('estacion3@sekaitech.com.pe');
+                      setPassword('kenya123');
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
+                  >
+                    <span>🔧</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white text-[11px]">Estación 3 (Roberto)</div>
+                      <div className="text-[9px] text-slate-400 truncate">estacion3@sekaitech...</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('estacion4@sekaitech.com.pe');
+                      setPassword('kenya123');
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
+                  >
+                    <span>🔧</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white text-[11px]">Estación 4 (Elena)</div>
+                      <div className="text-[9px] text-slate-400 truncate">estacion4@sekaitech...</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('estacion5@sekaitech.com.pe');
+                      setPassword('kenya123');
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
+                  >
+                    <span>🔧</span>
+                    <div className="truncate">
+                      <div className="font-bold text-white text-[11px]">Estación 5 (Marco)</div>
+                      <div className="text-[9px] text-slate-400 truncate">estacion5@sekaitech...</div>
+                    </div>
+                  </button>
+                </div>
+                <div className="mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('apoyo@sekaitech.com.pe');
+                      setPassword('kenya123');
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-xs text-amber-200 transition"
+                  >
+                    <span>⚡</span>
+                    <span className="font-semibold text-[11px]">Suplente / Apoyo (Jorge Valdivia)</span>
+                    <span className="text-[10px] text-amber-300 opacity-70">apoyo@sekaitech...</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </form>
 
           {/* Footer */}
@@ -357,9 +465,9 @@ export default function LoginPage({ onLogin }) {
             <p>
               {mode === 'login' ? (
                 <>
-                  ¿Primera vez? {' '}
+                  ¿Primera vez o cambio de contraseña? {' '}
                   <button onClick={() => switchMode('register')} className="login-link">
-                    Registra tu cuenta
+                    Registrar / Vincular
                   </button>
                 </>
               ) : (

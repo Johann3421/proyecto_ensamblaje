@@ -1,14 +1,64 @@
 from sqlalchemy.orm import Session
 from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog
+from .auth import hash_password
 
 DEFAULT_USERS = [
-    {"id": "ADM-01", "name": "Ing. Carlos Mendoza (Admin QC)", "role": "ADMIN", "avatar": "CM"},
-    {"id": "OP-101", "name": "Carlos Mendoza (Estación 1)", "role": "OPERATOR", "avatar": "CM"},
-    {"id": "OP-102", "name": "Ana Quispe (Estación 2)", "role": "OPERATOR", "avatar": "AQ"},
-    {"id": "OP-103", "name": "Roberto Diaz (Estación 3)", "role": "OPERATOR", "avatar": "RD"},
-    {"id": "OP-104", "name": "Elena Ramos (Estación 4)", "role": "OPERATOR", "avatar": "ER"},
-    {"id": "OP-105", "name": "Marco Solis (Estación 5)", "role": "OPERATOR", "avatar": "MS"},
-    {"id": "OP-106", "name": "Jorge Valdivia (Suplente/Apoyo)", "role": "OPERATOR", "avatar": "JV"},
+    {
+        "id": "ADM-01",
+        "name": "Ing. Carlos Mendoza (Admin QC)",
+        "role": "ADMIN",
+        "avatar": "CM",
+        "email": "admin@sekaitech.com.pe",
+        "password": "admin123"
+    },
+    {
+        "id": "OP-101",
+        "name": "Carlos Mendoza (Estación 1)",
+        "role": "OPERATOR",
+        "avatar": "CM",
+        "email": "estacion1@sekaitech.com.pe",
+        "password": "kenya123"
+    },
+    {
+        "id": "OP-102",
+        "name": "Ana Quispe (Estación 2)",
+        "role": "OPERATOR",
+        "avatar": "AQ",
+        "email": "estacion2@sekaitech.com.pe",
+        "password": "kenya123"
+    },
+    {
+        "id": "OP-103",
+        "name": "Roberto Diaz (Estación 3)",
+        "role": "OPERATOR",
+        "avatar": "RD",
+        "email": "estacion3@sekaitech.com.pe",
+        "password": "kenya123"
+    },
+    {
+        "id": "OP-104",
+        "name": "Elena Ramos (Estación 4)",
+        "role": "OPERATOR",
+        "avatar": "ER",
+        "email": "estacion4@sekaitech.com.pe",
+        "password": "kenya123"
+    },
+    {
+        "id": "OP-105",
+        "name": "Marco Solis (Estación 5)",
+        "role": "OPERATOR",
+        "avatar": "MS",
+        "email": "estacion5@sekaitech.com.pe",
+        "password": "kenya123"
+    },
+    {
+        "id": "OP-106",
+        "name": "Jorge Valdivia (Suplente/Apoyo)",
+        "role": "OPERATOR",
+        "avatar": "JV",
+        "email": "apoyo@sekaitech.com.pe",
+        "password": "kenya123"
+    },
 ]
 
 DEFAULT_MODELS = [
@@ -75,11 +125,28 @@ PROWORK_52_STEPS = [
 ]
 
 def seed_database(db: Session):
-    # 1. Crear usuarios por defecto si no existen
+    # 1. Crear o actualizar usuarios por defecto con sus credenciales
     for u in DEFAULT_USERS:
+        raw_password = u.get("password")
+        pwd_hash = hash_password(raw_password) if raw_password else None
+        
         existing = db.query(QCUser).filter(QCUser.id == u["id"]).first()
         if not existing:
-            db.add(QCUser(**u))
+            db.add(QCUser(
+                id=u["id"],
+                name=u["name"],
+                role=u["role"],
+                avatar=u.get("avatar"),
+                email=u.get("email"),
+                password_hash=pwd_hash,
+                is_active=True
+            ))
+        else:
+            # Sincronizar email y contraseña si faltan o se actualizaron
+            existing.email = u.get("email")
+            existing.password_hash = pwd_hash
+            existing.role = u["role"]
+            existing.name = u["name"]
     db.commit()
 
     # 2. Crear modelos base

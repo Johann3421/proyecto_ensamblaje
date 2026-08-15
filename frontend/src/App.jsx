@@ -7,7 +7,7 @@ import {
   Columns, Grid, ShieldCheck, FileText, PlusCircle, CheckSquare,
   Image as ImageIcon, PlayCircle, ArrowRightCircle, Search, Menu,
   ChevronDown, ChevronUp, LayoutDashboard, ClipboardList, Settings,
-  Wrench, Eye, Users, UserPlus, Trash2, RotateCcw, Trash, UserCheck, Sparkles
+  Wrench, Eye, Users, UserPlus, Trash2, RotateCcw, Trash, UserCheck, Sparkles, Camera
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -1664,11 +1664,230 @@ function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess
 }
 
 // =============================================
+// MODAL CAPTURA DE CÁMARA EN TIEMPO REAL
+// =============================================
+function CameraCaptureModal({ onCapture, onClose }) {
+  const videoRef = useRef(null);
+  const [stream, setStream] = useState(null);
+  const [facingMode, setFacingMode] = useState("environment");
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [cameraError, setCameraError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const startCamera = async (mode) => {
+    try {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      setCameraError(null);
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: mode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+      setStream(newStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+      }
+    } catch (err) {
+      console.error("Error al acceder a la cámara:", err);
+      setCameraError("No se pudo acceder a la cámara automáticamente. Verifique permisos o use el selector de cámara nativo.");
+    }
+  };
+
+  useEffect(() => {
+    startCamera(facingMode);
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [facingMode]);
+
+  const handleToggleFacingMode = () => {
+    setFacingMode(prev => (prev === "environment" ? "user" : "environment"));
+  };
+
+  const handleTakeSnapshot = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    setCapturedImage(dataUrl);
+  };
+
+  const handleConfirmAndUpload = async () => {
+    if (!capturedImage) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/camera/capture-base64`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: capturedImage })
+      });
+      if (!res.ok) throw new Error("Error al procesar fotografía en backend");
+      const data = await res.json();
+      
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      onCapture(data.url, data.type || "image");
+    } catch (err) {
+      alert("Error al subir foto: " + err.message);
+      setLoading(false);
+    }
+  };
+
+  const handleRetake = () => {
+    setCapturedImage(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in">
+      <div className="bg-[#1e293b] text-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-700">
+        <div className="bg-slate-900 px-4 py-3 flex justify-between items-center border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <Camera className="w-5 h-5 text-blue-400" />
+            <h3 className="text-sm font-bold">Tomar Foto con Cámara</h3>
+          </div>
+          <button
+            onClick={() => {
+              if (stream) stream.getTracks().forEach(t => t.stop());
+              onClose();
+            }}
+            className="p-1 hover:bg-white/10 rounded-lg transition"
+          >
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {cameraError ? (
+            <div className="bg-slate-800/80 border border-slate-700 p-4 rounded-xl text-center space-y-3">
+              <AlertCircle className="w-8 h-8 text-amber-400 mx-auto" />
+              <p className="text-xs text-slate-300">{cameraError}</p>
+              <label className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold cursor-pointer transition shadow">
+                <Camera className="w-4 h-4" />
+                Abrir Cámara del Dispositivo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      setCapturedImage(event.target.result);
+                      setCameraError(null);
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="relative bg-black rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-700">
+              {!capturedImage ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-4 border-2 border-dashed border-white/40 rounded-xl pointer-events-none flex items-center justify-center">
+                    <div className="text-[11px] text-white bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm border border-white/20">
+                      Enfoca el case, componente o sticker
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <img
+                  src={capturedImage}
+                  alt="Captura de cámara"
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
+          )}
+
+          {/* Controles */}
+          <div className="flex gap-2 pt-1">
+            {!capturedImage ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleToggleFacingMode}
+                  className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium border border-slate-700 transition flex items-center gap-1.5"
+                  title="Cambiar cámara frontal/trasera"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span className="hidden sm:inline">Girar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTakeSnapshot}
+                  disabled={!!cameraError}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40"
+                >
+                  <Camera className="w-4 h-4" />
+                  Capturar Foto
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleRetake}
+                  disabled={loading}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Tomar Otra
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAndUpload}
+                  disabled={loading}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Subiendo a Servidor...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Usar y Subir Foto
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
 // MODAL EDICIÓN PASO CHECKLIST
 // =============================================
 function ChecklistStepModal({ item, onClose, onSave }) {
   const [formData, setFormData] = useState({ ...item });
   const [uploading, setUploading] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -1689,86 +1908,120 @@ function ChecklistStepModal({ item, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
-          <h3 className="text-sm font-bold">
-            {formData.id ? `Editar Paso #${formData.step_number}` : "Nuevo Paso"}
-          </h3>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="p-4 space-y-3">
-          <div className="grid grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">N°</label>
-              <input
-                type="number"
-                required
-                value={formData.step_number}
-                onChange={(e) => setFormData({ ...formData, step_number: parseInt(e.target.value, 10) })}
-                className="w-full text-xs border border-gray-300 rounded-xl p-2.5 font-bold touch-target"
-              />
+    <>
+      <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+        <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
+            <h3 className="text-sm font-bold">
+              {formData.id ? `Editar Paso #${formData.step_number}` : "Nuevo Paso"}
+            </h3>
+            <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="p-4 space-y-3">
+            <div className="grid grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">N°</label>
+                <input
+                  type="number"
+                  required
+                  value={formData.step_number}
+                  onChange={(e) => setFormData({ ...formData, step_number: parseInt(e.target.value, 10) })}
+                  className="w-full text-xs border border-gray-300 rounded-xl p-2.5 font-bold touch-target"
+                />
+              </div>
+              <div className="col-span-3">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Operación</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.operation}
+                  onChange={(e) => setFormData({ ...formData, operation: e.target.value })}
+                  className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target"
+                />
+              </div>
             </div>
-            <div className="col-span-3">
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Operación</label>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción</label>
+              <textarea
+                rows="2"
+                value={formData.description || ""}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
+              ></textarea>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Criterio de Calidad</label>
+              <textarea
+                rows="2"
+                required
+                value={formData.qc_criteria}
+                onChange={(e) => setFormData({ ...formData, qc_criteria: e.target.value })}
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
+              ></textarea>
+            </div>
+            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2">
+              <label className="block text-xs font-bold text-gray-700">Multimedia (GIF/Imagen)</label>
               <input
                 type="text"
-                required
-                value={formData.operation}
-                onChange={(e) => setFormData({ ...formData, operation: e.target.value })}
-                className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target"
+                placeholder="URL de imagen o GIF..."
+                value={formData.media_url || ""}
+                onChange={(e) => setFormData({ ...formData, media_url: e.target.value })}
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
               />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block w-full py-2.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-xl cursor-pointer hover:bg-blue-100 text-center touch-target transition flex items-center justify-center gap-1.5">
+                  <Upload className="w-4 h-4" />
+                  <span>{uploading ? "Subiendo..." : "📁 Subir Archivo"}</span>
+                  <input type="file" accept="image/*,.gif" onChange={handleFileUpload} className="hidden" />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCameraOpen(true)}
+                  className="w-full py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-xl hover:bg-emerald-100 text-center touch-target flex items-center justify-center gap-1.5 transition"
+                >
+                  <Camera className="w-4 h-4 text-emerald-600" />
+                  <span>📸 Tomar Foto</span>
+                </button>
+              </div>
+              {formData.media_url && (
+                <div className="relative group">
+                  <img src={formData.media_url} alt="Preview" className="w-full max-h-36 object-cover rounded-xl border border-gray-200" />
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, media_url: "" }))}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white p-1 rounded-lg text-xs transition"
+                    title="Eliminar multimedia"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción</label>
-            <textarea
-              rows="2"
-              value={formData.description || ""}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
-            ></textarea>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Criterio de Calidad</label>
-            <textarea
-              rows="2"
-              required
-              value={formData.qc_criteria}
-              onChange={(e) => setFormData({ ...formData, qc_criteria: e.target.value })}
-              className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
-            ></textarea>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2">
-            <label className="block text-xs font-bold text-gray-700">Multimedia (GIF/Imagen)</label>
-            <input
-              type="text"
-              placeholder="URL de imagen o GIF..."
-              value={formData.media_url || ""}
-              onChange={(e) => setFormData({ ...formData, media_url: e.target.value })}
-              className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
-            />
-            <label className="block w-full py-2.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-xl cursor-pointer hover:bg-blue-100 text-center touch-target">
-              {uploading ? "Subiendo..." : "📁 Subir Archivo"}
-              <input type="file" accept="image/*,.gif" onChange={handleFileUpload} className="hidden" />
-            </label>
-            {formData.media_url && (
-              <img src={formData.media_url} alt="Preview" className="w-full max-h-32 object-cover rounded-xl" />
-            )}
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
-              Cancelar
-            </button>
-            <button type="submit" className="flex-1 py-3 text-xs font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-xl shadow transition touch-target">
-              Guardar Paso
-            </button>
-          </div>
-        </form>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
+                Cancelar
+              </button>
+              <button type="submit" className="flex-1 py-3 text-xs font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-xl shadow transition touch-target">
+                Guardar Paso
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {/* Modal de Cámara */}
+      {cameraOpen && (
+        <CameraCaptureModal
+          onCapture={(url, type) => {
+            setFormData(prev => ({ ...prev, media_url: url, media_type: type }));
+            setCameraOpen(false);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
+    </>
   );
 }
 

@@ -810,6 +810,32 @@ async def upload_media(file: UploadFile = File(...)):
         "type": "gif" if filename.lower().endswith(".gif") else "image"
     }
 
+@api_router.post("/camera/capture-base64")
+async def capture_camera_photo(data: dict):
+    """Guarda una fotografía capturada en tiempo real por la cámara mediante Python backend"""
+    import base64
+    image_data = data.get("image")
+    if not image_data:
+        raise HTTPException(status_code=400, detail="No se recibió imagen de la cámara")
+    
+    if "," in image_data:
+        image_data = image_data.split(",")[1]
+        
+    try:
+        img_bytes = base64.b64decode(image_data)
+        filename = f"cam_{int(datetime.utcnow().timestamp())}.jpg"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(img_bytes)
+            
+        return {
+            "url": f"/uploads/{filename}",
+            "filename": filename,
+            "type": "image"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando captura de cámara: {str(e)}")
+
 @api_router.get("/orders/{order_id}/logs")
 def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
     return db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()

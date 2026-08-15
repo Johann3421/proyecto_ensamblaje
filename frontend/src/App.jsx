@@ -38,9 +38,9 @@ const DEFAULT_USERS_FALLBACK = [
   { id: "OP-103", name: "Roberto Diaz (Estación 3)", role: "OPERATOR", avatar: "RD" },
   { id: "OP-104", name: "Elena Ramos (Estación 4)", role: "OPERATOR", avatar: "ER" },
   { id: "OP-105", name: "Marco Solis (Estación 5)", role: "OPERATOR", avatar: "MS" },
+  { id: "OP-106", name: "Jorge Valdivia (Suplente/Apoyo)", role: "OPERATOR", avatar: "JV" },
 ];
 
-// Badge component
 const Badge = ({ children, variant = "neutral", className = "" }) => {
   const styles = {
     neutral: "bg-gray-100 text-gray-700 border-gray-200",
@@ -56,7 +56,6 @@ const Badge = ({ children, variant = "neutral", className = "" }) => {
   );
 };
 
-// Card component
 const Card = ({ children, className = "", ...props }) => (
   <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`} {...props}>
     {children}
@@ -69,7 +68,7 @@ export default function App() {
   const [users, setUsers] = useState(DEFAULT_USERS_FALLBACK);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState("ORD-2026-0892");
   const [matrixData, setMatrixData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -96,14 +95,15 @@ export default function App() {
 
       if (Array.isArray(resUsers) && resUsers.length > 0) setUsers(resUsers);
       if (Array.isArray(resModels)) setModels(resModels);
-      if (Array.isArray(resOrders)) {
+      if (Array.isArray(resOrders) && resOrders.length > 0) {
         setOrders(resOrders);
-        if (resOrders.length > 0 && !selectedOrder) {
-          setSelectedOrder(resOrders[0].order_id);
-        }
+        setSelectedOrder(resOrders[0].order_id);
+      } else {
+        setSelectedOrder("ORD-2026-0892");
       }
     } catch (err) {
-      console.warn("API loading note:", err);
+      console.warn("API load error:", err);
+      setSelectedOrder("ORD-2026-0892");
     } finally {
       setLoading(false);
     }
@@ -149,7 +149,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      {/* NAVBAR SUPERIOR */}
+      {/* NAVBAR */}
       <header className="bg-[#0078d4] text-white shadow-md flex-shrink-0 z-30">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -239,7 +239,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Notificación Flotante */}
+      {/* NOTIFICACIÓN FLOTANTE */}
       {notification && (
         <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg border text-sm font-medium flex items-center gap-2 fade-in ${
           notification.type === "success" 
@@ -262,7 +262,14 @@ export default function App() {
               setSelectedOrder={setSelectedOrder}
               onOpenEmergency={() => setEmergencyModalOpen(true)}
               onSelectUnit={(unit) => setSelectedUnitDetail(unit)}
-              onRefresh={() => loadInitialData()}
+              onRefresh={() => {
+                loadInitialData();
+                if (selectedOrder) {
+                  fetch(`${API_BASE}/orders/${selectedOrder}/matrix`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(data => { if (data) setMatrixData(data); });
+                }
+              }}
             />
           )}
 
@@ -354,9 +361,19 @@ export default function App() {
 function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh }) {
   if (!matrixData || !matrixData.order) {
     return (
-      <Card className="p-8 text-center">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-3" />
-        <p className="text-gray-600 font-medium">Cargando matriz de producción en tiempo real...</p>
+      <Card className="p-8 text-center max-w-md mx-auto space-y-4">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+        <div>
+          <h3 className="text-sm font-bold text-gray-800">Conectando con la Matriz de Producción...</h3>
+          <p className="text-xs text-gray-500 mt-1">Obteniendo estado en tiempo real del pipeline de ensamble.</p>
+        </div>
+        <button
+          onClick={onRefresh}
+          className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-4 py-2 rounded-md shadow inline-flex items-center gap-1.5 transition"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Actualizar Datos</span>
+        </button>
       </Card>
     );
   }
@@ -387,17 +404,19 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={selectedOrder || ""}
-            onChange={(e) => setSelectedOrder(e.target.value)}
-            className="text-xs border border-gray-300 rounded px-2.5 py-1.5 bg-gray-50 font-medium text-gray-700"
-          >
-            {orders.map(o => (
-              <option key={o.order_id} value={o.order_id}>
-                {o.order_id} ({o.model_name} - {o.total_units} PCs)
-              </option>
-            ))}
-          </select>
+          {orders.length > 0 && (
+            <select
+              value={selectedOrder || ""}
+              onChange={(e) => setSelectedOrder(e.target.value)}
+              className="text-xs border border-gray-300 rounded px-2.5 py-1.5 bg-gray-50 font-medium text-gray-700"
+            >
+              {orders.map(o => (
+                <option key={o.order_id} value={o.order_id}>
+                  {o.order_id} ({o.model_name} - {o.total_units} PCs)
+                </option>
+              ))}
+            </select>
+          )}
 
           <button
             onClick={onOpenEmergency}
@@ -1351,7 +1370,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
 // 5. AUDITORÍA FORENSE
 function AuditLogsView({ selectedOrder, orders }) {
   const [logs, setLogs] = useState([]);
-  const [activeOrderId, setActiveOrderId] = useState(selectedOrder || orders[0]?.order_id);
+  const [activeOrderId, setActiveOrderId] = useState(selectedOrder || orders[0]?.order_id || "ORD-2026-0892");
   const [filterUser, setFilterUser] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -1383,15 +1402,17 @@ function AuditLogsView({ selectedOrder, orders }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <select
-              value={activeOrderId || ""}
-              onChange={(e) => setActiveOrderId(e.target.value)}
-              className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-gray-50 font-semibold"
-            >
-              {orders.map(o => (
-                <option key={o.order_id} value={o.order_id}>{o.order_id}</option>
-              ))}
-            </select>
+            {orders.length > 0 && (
+              <select
+                value={activeOrderId || ""}
+                onChange={(e) => setActiveOrderId(e.target.value)}
+                className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-gray-50 font-semibold"
+              >
+                {orders.map(o => (
+                  <option key={o.order_id} value={o.order_id}>{o.order_id}</option>
+                ))}
+              </select>
+            )}
 
             <input
               type="text"

@@ -129,6 +129,7 @@ def seed_database(db: Session):
     for u in DEFAULT_USERS:
         raw_password = u.get("password")
         pwd_hash = hash_password(raw_password) if raw_password else None
+        clean_email = u.get("email").strip().lower() if u.get("email") else None
         
         existing = db.query(QCUser).filter(QCUser.id == u["id"]).first()
         if not existing:
@@ -137,13 +138,13 @@ def seed_database(db: Session):
                 name=u["name"],
                 role=u["role"],
                 avatar=u.get("avatar"),
-                email=u.get("email"),
+                email=clean_email,
                 password_hash=pwd_hash,
                 is_active=True
             ))
         else:
             # Sincronizar email y contraseña si faltan o se actualizaron
-            existing.email = u.get("email")
+            existing.email = clean_email
             existing.password_hash = pwd_hash
             existing.role = u["role"]
             existing.name = u["name"]

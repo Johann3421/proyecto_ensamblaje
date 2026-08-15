@@ -7,7 +7,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, SessionLocal, get_db
@@ -20,7 +20,7 @@ from .schemas import (
     ReassignEmergencyRequest,
     AuthRegister, AuthLogin, TokenResponse
 )
-from .seed_data import seed_database
+from .seed_data import seed_database, DEFAULT_USERS
 from .excel_handler import generate_checklist_excel, parse_checklist_excel
 from .auth import hash_password, verify_password, create_access_token, require_auth
 
@@ -55,27 +55,26 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 def auto_migrate_schema():
     """Migración automática de columnas para PostgreSQL / SQLite sin romper datos existentes"""
-    try:
-        with engine.begin() as conn:
-            migrations = [
-                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS email VARCHAR(150);",
-                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);",
-                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS avatar VARCHAR(255);",
-                "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
-            ]
-            for sql in migrations:
-                try:
-                    conn.execute(text(sql))
-                except Exception:
-                    try:
-                        # Fallback sintaxis sin IF NOT EXISTS (ej. SQLite)
-                        sql_fallback = sql.replace(" IF NOT EXISTS", "")
-                        conn.execute(text(sql_fallback))
-                    except Exception:
-                        pass
-        print("[DB Migration] Esquema de base de datos verificado y actualizado.")
-    except Exception as e:
-        print(f"[DB Migration Warning] {e}")
+    migrations = [
+        "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS email VARCHAR(150);",
+        "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);",
+        "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS avatar VARCHAR(255);",
+        "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
+    ]
+    for sql in migrations:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(sql))
+                conn.commit()
+        except Exception:
+            try:
+                # Fallback sintaxis sin IF NOT EXISTS (ej. SQLite)
+                with engine.connect() as conn:
+                    conn.execute(text(sql.replace(" IF NOT EXISTS", "")))
+                    conn.commit()
+            except Exception:
+                pass
+    print("[DB Migration] Esquema de base de datos verificado y actualizado.")
 
 # Inicialización de base de datos en startup
 @app.on_event("startup")
@@ -142,13 +141,51 @@ def register_user(req: AuthRegister, db: Session = Depends(get_db)):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 def login_user(req: AuthLogin, db: Session = Depends(get_db)):
-    """Autenticar usuario con email y contraseña."""
-    user = db.query(QCUser).filter(QCUser.email == req.email.strip().lower()).first()
-    if not user or not user.password_hash:
-        raise HTTPException(status_code=401, detail="Credenciales inválidas.")
+    """Autenticar usuario con email o ID y contraseña."""
+    identifier = req.email.strip().lower()
     
-    if not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas.")
+    # 1. Buscar por email o por ID
+    user = db.query(QCUser).filter(
+        (func.lower(QCUser.email) == identifier) | 
+        (func.lower(QCUser.id) == identifier)
+    ).first()
+    
+    # 2. Si no se encuentra, buscar por coincidencia en nombre
+    if not user:
+        user = db.query(QCUser).filter(func.lower(QCUser.name).like(f"%{identifier}%")).first()
+        
+    if not user:
+        print(f"[Auth Error] Usuario no encontrado para: '{identifier}'")
+        raise HTTPException(status_code=401, detail="Usuario o correo electrónico no encontrado.")
+    
+    # 3. Auto-healing si no tiene contraseña en base de datos
+    if not user.password_hash:
+        print(f"[Auth Info] Auto-asignando credenciales para {user.id}")
+        default_u = next((u for u in DEFAULT_USERS if u["id"] == user.id), None)
+        if default_u and default_u.get("password"):
+            user.password_hash = hash_password(default_u["password"])
+            if not user.email and default_u.get("email"):
+                user.email = default_u["email"].strip().lower()
+            db.commit()
+            db.refresh(user)
+        else:
+            raise HTTPException(status_code=401, detail="Este usuario aún no tiene contraseña configurada.")
+    
+    # 4. Verificar contraseña
+    is_valid = verify_password(req.password, user.password_hash)
+    if not is_valid:
+        # Check fallback con password por defecto
+        default_u = next((u for u in DEFAULT_USERS if u["id"] == user.id), None)
+        if default_u and req.password == default_u.get("password"):
+            # Sincronizar hash
+            user.password_hash = hash_password(default_u["password"])
+            db.commit()
+            db.refresh(user)
+            is_valid = True
+            
+    if not is_valid:
+        print(f"[Auth Error] Contraseña incorrecta para usuario {user.id}")
+        raise HTTPException(status_code=401, detail="Contraseña incorrecta.")
     
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario desactivado. Contacte al administrador.")

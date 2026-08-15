@@ -34,7 +34,7 @@ services:
       PORT: 8000
       DOMAIN: ${DOMAIN:-ensamblaje.sekaitech.com.pe}
     ports:
-      - "${PORT:-3015}:8000"
+      - "${PORT:-3015}:80"
     depends_on:
       postgres:
         condition: service_healthy

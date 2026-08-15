@@ -1,8 +1,9 @@
 import os
 import shutil
+import time
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -19,18 +20,13 @@ from .schemas import (
 from .seed_data import seed_database
 from .excel_handler import generate_checklist_excel, parse_checklist_excel
 
-# Crear tablas e inicializar datos base
-Base.metadata.create_all(bind=engine)
-with next(get_db()) as db_session:
-    seed_database(db_session)
-
 app = FastAPI(
     title="QC KENYA - API de Control de Calidad Industrial",
     description="Sistema de Flujo en Cadena (Pipeline) para Control de Calidad de Computadoras KENYA",
     version="2.0.0"
 )
 
-# Habilitar CORS para conectar con React / Dokploy
+# Habilitar CORS amplio
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,16 +35,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Servir archivos subidos (GIFs, fotos)
+# Servir archivos subidos
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+# Inicialización resiliente con reintentos para PostgreSQL / Docker
+@app.on_event("startup")
+def startup_db_init():
+    for attempt in range(1, 11):
+        try:
+            print(f"[DB] Inicializando tablas y datos semilla (intento {attempt}/10)...")
+            Base.metadata.create_all(bind=engine)
+            with next(get_db()) as db_session:
+                seed_database(db_session)
+            print("[DB] Base de datos inicializada y sembrada con éxito.")
+            break
+        except Exception as e:
+            print(f"[DB Warning] Esperando conexión a base de datos ({e})...")
+            if attempt == 10:
+                print("[DB Error] No se pudo inicializar la base de datos tras 10 intentos.")
+            time.sleep(2)
+
+# Crear router con prefijo /api y también registrar en raíz para máxima compatibilidad Nginx
+api_router = APIRouter()
+
+# ==========================================
+# RUTAS: HEALTH CHECK
+# ==========================================
+
+@api_router.get("/health")
+def health_check():
+    return {"status": "ok", "timestamp": datetime.utcnow(), "service": "QC-KENYA-API"}
 
 # ==========================================
 # RUTAS: USUARIOS Y AUTENTICACIÓN / ROLES
 # ==========================================
 
-@app.get("/api/users", response_model=List[QCUserSchema])
+@api_router.get("/users", response_model=List[QCUserSchema])
 def get_users(db: Session = Depends(get_db)):
     return db.query(QCUser).filter(QCUser.is_active == True).all()
 
@@ -56,7 +80,7 @@ def get_users(db: Session = Depends(get_db)):
 # RUTAS: GESTIÓN DE MODELOS Y CHECKLISTS
 # ==========================================
 
-@app.get("/api/models")
+@api_router.get("/models")
 def get_models(db: Session = Depends(get_db)):
     models = db.query(QCModel).all()
     results = []
@@ -71,7 +95,7 @@ def get_models(db: Session = Depends(get_db)):
         })
     return results
 
-@app.post("/api/models")
+@api_router.post("/models")
 def create_model(data: dict, db: Session = Depends(get_db)):
     name = data.get("name", "").strip().upper()
     if not name:
@@ -86,14 +110,13 @@ def create_model(data: dict, db: Session = Depends(get_db)):
     db.refresh(new_model)
     return new_model
 
-@app.get("/api/models/{model_name}/checklist", response_model=List[ChecklistItemSchema])
+@api_router.get("/models/{model_name}/checklist", response_model=List[ChecklistItemSchema])
 def get_model_checklist(model_name: str, db: Session = Depends(get_db)):
     items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number).all()
     return items
 
-@app.post("/api/models/{model_name}/checklist")
+@api_router.post("/models/{model_name}/checklist")
 def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session = Depends(get_db)):
-    # Si viene con ID, actualizar
     if item.id:
         existing = db.query(QCChecklistItem).filter(QCChecklistItem.id == item.id).first()
         if existing:
@@ -107,7 +130,6 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
             db.refresh(existing)
             return existing
     
-    # Si no tiene ID o no existe, crear nuevo
     new_item = QCChecklistItem(
         model_name=model_name,
         step_number=item.step_number,
@@ -122,7 +144,7 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
     db.refresh(new_item)
     return new_item
 
-@app.delete("/api/models/{model_name}/checklist/{step_id}")
+@api_router.delete("/models/{model_name}/checklist/{step_id}")
 def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(get_db)):
     item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == model_name).first()
     if not item:
@@ -135,7 +157,7 @@ def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(g
 # RUTAS: IMPORTACIÓN / EXPORTACIÓN EXCEL
 # ==========================================
 
-@app.get("/api/models/{model_name}/export-excel")
+@api_router.get("/models/{model_name}/export-excel")
 def export_model_excel(model_name: str, db: Session = Depends(get_db)):
     items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number).all()
     items_data = [
@@ -149,7 +171,6 @@ def export_model_excel(model_name: str, db: Session = Depends(get_db)):
         for it in items
     ]
     excel_bytes = generate_checklist_excel(model_name, items_data)
-    
     filename = f"Checklist_QC_KENYA_{model_name}.xlsx"
     return Response(
         content=excel_bytes,
@@ -157,7 +178,7 @@ def export_model_excel(model_name: str, db: Session = Depends(get_db)):
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-@app.post("/api/models/{model_name}/import-excel")
+@api_router.post("/models/{model_name}/import-excel")
 async def import_model_excel(model_name: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     content = await file.read()
     parsed_items = parse_checklist_excel(content)
@@ -165,9 +186,7 @@ async def import_model_excel(model_name: str, file: UploadFile = File(...), db: 
     if not parsed_items:
         raise HTTPException(status_code=400, detail="No se encontraron filas válidas en el archivo Excel")
     
-    # Reemplazar pasos existentes del modelo
     db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
-    
     for it in parsed_items:
         db.add(QCChecklistItem(
             model_name=model_name,
@@ -179,14 +198,13 @@ async def import_model_excel(model_name: str, file: UploadFile = File(...), db: 
             media_type=it.get("media_type", "image")
         ))
     db.commit()
-    
     return {"message": f"Se importaron {len(parsed_items)} pasos correctamente para el modelo {model_name}"}
 
 # ==========================================
 # RUTAS: GESTIÓN DE ÓRDENES Y PIPELINE
 # ==========================================
 
-@app.get("/api/orders")
+@api_router.get("/orders")
 def list_orders(db: Session = Depends(get_db)):
     orders = db.query(QCOrder).order_by(QCOrder.created_at.desc()).all()
     results = []
@@ -215,13 +233,12 @@ def list_orders(db: Session = Depends(get_db)):
         })
     return results
 
-@app.post("/api/orders")
+@api_router.post("/orders")
 def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
     existing = db.query(QCOrder).filter(QCOrder.order_id == req.order_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="El número de orden ya existe")
 
-    # Obtener total de pasos del modelo
     steps = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == req.model_name).order_by(QCChecklistItem.step_number).all()
     total_steps = len(steps)
     if total_steps == 0:
@@ -231,7 +248,6 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
     if num_stations == 0:
         raise HTTPException(status_code=400, detail="Debe asignar al menos 1 estación de trabajo")
 
-    # Crear Orden
     order = QCOrder(
         order_id=req.order_id,
         model_name=req.model_name,
@@ -244,7 +260,6 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
     db.add(order)
     db.commit()
 
-    # División inteligente y equitativa de pasos entre estaciones
     base_step_count = total_steps // num_stations
     remainder = total_steps % num_stations
 
@@ -266,7 +281,6 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         current_start = current_end + 1
     db.commit()
 
-    # Generar las unidades físicas de PC para el lote
     for u_num in range(1, req.total_units + 1):
         db.add(QCPCUnit(
             order_id=req.order_id,
@@ -280,22 +294,16 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
 
     return {"message": "Orden y pipeline creados exitosamente", "order_id": req.order_id}
 
-@app.get("/api/orders/{order_id}")
+@api_router.get("/orders/{order_id}")
 def get_order_detail(order_id: str, db: Session = Depends(get_db)):
     order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    
     stations = db.query(QCStationAssignment).filter(QCStationAssignment.order_id == order_id).order_by(QCStationAssignment.station_number).all()
     units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).order_by(QCPCUnit.unit_number).all()
-    
-    return {
-        "order": order,
-        "stations": stations,
-        "units": units
-    }
+    return {"order": order, "stations": stations, "units": units}
 
-@app.get("/api/orders/{order_id}/matrix")
+@api_router.get("/orders/{order_id}/matrix")
 def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
     order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
     if not order:
@@ -325,9 +333,8 @@ def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
 # RUTAS: EJECUCIÓN DE ESTACIÓN (OPERARIO)
 # ==========================================
 
-@app.get("/api/operator/{user_id}/station")
+@api_router.get("/operator/{user_id}/station")
 def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Session = Depends(get_db)):
-    # Buscar asignación activa del usuario
     query = db.query(QCStationAssignment).join(QCOrder).filter(
         QCStationAssignment.user_id == user_id,
         QCOrder.status == "IN_PROGRESS"
@@ -337,29 +344,22 @@ def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Ses
     
     assignment = query.first()
     if not assignment:
-        # Si no tiene asignación directa con su ID, buscar cualquier orden activa para vista demo
         assignment = db.query(QCStationAssignment).first()
         if not assignment:
             return {"active": False, "message": "No hay asignaciones activas para este usuario"}
 
     order = db.query(QCOrder).filter(QCOrder.order_id == assignment.order_id).first()
-    
-    # Obtener pasos de checklist que le corresponden a esta estación
     all_steps = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).order_by(QCChecklistItem.step_number).all()
     station_steps = [s for s in all_steps if assignment.start_step <= s.step_number <= assignment.end_step]
 
-    # Identificar unidades:
-    # 1. Unidades en esta estación
     units_in_station = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order.order_id,
         QCPCUnit.current_station == assignment.station_number,
         QCPCUnit.overall_status.in_(["PENDING", "IN_PROGRESS"])
     ).order_by(QCPCUnit.unit_number).all()
 
-    # Unidad activa actual (la primera en la cola de esta estación)
     active_unit = units_in_station[0] if units_in_station else None
 
-    # Si hay unidad activa, obtener los logs de pasos que ya hizo para esa unidad
     completed_steps_ids = []
     if active_unit:
         logs = db.query(QCStepLog).filter(
@@ -370,10 +370,7 @@ def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Ses
         ).all()
         completed_steps_ids = [l.step_number for l in logs]
 
-    # Cola de unidades siguientes
     queue_units = units_in_station[1:] if len(units_in_station) > 1 else []
-
-    # Unidades ya completadas por esta estación
     completed_units = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order.order_id,
         QCPCUnit.current_station > assignment.station_number
@@ -390,9 +387,8 @@ def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Ses
         "completed_units": completed_units
     }
 
-@app.post("/api/operator/submit-step")
+@api_router.post("/operator/submit-step")
 def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
-    # Guardar en registro de auditoría inmutable
     new_log = QCStepLog(
         order_id=req.order_id,
         unit_number=req.unit_number,
@@ -406,7 +402,6 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
     )
     db.add(new_log)
 
-    # Actualizar estado de la unidad a IN_PROGRESS si estaba en PENDING
     unit = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == req.order_id,
         QCPCUnit.unit_number == req.unit_number
@@ -424,12 +419,11 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Paso registrado con trazabilidad completa", "log_id": new_log.id, "timestamp": new_log.timestamp}
 
-@app.post("/api/operator/finish-station")
+@api_router.post("/operator/finish-station")
 def finish_station(data: dict, db: Session = Depends(get_db)):
     order_id = data.get("order_id")
     unit_number = data.get("unit_number")
     station_number = data.get("station_number")
-    user_name = data.get("user_name", "Operario")
 
     unit = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order_id,
@@ -440,11 +434,8 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
     order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
-
-    # Avanzar al siguiente paso del pipeline
     next_station = station_number + 1
     if next_station > order.total_stations:
-        # Completó la última estación
         unit.current_station = next_station
         unit.overall_status = "PASSED"
         unit.completed_at = datetime.utcnow()
@@ -453,14 +444,13 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
         unit.overall_status = "PENDING"
 
     db.commit()
-
     return {
-        "message": f"PC #{unit_number} completada en Estación {station_number} y enviada a Estación {next_station if next_station <= order.total_stations else 'FINALIZADO'}",
+        "message": f"PC #{unit_number} enviada a Estación {next_station if next_station <= order.total_stations else 'FINALIZADO'}",
         "next_station": next_station,
         "is_finished": next_station > order.total_stations
     }
 
-@app.post("/api/operator/report-issue")
+@api_router.post("/operator/report-issue")
 def report_issue(req: IssueCreate, db: Session = Depends(get_db)):
     issue = QCIssue(
         order_id=req.order_id,
@@ -483,13 +473,9 @@ def report_issue(req: IssueCreate, db: Session = Depends(get_db)):
         unit.overall_status = "FAILED"
 
     db.commit()
-    return {"message": "Incidencia registrada y PC bloqueada para revisión técnica", "issue_id": issue.id}
+    return {"message": "Incidencia registrada y PC bloqueada", "issue_id": issue.id}
 
-# ==========================================
-# RUTAS: REASIGNACIÓN DE EMERGENCIA
-# ==========================================
-
-@app.post("/api/orders/reassign-emergency")
+@api_router.post("/orders/reassign-emergency")
 def reassign_station_emergency(req: ReassignEmergencyRequest, db: Session = Depends(get_db)):
     assignment = db.query(QCStationAssignment).filter(
         QCStationAssignment.order_id == req.order_id,
@@ -503,10 +489,9 @@ def reassign_station_emergency(req: ReassignEmergencyRequest, db: Session = Depe
     assignment.user_id = req.new_user_id
     assignment.user_name = req.new_user_name
 
-    # Registrar evento en logs
     log_reassign = QCStepLog(
         order_id=req.order_id,
-        unit_number=0, # General de la estación
+        unit_number=0,
         step_number=assignment.start_step,
         station_number=req.station_number,
         user_id=req.new_user_id,
@@ -520,11 +505,7 @@ def reassign_station_emergency(req: ReassignEmergencyRequest, db: Session = Depe
 
     return {"message": f"Estación {req.station_number} reasignada con éxito a {req.new_user_name}"}
 
-# ==========================================
-# RUTAS: CARGA DE MULTIMEDIA (GIFs / IMÁGENES)
-# ==========================================
-
-@app.post("/api/upload-media")
+@api_router.post("/upload-media")
 async def upload_media(file: UploadFile = File(...)):
     filename = f"{int(datetime.utcnow().timestamp())}_{file.filename}"
     filepath = os.path.join(UPLOAD_DIR, filename)
@@ -537,11 +518,10 @@ async def upload_media(file: UploadFile = File(...)):
         "type": "gif" if filename.lower().endswith(".gif") else "image"
     }
 
-# ==========================================
-# RUTAS: AUDITORÍA Y TRAZABILIDAD
-# ==========================================
-
-@app.get("/api/orders/{order_id}/logs")
+@api_router.get("/orders/{order_id}/logs")
 def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
-    logs = db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()
-    return logs
+    return db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()
+
+# Registrar rutas tanto con /api como en la raíz de FastAPI
+app.include_router(api_router, prefix="/api")
+app.include_router(api_router, prefix="")

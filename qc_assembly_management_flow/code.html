@@ -1,0 +1,429 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>QC Master - QC Session Configuration</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary": "#ffffff",
+                    "on-surface": "#191c1e",
+                    "background": "#f7f9fb",
+                    "on-secondary-fixed": "#0b1c30",
+                    "on-tertiary-container": "#00a148",
+                    "on-primary": "#ffffff",
+                    "surface-variant": "#e0e3e5",
+                    "on-primary-container": "#768dad",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#c4c6ce",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary-fixed": "#6bff8f",
+                    "surface-container": "#eceef0",
+                    "secondary": "#505f76",
+                    "on-error-container": "#93000a",
+                    "primary-container": "#0a2540",
+                    "secondary-fixed": "#d3e4fe",
+                    "primary-fixed": "#d2e4ff",
+                    "surface-tint": "#49607e",
+                    "primary-fixed-dim": "#b0c8eb",
+                    "tertiary": "#001304",
+                    "surface-container-low": "#f2f4f6",
+                    "inverse-primary": "#b0c8eb",
+                    "error-container": "#ffdad6",
+                    "surface": "#f7f9fb",
+                    "inverse-surface": "#2d3133",
+                    "on-secondary-container": "#54647a",
+                    "outline": "#74777e",
+                    "inverse-on-surface": "#eff1f3",
+                    "secondary-container": "#d0e1fb",
+                    "on-tertiary-fixed-variant": "#005321",
+                    "on-primary-fixed": "#001c37",
+                    "surface-dim": "#d8dadc",
+                    "on-background": "#191c1e",
+                    "on-secondary-fixed-variant": "#38485d",
+                    "on-primary-fixed-variant": "#314865",
+                    "tertiary-fixed-dim": "#4ae176",
+                    "secondary-fixed-dim": "#b7c8e1",
+                    "primary": "#000f22",
+                    "surface-bright": "#f7f9fb",
+                    "on-secondary": "#ffffff",
+                    "tertiary-container": "#002b0e",
+                    "on-tertiary-fixed": "#002109",
+                    "surface-container-highest": "#e0e3e5",
+                    "on-surface-variant": "#43474d",
+                    "surface-container-high": "#e6e8ea"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "unit": "4px",
+                    "margin-desktop": "40px",
+                    "md": "16px",
+                    "margin-mobile": "16px",
+                    "sm": "8px",
+                    "lg": "24px",
+                    "gutter": "16px",
+                    "xl": "32px"
+            },
+            "fontFamily": {
+                    "label-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "mono-data": [
+                            "JetBrains Mono"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "headline-lg-mobile": [
+                            "Inter"
+                    ],
+                    "display-lg": [
+                            "Inter"
+                    ],
+                    "label-sm": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "mono-data": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.02em",
+                                    "fontWeight": "500"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Custom scrollbar for industrial feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f2f4f6; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c4c6ce; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #74777e; 
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md h-screen flex overflow-hidden">
+<!-- SideNavBar -->
+<nav class="bg-surface docked left-0 h-full w-64 border-r border-outline-variant flex flex-col p-4 fixed left-0 top-0 z-40 hidden md:flex">
+<div class="mb-8">
+<h1 class="text-headline-md font-headline-md font-extrabold text-primary flex items-center gap-2">
+<span class="material-symbols-outlined text-[32px]" style="font-variation-settings: &quot;FILL&quot; 1;">build_circle</span>
+                QC KENYA</h1>
+<p class="text-label-sm font-label-sm text-on-surface-variant mt-1">Industrial Assembly</p>
+</div>
+<div class="flex flex-col gap-2 flex-grow">
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</a>
+<!-- Active -->
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container rounded-lg font-bold scale-95 duration-100 group" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">fact_check</span>
+<span class="text-label-md font-label-md">QC Sessions</span>
+</a>
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">settings_applications</span>
+<span class="text-label-md font-label-md">Steps Management</span>
+</a>
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">assignment_ind</span>
+<span class="text-label-md font-label-md">Active Tasks</span>
+</a>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant flex items-center gap-3">
+<img alt="User Profile" class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of an industrial technician wearing safety glasses and a hardhat in a brightly lit, modern manufacturing facility." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvBkd6qWeY49WGjnmbUk_ZfgmeUSIn6kj3nuCtJ6XKEVS1C6cbXAMBALJJuCJqe494MvA4AXdiY-4ALT92QidcSqviAIDrcG_5YLdE6DdHF9clk_5dZfAB8Q-JA7dCO58Xi3d9hIV6WO7V0Oc-MW0nYK2R1D9qRhWPMvHkbQjhxLpERGoV7HejfHLlgvQLHyVPiWamvyhtevD8dDWXkt1AX0Y1HXFn7yZeULyk8hh00CiOdYAMxMsB">
+<div>
+<p class="text-label-md font-label-md text-on-surface">J. Doe</p>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Tech Lead</p>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col ml-0 md:ml-64 h-full overflow-hidden">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center w-full px-margin-desktop h-16 shrink-0 z-30">
+<div class="flex items-center gap-4">
+<!-- Mobile menu button -->
+<button class="md:hidden text-on-surface-variant hover:text-on-surface transition-colors p-2 rounded-full hover:bg-surface-container">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h2 class="text-headline-md font-headline-md font-bold text-primary">PC Assembly QC</h2>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex gap-2">
+<button class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors p-2 rounded-full">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+<button class="flex items-center gap-2 bg-error-container text-on-error-container px-4 py-2 rounded-lg text-label-md font-label-md hover:opacity-80 transition-opacity"><span class="material-symbols-outlined text-[20px]">stop_circle</span>Finalizar Sesión</button>
+</div>
+</header>
+<!-- Scrollable Content Canvas -->
+<main class="flex-1 overflow-y-auto p-4 md:p-margin-desktop bg-surface-bright">
+<!-- Page Header -->
+<div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h1 class="text-headline-lg font-headline-lg text-on-surface mb-2">Configurar Sesión de Control de Calidad</h1>
+<p class="text-body-lg font-body-lg text-on-surface-variant max-w-2xl">Defina los parámetros de inspección, asigne personal y distribuya las tareas de verificación para la ejecución de ensamblaje actual.</p>
+</div>
+<button class="bg-primary text-on-primary px-6 py-3 rounded-lg text-label-md font-label-md flex items-center justify-center gap-2 hover:bg-primary-container transition-colors shrink-0 shadow-sm border border-primary"><span class="material-symbols-outlined">play_arrow</span>Iniciar Sesión</button>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<!-- Left Column: Session Parameters -->
+<div class="lg:col-span-4 flex flex-col gap-6">
+<!-- Category Selection Card -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+<h3 class="text-headline-md font-headline-md text-on-surface flex items-center gap-2 border-b border-outline-variant pb-4 mb-4"><span class="material-symbols-outlined text-primary">category</span>Categoría de Ensamblaje</h3>
+<div class="grid grid-cols-2 gap-3">
+<button class="flex items-center justify-center py-3 px-4 border border-outline-variant bg-surface text-on-surface rounded-lg text-label-md font-label-md hover:bg-surface-container transition-colors">Genwork</button>
+<button class="flex items-center justify-center py-3 px-4 border-2 border-primary bg-primary-fixed text-on-primary-fixed rounded-lg text-label-md font-label-md transition-colors shadow-sm">Prowork</button>
+<button class="flex items-center justify-center py-3 px-4 border border-outline-variant bg-surface text-on-surface rounded-lg text-label-md font-label-md hover:bg-surface-container transition-colors">Ofiszu</button>
+<button class="flex items-center justify-center py-3 px-4 border border-outline-variant bg-surface text-on-surface rounded-lg text-label-md font-label-md hover:bg-surface-container transition-colors">Raito</button>
+<button class="col-span-2 flex items-center justify-center gap-2 py-3 px-4 border border-dashed border-outline text-on-surface-variant rounded-lg text-label-md font-label-md hover:bg-surface-container hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[20px]">add</span>Agregar Nueva Categoría</button>
+</div>
+</section>
+<!-- Session Inputs Card -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm">
+<h3 class="text-headline-md font-headline-md text-on-surface flex items-center gap-2 border-b border-outline-variant pb-4 mb-4"><span class="material-symbols-outlined text-primary">tune</span>Parámetros de Ejecución</h3>
+<div class="space-y-5">
+<div>
+<label class="block text-label-md font-label-md text-on-surface mb-2">N° de Máquinas a Revisar</label>
+<div class="relative">
+<input class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 text-body-md font-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono-data pr-12" type="number" value="50">
+<span class="absolute right-4 top-1/2 -translate-y-1/2 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">Units</span>
+</div>
+</div>
+<div>
+<label class="block text-label-md font-label-md text-on-surface mb-2">Número de Parte</label>
+<input class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 text-body-md font-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono-data" type="text" value="PN-GNRWK-8821">
+</div>
+<div>
+<label class="block text-label-md font-label-md text-on-surface mb-2">Número de Orden / ID de Lote</label>
+<input class="w-full bg-surface border border-outline-variant rounded-lg px-4 py-3 text-body-md font-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all font-mono-data" type="text" value="ORD-2023-Q4-001">
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Task Allocation -->
+<div class="lg:col-span-8 flex flex-col gap-6">
+<!-- Task Distribution Header Card -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t-4 border-t-primary-container">
+<div>
+<h3 class="text-headline-md font-headline-md text-on-surface flex items-center gap-2 mb-1"><span class="material-symbols-outlined text-primary">group_work</span>Asignación de Personal</h3>
+<p class="text-body-md font-body-md text-on-surface-variant">Distribuya los 52 pasos estándar de control de calidad entre los técnicos disponibles.</p>
+</div>
+<div class="bg-surface border border-outline-variant rounded-lg p-2 flex items-center gap-3 shrink-0">
+<span class="text-label-md font-label-md text-on-surface-variant pl-2">Técnicos:</span>
+<div class="flex items-center">
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded-l bg-surface-container hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[16px]">remove</span>
+</button>
+<input class="w-12 h-8 border-y border-outline-variant bg-surface text-center font-mono-data text-body-md focus:outline-none" readonly="" type="text" value="4">
+<button class="w-8 h-8 flex items-center justify-center border border-outline-variant rounded-r bg-surface-container hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Auto-Split Logic Visualization -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm flex flex-col flex-grow">
+<div class="px-6 py-4 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+<h4 class="text-label-md font-label-md text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-on-surface-variant">account_tree</span>Bloques de Distribución de Tareas</h4>
+<span class="bg-primary-fixed text-on-primary-fixed px-2 py-1 rounded text-label-sm font-label-sm font-mono-data">Auto-División Activa</span>
+</div>
+<div class="p-6 overflow-y-auto flex-grow flex flex-col gap-4">
+<!-- Block 1 -->
+<div class="border border-outline-variant rounded-lg p-4 bg-surface hover:bg-surface-container-lowest transition-colors flex flex-col md:flex-row md:items-center gap-4 group">
+<div class="w-12 h-12 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center shrink-0 border border-secondary-fixed">
+<span class="text-headline-md font-headline-md">1</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h5 class="text-label-md font-label-md text-on-surface">Steps 1 - 10</h5>
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded border border-outline-variant">10 Tareas</span>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant line-clamp-1">Visual Inspection, Chassis Integrity, Motherboard Mounts...</p>
+</div>
+<div class="shrink-0 w-full md:w-48">
+<label class="sr-only">Assignee</label>
+<select class="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-label-md font-label-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all appearance-none cursor-pointer"><option value="fernando" class="">Fernando</option><option value="jhoan" class="">Jhoan</option><option value="neison" class="">Neison</option><option value="jhordan" class="">Jhordan</option></select>
+</div>
+</div>
+<!-- Block 2 -->
+<div class="border border-outline-variant rounded-lg p-4 bg-surface hover:bg-surface-container-lowest transition-colors flex flex-col md:flex-row md:items-center gap-4 group">
+<div class="w-12 h-12 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="text-headline-md font-headline-md">2</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h5 class="text-label-md font-label-md text-on-surface">Steps 11 - 20</h5>
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded border border-outline-variant">10 Tareas</span>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant line-clamp-1">CPU Seating, Thermal Paste Application, Cooler Mount...</p>
+</div>
+<div class="shrink-0 w-full md:w-48">
+<select class="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-label-md font-label-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all appearance-none cursor-pointer"><option value="fernando" class="">Fernando</option><option value="jhoan" class="">Jhoan</option><option value="neison" class="">Neison</option><option value="jhordan" class="">Jhordan</option></select>
+</div>
+</div>
+<!-- Block 3 -->
+<div class="border border-outline-variant rounded-lg p-4 bg-surface hover:bg-surface-container-lowest transition-colors flex flex-col md:flex-row md:items-center gap-4 group">
+<div class="w-12 h-12 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="text-headline-md font-headline-md">3</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h5 class="text-label-md font-label-md text-on-surface">Steps 21 - 30</h5>
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded border border-outline-variant">10 Tareas</span>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant line-clamp-1">RAM Installation, Storage Drives (NVMe/SATA), Cable Routing Basics...</p>
+</div>
+<div class="shrink-0 w-full md:w-48">
+<select class="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-label-md font-label-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all appearance-none cursor-pointer"><option value="fernando" class="">Fernando</option><option value="jhoan" class="">Jhoan</option><option value="neison" class="">Neison</option><option value="jhordan" class="">Jhordan</option></select>
+</div>
+</div>
+<!-- Block 4 -->
+<div class="border border-outline-variant rounded-lg p-4 bg-surface hover:bg-surface-container-lowest transition-colors flex flex-col md:flex-row md:items-center gap-4 group">
+<div class="w-12 h-12 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="text-headline-md font-headline-md">4</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h5 class="text-label-md font-label-md text-on-surface">Steps 31 - 40</h5>
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded border border-outline-variant">10 Tareas</span>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant line-clamp-1">GPU Installation, PCIe Power Connections, Front Panel Headers...</p>
+</div>
+<div class="shrink-0 w-full md:w-48">
+<select class="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-label-md font-label-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all appearance-none cursor-pointer"><option value="fernando" class="">Fernando</option><option value="jhoan" class="">Jhoan</option><option value="neison" class="">Neison</option><option value="jhordan" class="">Jhordan</option></select>
+</div>
+</div>
+<!-- Block 5 -->
+<div class="border border-outline-variant rounded-lg p-4 bg-surface hover:bg-surface-container-lowest transition-colors flex flex-col md:flex-row md:items-center gap-4 group">
+<div class="w-12 h-12 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center shrink-0 border border-outline-variant">
+<span class="text-headline-md font-headline-md">5</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h5 class="text-label-md font-label-md text-on-surface">Steps 41 - 52</h5>
+<span class="text-label-sm font-label-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded border border-outline-variant">12 Tareas</span>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant line-clamp-1">Power Supply Verification, POST Check, BIOS Configuration, Final Wipe...</p>
+</div>
+<div class="shrink-0 w-full md:w-48">
+<select class="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 text-label-md font-label-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all appearance-none cursor-pointer"><option value="fernando" class="">Fernando</option><option value="jhoan" class="">Jhoan</option><option value="neison" class="">Neison</option><option value="jhordan" class="">Jhordan</option></select>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+
+
+</body></html>

@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Base de Datos PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: qc_kenya_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qc_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-KenyaQC2026Secure!}
+      POSTGRES_DB: ${POSTGRES_DB:-qc_kenya_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qc_admin -d qc_kenya_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qc_network
+
+  # Backend FastAPI
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qc_kenya_backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-qc_admin}:${POSTGRES_PASSWORD:-KenyaQC2026Secure!}@postgres:5432/${POSTGRES_DB:-qc_kenya_db}
+      PORT: 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+    networks:
+      - qc_network
+
+  # Frontend React (Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: qc_kenya_frontend
+    restart: always
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      - backend
+    networks:
+      - qc_network
+
+volumes:
+  postgres_data:
+  backend_uploads:
+
+networks:
+  qc_network:
+    driver: bridge

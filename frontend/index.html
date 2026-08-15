@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-[#f3f2f1]">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>QC KENYA - Sistema de Control de Calidad en Cadena (Pipeline)</title>
+  
+  <!-- Tipografía Fluent / Segoe UI & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN para renderizado instantáneo -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Segoe UI', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          },
+          colors: {
+            fluent: {
+              blue: '#0078d4',
+              blueDark: '#106ebe',
+              blueLight: '#eff6fc',
+              green: '#107c41',
+              greenLight: '#dff6dd',
+              orange: '#d83b01',
+              orangeLight: '#fed9cc',
+              red: '#c50f1f',
+              redLight: '#fde7e9',
+              neutralDark: '#201f1e',
+              neutralPrimary: '#323130',
+              neutralSecondary: '#605e5c',
+              neutralTertiary: '#a19f9d',
+              neutralLight: '#edebe9',
+              neutralLighter: '#f3f2f1',
+              cardBg: '#ffffff',
+            }
+          },
+          boxShadow: {
+            'fluent-depth-4': '0 1.6px 3.6px 0 rgba(0, 0, 0, 0.132), 0 0.3px 0.9px 0 rgba(0, 0, 0, 0.108)',
+            'fluent-depth-8': '0 3.2px 7.2px 0 rgba(0, 0, 0, 0.132), 0 0.6px 1.8px 0 rgba(0, 0, 0, 0.108)',
+            'fluent-depth-16': '0 6.4px 14.4px 0 rgba(0, 0, 0, 0.132), 0 1.2px 3.6px 0 rgba(0, 0, 0, 0.108)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18 & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel para transpilar JSX en caliente -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons & Canvas Confetti & SheetJS -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      background-color: #f3f2f1;
+      color: #323130;
+    }
+    
+    /* Scrollbar sutil estilo Microsoft */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #edebe9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c8c6c4;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #8a8886;
+    }
+
+    /* Animaciones suaves */
+    .fade-in {
+      animation: fadeIn 0.2s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pulse-glow {
+      animation: pulseGlow 2s infinite;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(0, 120, 212, 0); }
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col antialiased">
+  <div id="root" class="h-full flex flex-col"></div>
+
+  <!-- Script principal de la aplicación React -->
+  <script type="text/babel" src="./app.jsx"></script>
+</body>
+</html>

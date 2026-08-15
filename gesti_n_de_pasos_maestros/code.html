@@ -1,0 +1,190 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>QC Master - Steps Management</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#191c1e",
+                        "background": "#f7f9fb",
+                        "on-secondary-fixed": "#0b1c30",
+                        "on-tertiary-container": "#00a148",
+                        "on-primary": "#ffffff",
+                        "surface-variant": "#e0e3e5",
+                        "on-primary-container": "#768dad",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#c4c6ce",
+                        "error": "#ba1a1a",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed": "#6bff8f",
+                        "surface-container": "#eceef0",
+                        "secondary": "#505f76",
+                        "on-error-container": "#93000a",
+                        "primary-container": "#0a2540",
+                        "secondary-fixed": "#d3e4fe",
+                        "primary-fixed": "#d2e4ff",
+                        "surface-tint": "#49607e",
+                        "primary-fixed-dim": "#b0c8eb",
+                        "tertiary": "#001304",
+                        "surface-container-low": "#f2f4f6",
+                        "inverse-primary": "#b0c8eb",
+                        "error-container": "#ffdad6",
+                        "surface": "#f7f9fb",
+                        "inverse-surface": "#2d3133",
+                        "on-secondary-container": "#54647a",
+                        "outline": "#74777e",
+                        "inverse-on-surface": "#eff1f3",
+                        "secondary-container": "#d0e1fb",
+                        "on-tertiary-fixed-variant": "#005321",
+                        "on-primary-fixed": "#001c37",
+                        "surface-dim": "#d8dadc",
+                        "on-background": "#191c1e",
+                        "on-secondary-fixed-variant": "#38485d",
+                        "on-primary-fixed-variant": "#314865",
+                        "tertiary-fixed-dim": "#4ae176",
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "primary": "#000f22",
+                        "surface-bright": "#f7f9fb",
+                        "on-secondary": "#ffffff",
+                        "tertiary-container": "#002b0e",
+                        "on-tertiary-fixed": "#002109",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-surface-variant": "#43474d",
+                        "surface-container-high": "#e6e8ea"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "unit": "4px",
+                        "margin-desktop": "40px",
+                        "md": "16px",
+                        "margin-mobile": "16px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "gutter": "16px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "mono-data": ["JetBrains Mono"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "mono-data": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Base styles to ensure consistency */
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-surface');
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        /* Drag and Drop utility classes */
+        .drag-over {
+            border-top: 2px solid theme('colors.primary');
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-body-md font-body-md">
+<!-- Shared Component: SideNavBar -->
+<!-- Applying exact styles from JSON execution rules -->
+<aside class="fixed left-0 top-0 h-full z-40 flex flex-col p-4 w-64 bg-surface dark:bg-inverse-surface border-r border-outline-variant dark:border-outline text-primary dark:text-inverse-primary">
+<!-- Header -->
+<div class="mb-8 mt-2 px-2">
+<h1 class="text-headline-md font-headline-md font-extrabold text-primary dark:text-inverse-primary">QC KENYA</h1>
+<p class="text-label-md font-label-md mt-1 opacity-80">Industrial Assembly</p>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex flex-col gap-2 w-full"><a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant transition-colors rounded-lg text-label-md font-label-md" href="#"><span class="material-symbols-outlined text-[20px]">dashboard</span><span class="">Tablero</span></a><a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant transition-colors rounded-lg text-label-md font-label-md" href="#"><span class="material-symbols-outlined text-[20px]">fact_check</span><span class="">Sesiones de CC</span></a><a class="flex items-center gap-3 px-4 py-3 bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-lg font-bold scale-95 duration-100 text-label-md font-label-md" href="#"><span class="material-symbols-outlined text-[20px]" style="font-variation-settings: &quot;FILL&quot; 1;">settings_applications</span><span class="">Gestión de Pasos</span></a><a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant transition-colors rounded-lg text-label-md font-label-md" href="#"><span class="material-symbols-outlined text-[20px]">assignment_ind</span><span class="">Tareas Activas</span></a></nav>
+</aside>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col ml-64 overflow-hidden bg-background">
+<!-- Shared Component: TopAppBar -->
+<!-- Applying exact styles from JSON execution rules -->
+<header class="flex justify-between items-center w-full px-margin-desktop h-16 bg-surface-container-lowest dark:bg-surface-container-low border-b border-outline-variant dark:border-outline text-primary dark:text-inverse-primary shrink-0 z-30">
+<div class="flex items-center gap-4">
+<h2 class="text-headline-md font-headline-md font-bold text-primary dark:text-inverse-primary">PC Assembly QC - Modelo PROWORK</h2>
+</div>
+<div class="flex items-center gap-md">
+<!-- Trailing Icon Actions -->
+<button aria-label="Notifications" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container dark:hover:bg-inverse-surface transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button aria-label="Help" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container dark:hover:bg-inverse-surface transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<!-- Trailing Primary Action -->
+<button class="bg-primary-container text-on-primary-container hover:opacity-90 px-4 py-2 rounded font-label-md text-label-md transition-colors shadow-sm ml-2">Finalizar Sesión</button>
+<!-- Profile Image -->
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-outline-variant ml-2 object-cover" data-alt="A small circular avatar placeholder image indicating a user profile, featuring initials or a generic silhouette against a dark blue background in a corporate software interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAB7bZVxUlFQ2ihGbS5oTkzGYq8ZfuMkhbN1OMAbdkKBEKYgur19hlWUItMMNxCsKu-j8yhUZEt5h-fsJrrLbBn7ZaQ6EH9sdyvipYxZOOiV_pgveE5VDPv2KZ-rTAlu6TviAou7nnm0Z9DZA1029m1C9JAT51eO-IYanmr1g41Y1LCEeCep9uYBgWPVYuzk3q8sfwuOOg-MiTkqfV_btbfIgalPepLxsAP9mfbl5LCmAsPSbXYApFY">
+</div>
+</header>
+<!-- Main Scrollable Area -->
+<main class="flex-1 overflow-y-auto p-margin-desktop">
+<!-- Page Header & Actions -->
+<div class="flex items-end justify-between mb-lg">
+<div><h1 class="text-headline-lg font-headline-lg text-primary mb-2">Checklist Maestro: Modelo PROWORK</h1><p class="text-body-md font-body-md text-on-surface-variant max-w-2xl">Administrador: Estalin H. Equipo Técnico: Fernando, Jhoan, Neison, Jhordan. Defina los 52 pasos de validación para el modelo PROWORK. Datos sincronizados con {{DATA:DOCUMENT:DOCUMENT_1}}.</p></div>
+<div class="flex gap-md"><button class="flex items-center gap-2 px-4 py-2 bg-surface border border-outline hover:bg-surface-container transition-colors rounded text-label-md font-label-md text-primary"><span class="material-symbols-outlined text-[18px]">download</span>Exportar</button><button class="flex items-center gap-2 px-4 py-2 bg-primary-container text-on-primary-container hover:opacity-90 transition-opacity rounded text-label-md font-label-md shadow-sm"><span class="material-symbols-outlined text-[18px]">add</span>Agregar Nuevo Paso</button></div>
+</div>
+<!-- Table Controls (Search & Filter) -->
+<div class="bg-surface border border-outline-variant rounded-t p-4 flex justify-between items-center mt-xl shadow-sm">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-background border border-outline-variant rounded focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-shadow text-body-md font-body-md text-on-surface placeholder:text-outline" placeholder="Buscar pasos por ID o descripción..." type="text">
+</div>
+<div class="flex items-center gap-sm"><button class="flex items-center gap-2 px-3 py-1.5 text-on-surface-variant hover:bg-surface-container rounded transition-colors text-label-md font-label-md"><span class="material-symbols-outlined text-[18px]">filter_list</span>Filtrar</button><div class="h-6 w-px bg-outline-variant mx-2"></div><span class="text-label-sm font-label-sm text-outline">52 Pasos Totales</span></div>
+</div>
+<!-- Data Table -->
+<div class="bg-surface border-x border-b border-outline-variant rounded-b overflow-x-auto shadow-sm">
+<table class="w-full text-left border-collapse min-w-[900px]">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant text-label-md font-label-md text-on-surface-variant"><th class="py-3 px-4 w-12 text-center"></th><th class="py-3 px-4 w-24">ID</th><th class="py-3 px-4">Operación / Tarea</th><th class="py-3 px-4">Criterios de Revisión de Calidad</th><th class="py-3 px-4 w-32">Estado</th><th class="py-3 px-4 w-24 text-right">Acciones</th></tr>
+</thead>
+<tbody class="text-body-md font-body-md"><tr class="border-b border-outline-variant hover:bg-surface-container-lowest transition-colors group"><td class="py-4 px-4 text-center cursor-move text-outline hover:text-primary transition-colors"><span class="material-symbols-outlined">drag_indicator</span></td><td class="py-4 px-4 font-mono-data text-mono-data text-primary">PW-001</td><td class="py-4 px-4 text-on-surface font-bold">Preparación de Chasis</td><td class="py-4 px-4 text-on-surface-variant">Verificar ausencia de rayones y correcta instalación de soportes de placa base.</td><td class="py-4 px-4"><span class="inline-flex items-center px-2 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-label-sm font-label-sm">Validado</span></td><td class="py-4 px-4 text-right"><div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button class="p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-primary rounded transition-colors"><span class="material-symbols-outlined text-[20px]">edit</span></button></div></td></tr><tr class="border-b border-outline-variant hover:bg-surface-container-lowest transition-colors group"><td class="py-4 px-4 text-center cursor-move text-outline hover:text-primary transition-colors"><span class="material-symbols-outlined">drag_indicator</span></td><td class="py-4 px-4 font-mono-data text-mono-data text-primary">PW-002</td><td class="py-4 px-4 text-on-surface font-bold">Instalación de Fuente (PSU)</td><td class="py-4 px-4 text-on-surface-variant">Tornillos asegurados firmemente; ventilador orientado hacia la rejilla de ventilación.</td><td class="py-4 px-4"><span class="inline-flex items-center px-2 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-label-sm font-label-sm">Validado</span></td><td class="py-4 px-4 text-right"><div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button class="p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-primary rounded transition-colors"><span class="material-symbols-outlined text-[20px]">edit</span></button></div></td></tr></tbody>
+</table>
+<!-- Pagination Footer -->
+<div class="bg-surface p-4 flex items-center justify-between border-t border-outline-variant"><span class="text-label-sm font-label-sm text-on-surface-variant">Mostrando 1-10 de 52 pasos</span><div class="flex items-center gap-2"><button class="p-1 text-outline hover:text-primary transition-colors disabled:opacity-50" disabled=""><span class="material-symbols-outlined">chevron_left</span></button><span class="text-label-sm font-label-sm px-2">Página 1 de 6</span><button class="p-1 text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">chevron_right</span></button></div></div>
+</div>
+</main>
+</div>
+
+
+</body></html>

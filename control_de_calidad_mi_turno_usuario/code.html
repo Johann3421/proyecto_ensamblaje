@@ -1,0 +1,314 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Active QC Tasks</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary": "#ffffff",
+                      "on-surface": "#191c1e",
+                      "background": "#f7f9fb",
+                      "on-secondary-fixed": "#0b1c30",
+                      "on-tertiary-container": "#00a148",
+                      "on-primary": "#ffffff",
+                      "surface-variant": "#e0e3e5",
+                      "on-primary-container": "#768dad",
+                      "on-error": "#ffffff",
+                      "outline-variant": "#c4c6ce",
+                      "error": "#ba1a1a",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary-fixed": "#6bff8f",
+                      "surface-container": "#eceef0",
+                      "secondary": "#505f76",
+                      "on-error-container": "#93000a",
+                      "primary-container": "#0a2540",
+                      "secondary-fixed": "#d3e4fe",
+                      "primary-fixed": "#d2e4ff",
+                      "surface-tint": "#49607e",
+                      "primary-fixed-dim": "#b0c8eb",
+                      "tertiary": "#001304",
+                      "surface-container-low": "#f2f4f6",
+                      "inverse-primary": "#b0c8eb",
+                      "error-container": "#ffdad6",
+                      "surface": "#f7f9fb",
+                      "inverse-surface": "#2d3133",
+                      "on-secondary-container": "#54647a",
+                      "outline": "#74777e",
+                      "inverse-on-surface": "#eff1f3",
+                      "secondary-container": "#d0e1fb",
+                      "on-tertiary-fixed-variant": "#005321",
+                      "on-primary-fixed": "#001c37",
+                      "surface-dim": "#d8dadc",
+                      "on-background": "#191c1e",
+                      "on-secondary-fixed-variant": "#38485d",
+                      "on-primary-fixed-variant": "#314865",
+                      "tertiary-fixed-dim": "#4ae176",
+                      "secondary-fixed-dim": "#b7c8e1",
+                      "primary": "#000f22",
+                      "surface-bright": "#f7f9fb",
+                      "on-secondary": "#ffffff",
+                      "tertiary-container": "#002b0e",
+                      "on-tertiary-fixed": "#002109",
+                      "surface-container-highest": "#e0e3e5",
+                      "on-surface-variant": "#43474d",
+                      "surface-container-high": "#e6e8ea"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "unit": "4px",
+                      "margin-desktop": "40px",
+                      "md": "16px",
+                      "margin-mobile": "16px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "gutter": "16px",
+                      "xl": "32px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "mono-data": [
+                              "JetBrains Mono"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "mono-data": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.02em",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row antialiased">
+<!-- Mobile Top App Bar (Technician View) -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-16 bg-surface-container-lowest border-b border-outline-variant sticky top-0 z-50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">engineering</span>
+<span class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">QC ESTALIN</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col w-full max-w-3xl mx-auto pb-24 md:pb-8">
+<!-- Context Header -->
+<section class="bg-primary-container text-on-primary-container p-4 md:p-6 shadow-sm sticky top-16 md:top-0 z-40">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<div>
+<h1 class="font-headline-md text-headline-md text-on-primary">PC #1 of 50</h1>
+<div class="font-mono-data text-mono-data text-inverse-primary mt-1">Orden: 4500X | Modelo: PROWORK |NS:GBT12376548763</div>
+</div>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed px-3 py-1 rounded-full font-label-sm text-label-sm uppercase">En Progreso</span>
+</div>
+<!-- Progress Tracker -->
+<div class="mt-4">
+<div class="flex justify-between font-label-sm text-label-sm text-inverse-primary mb-1">
+<span class="">Progreso General de la PC</span>
+<span class="">45%</span>
+</div>
+<div class="w-full bg-surface-tint/30 h-2 rounded-full overflow-hidden">
+<div class="bg-tertiary-fixed h-full rounded-full w-[45%] transition-all duration-500"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Task List Content -->
+<section class="p-4 md:p-6 flex-1">
+<div class="mb-6 flex justify-between items-end">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Mis Tareas Asignadas</h2>
+<p class="text-on-surface-variant text-body-md mt-1">Pasos 1-10 para el ensamblaje final. (Paso 1 de 52)</p>
+</div>
+<div class="font-mono-data text-mono-data text-on-surface-variant bg-surface-container-high px-2 py-1 rounded border border-outline-variant">1/10 Completed</div>
+</div>
+<!-- Task List -->
+<div class="flex flex-col gap-4">
+<!-- Task Item 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex gap-4 items-start shadow-sm hover:bg-surface-container-low transition-colors group cursor-pointer checked" onclick="toggleTask(this)">
+<div class="pt-1">
+<div class="w-8 h-8 rounded-full border-2 border-outline-variant flex items-center justify-center text-outline-variant bg-surface-container-lowest group-[.checked]:bg-[#22C55E] group-[.checked]:border-[#22C55E] group-[.checked]:text-white transition-colors">
+<span class="material-symbols-outlined text-sm opacity-0 group-[.checked]:opacity-100 transition-opacity">check</span>
+</div>
+</div>
+<div class="flex-1"><div class="flex justify-between items-start mb-1"><h3 class="font-label-md text-label-md text-on-surface">1. <b>Agitar vertical y horizontalmente el case</b></h3><span class="text-on-surface-variant text-label-sm">Paso 1</span></div><div class="text-body-md text-on-surface-variant mb-3"><p class="mb-2">• Agitar cuidadosamente el case en sentido vertical y horizontal para comprobar que no existan elementos sueltos en el interior.</p><p class="">• Confirmar que no se escuchen sonidos internos por pernos sueltos, restos de cintillos u otros elementos.</p></div><div class="flex justify-between items-center"><button class="flex items-center gap-1 text-[#0A2540] bg-white border border-[#64748B] px-3 py-1.5 rounded text-label-sm font-label-md hover:bg-surface-container-high transition-colors" onclick="event.stopPropagation()"><span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">image</span>Ver Referencia</button><div class="text-label-sm text-on-surface-variant hidden group-[.checked]:block italic timestamp-display">Checked by Tech at 08:10 p. m.</div></div></div>
+</div>
+<!-- Task Item 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex gap-4 items-start shadow-sm hover:bg-surface-container-low transition-colors group cursor-pointer" onclick="toggleTask(this)">
+<div class="pt-1">
+<div class="w-8 h-8 rounded-full border-2 border-outline-variant flex items-center justify-center text-outline-variant bg-surface-container-lowest group-[.checked]:bg-[#22C55E] group-[.checked]:border-[#22C55E] group-[.checked]:text-white transition-colors">
+<span class="material-symbols-outlined text-sm opacity-0 group-[.checked]:opacity-100 transition-opacity">check</span>
+</div>
+</div>
+<div class="flex-1"><div class="flex justify-between items-start mb-1"><h3 class="font-label-md text-label-md text-on-surface">2. <b>Revisar estado físico de componentes</b></h3><span class="text-on-surface-variant text-label-sm">Paso 2</span></div><div class="text-body-md text-on-surface-variant mb-3"><p class="mb-2">• Revisar el estado físico de RAM, disco, tarjeta gráfica, placa base, case, tapas y demás componentes, verificando que no presenten daños, rayones, rajaduras, abolladuras o deformaciones.</p><p class="">• Confirmar la integridad visual de todos los componentes.</p></div><div class="flex justify-between items-center"><button class="flex items-center gap-1 text-[#0A2540] bg-white border border-[#64748B] px-3 py-1.5 rounded text-label-sm font-label-md hover:bg-surface-container-high transition-colors" onclick="event.stopPropagation()"><span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">videocam</span>Ver Referencia</button><div class="text-label-sm text-on-surface-variant hidden group-[.checked]:block italic timestamp-display"></div></div></div>
+</div>
+<!-- Task Item 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex gap-4 items-start shadow-sm hover:bg-surface-container-low transition-colors group cursor-pointer" onclick="toggleTask(this)">
+<div class="pt-1">
+<div class="w-8 h-8 rounded-full border-2 border-outline-variant flex items-center justify-center text-outline-variant bg-surface-container-lowest group-[.checked]:bg-[#22C55E] group-[.checked]:border-[#22C55E] group-[.checked]:text-white transition-colors">
+<span class="material-symbols-outlined text-sm opacity-0 group-[.checked]:opacity-100 transition-opacity">check</span>
+</div>
+</div>
+<div class="flex-1"><div class="flex justify-between items-start mb-1"><h3 class="font-label-md text-label-md text-on-surface">3. <b>Verificar cambio de fuente de poder</b></h3><span class="text-on-surface-variant text-label-sm">Paso 3</span></div><div class="text-body-md text-on-surface-variant mb-3"><p class="mb-2">• Verificar que la fuente de poder instalada corresponda a una unidad de 750 W con certificación 80 Plus.</p><p class="">• Realizar verificación visual de modelo, potencia y certificación.</p></div><div class="flex justify-between items-center"><button class="flex items-center gap-1 text-[#0A2540] bg-white border border-[#64748B] px-3 py-1.5 rounded text-label-sm font-label-md hover:bg-surface-container-high transition-colors" onclick="event.stopPropagation()"><span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">integration_instructions</span>Ver Referencia</button><div class="text-label-sm text-on-surface-variant hidden group-[.checked]:block italic timestamp-display"></div></div></div>
+</div>
+</div>
+<!-- Action Area (Sticky on mobile bottom, normal flow on desktop) -->
+<div class="fixed bottom-0 left-0 right-0 bg-surface-container-lowest border-t border-outline-variant p-4 md:static md:bg-transparent md:border-none md:p-0 md:mt-8 z-40">
+<div class="max-w-3xl mx-auto flex gap-4">
+<button class="flex-1 bg-white border border-[#64748B] text-[#0A2540] font-label-md text-label-md py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-surface-container transition-colors min-h-[48px]"><span class="material-symbols-outlined">flag</span>Reportar un Problema</button>
+<button class="flex-1 bg-[#0A2540] text-white font-label-md text-label-md py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-[#0b1c30] transition-colors min-h-[48px] opacity-50 cursor-not-allowed" disabled="true" id="handoverBtn"><span class="material-symbols-outlined">arrow_forward</span>Pasar al Siguiente Técnico</button>
+</div>
+</div>
+</section>
+</main>
+<script>
+        const totalTasks = 3;
+        let completedTasks = 0;
+        const handoverBtn = document.getElementById('handoverBtn');
+        const counterDisplay = document.querySelector('.font-mono-data.bg-surface-container-high');
+
+        function toggleTask(element) {
+            const isChecked = element.classList.contains('checked');
+            const timestampDisplay = element.querySelector('.timestamp-display');
+            
+            if (!isChecked) {
+                element.classList.add('checked');
+                const now = new Date();
+                const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                timestampDisplay.textContent = `Checked by Tech at ${timeString}`;
+                completedTasks++;
+            } else {
+                element.classList.remove('checked');
+                timestampDisplay.textContent = '';
+                completedTasks--;
+            }
+
+            updateProgress();
+        }
+
+        function updateProgress() {
+            counterDisplay.textContent = `${completedTasks}/10 Completed`; // Simulating out of 10 for the UI spec
+            
+            // Enable Handover button only if all assigned tasks (3 in this mock) are done
+            if (completedTasks === totalTasks) {
+                handoverBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                handoverBtn.classList.add('bg-[#22C55E]', 'hover:bg-[#16a34a]'); // Shift to success color on completion
+                handoverBtn.classList.remove('bg-[#0A2540]', 'hover:bg-[#0b1c30]');
+                handoverBtn.removeAttribute('disabled');
+            } else {
+                handoverBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                handoverBtn.classList.remove('bg-[#22C55E]', 'hover:bg-[#16a34a]');
+                handoverBtn.classList.add('bg-[#0A2540]', 'hover:bg-[#0b1c30]');
+                handoverBtn.setAttribute('disabled', 'true');
+            }
+        }
+    </script>
+
+
+</body></html>

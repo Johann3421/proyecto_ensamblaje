@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Active QC Tasks</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary": "#ffffff",
+                      "on-surface": "#191c1e",
+                      "background": "#f7f9fb",
+                      "on-secondary-fixed": "#0b1c30",
+                      "on-tertiary-container": "#00a148",
+                      "on-primary": "#ffffff",
+                      "surface-variant": "#e0e3e5",
+                      "on-primary-container": "#768dad",
+                      "on-error": "#ffffff",
+                      "outline-variant": "#c4c6ce",
+                      "error": "#ba1a1a",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary-fixed": "#6bff8f",
+                      "surface-container": "#eceef0",
+                      "secondary": "#505f76",
+                      "on-error-container": "#93000a",
+                      "primary-container": "#0a2540",
+                      "secondary-fixed": "#d3e4fe",
+                      "primary-fixed": "#d2e4ff",
+                      "surface-tint": "#49607e",
+                      "primary-fixed-dim": "#b0c8eb",
+                      "tertiary": "#001304",
+                      "surface-container-low": "#f2f4f6",
+                      "inverse-primary": "#b0c8eb",
+                      "error-container": "#ffdad6",
+                      "surface": "#f7f9fb",
+                      "inverse-surface": "#2d3133",
+                      "on-secondary-container": "#54647a",
+                      "outline": "#74777e",
+                      "inverse-on-surface": "#eff1f3",
+                      "secondary-container": "#d0e1fb",
+                      "on-tertiary-fixed-variant": "#005321",
+                      "on-primary-fixed": "#001c37",
+                      "surface-dim": "#d8dadc",
+                      "on-background": "#191c1e",
+                      "on-secondary-fixed-variant": "#38485d",
+                      "on-primary-fixed-variant": "#314865",
+                      "tertiary-fixed-dim": "#4ae176",
+                      "secondary-fixed-dim": "#b7c8e1",
+                      "primary": "#000f22",
+                      "surface-bright": "#f7f9fb",
+                      "on-secondary": "#ffffff",
+                      "tertiary-container": "#002b0e",
+                      "on-tertiary-fixed": "#002109",
+                      "surface-container-highest": "#e0e3e5",
+                      "on-surface-variant": "#43474d",
+                      "surface-container-high": "#e6e8ea"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "xs": "4px",
+                      "unit": "4px",
+                      "margin-desktop": "40px",
+                      "md": "16px",
+                      "margin-mobile": "16px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "gutter": "16px",
+                      "xl": "32px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "mono-data": [
+                              "JetBrains Mono"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "mono-data": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.02em",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+    /* Custom Scrollbar for modal */
+    .modal-scroll::-webkit-scrollbar {
+        width: 6px;
+    }
+    .modal-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .modal-scroll::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 20px;
+    }
+</style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row antialiased relative">
+<!-- Mobile Top App Bar (Technician View) -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-16 bg-surface-container-lowest border-b border-outline-variant sticky top-0 z-40">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">engineering</span>
+<span class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary">QC ESTALIN</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center h-10 w-10">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col w-full max-w-3xl mx-auto pb-24 md:pb-8">
+<!-- Context Header -->
+<section class="bg-primary-container text-on-primary-container p-4 md:p-6 shadow-sm sticky top-16 md:top-0 z-30">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<div>
+<h1 class="font-headline-md text-headline-md text-on-primary font-bold">PC #1 de 50</h1>
+<div class="font-mono-data text-mono-data text-inverse-primary mt-1">Orden: 4500X | Modelo: PROWORK | NS: GBT12376548763</div>
+</div>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed px-3 py-1 rounded-full font-label-sm text-label-sm uppercase font-bold tracking-wide">En Progreso</span>
+</div>
+<!-- Progress Tracker -->
+<div class="mt-4">
+<div class="flex justify-between font-label-sm text-label-sm text-inverse-primary mb-1">
+<span class="">Progreso General de la PC</span>
+<span class="">45%</span>
+</div>
+<div class="w-full bg-surface-tint/30 h-2 rounded-full overflow-hidden">
+<div class="bg-tertiary-fixed h-full rounded-full w-[45%] transition-all duration-500"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Task List Content -->
+<section class="p-4 md:p-6 flex-1">
+<div class="mb-6 flex justify-between items-end">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Mis Tareas Asignadas</h2>
+<p class="text-on-surface-variant text-body-md mt-1">Pasos 1-10 para el ensamblaje final. (Paso 1 de 52)</p>
+</div>
+<div class="font-mono-data text-mono-data text-on-surface-variant bg-surface-container-high px-3 py-2 rounded-md border border-outline-variant font-medium">1/10 Completed</div>
+</div>
+<!-- Task List -->
+<div class="flex flex-col gap-5">
+<!-- Task Item 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex gap-5 items-start shadow-sm hover:shadow-md transition-all group cursor-pointer checked" onclick="toggleTask(this)">
+<div class="pt-0.5">
+<div class="w-10 h-10 rounded-full border-2 border-outline-variant flex items-center justify-center text-outline-variant bg-surface-container-lowest group-[.checked]:bg-[#22C55E] group-[.checked]:border-[#22C55E] group-[.checked]:text-white transition-colors shadow-sm">
+<span class="material-symbols-outlined text-xl opacity-0 group-[.checked]:opacity-100 transition-opacity">check</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-label-md text-[16px] text-on-surface">1. <b>Agitar vertical y horizontalmente el case</b></h3>
+<span class="text-on-surface-variant font-mono-data text-label-sm bg-surface-container-low px-2 py-0.5 rounded">Paso 1</span>
+</div>
+<div class="text-body-md text-on-surface-variant mb-4 space-y-2">
+<p class="">• Agitar cuidadosamente el case en sentido vertical y horizontal para comprobar que no existan elementos sueltos en el interior.</p>
+<p class="">• Confirmar que no se escuchen sonidos internos por pernos sueltos, restos de cintillos u otros elementos.</p>
+</div>
+<div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+<button class="flex items-center justify-center gap-2 text-primary bg-primary-fixed hover:bg-primary-fixed-dim px-4 py-2 rounded-lg text-label-md font-label-md transition-colors w-full sm:w-auto" onclick="event.stopPropagation(); openModal('modal-1')">
+<span class="material-symbols-outlined text-[18px]">photo_library</span>Ver Instrucción (GIF/Imagen)
+        </button>
+<div class="hidden group-[.checked]:flex flex-col items-end timestamp-display bg-green-50 px-3 py-1.5 rounded-md border border-green-100">
+<div class="text-label-sm font-semibold text-green-800">Estalin Perez</div>
+<div class="text-[11px] text-green-600">12/10/2023 - 08:10 p. m.</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Task Item 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex gap-5 items-start shadow-sm hover:shadow-md transition-all group cursor-pointer" onclick="toggleTask(this)">
+<div class="pt-0.5">
+<div class="w-10 h-10 rounded-full border-2 border-outline-variant flex items-center justify-center text-outline-variant bg-surface-container-lowest group-[.checked]:bg-[#22C55E] group-[.checked]:border-[#22C55E] group-[.checked]:text-white transition-colors shadow-sm">
+<span class="material-symbols-outlined text-xl opacity-0 group-[.checked]:opacity-100 transition-opacity">check</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-label-md text-[16px] text-on-surface">2. <b>Revisar estado físico de componentes</b></h3>
+<span class="text-on-surface-variant font-mono-data text-label-sm bg-surface-container-low px-2 py-0.5 rounded">Paso 2</span>
+</div>
+<div class="text-body-md text-on-surface-variant mb-4 space-y-2">
+<p class="">• Revisar el estado físico de RAM, disco, tarjeta gráfica, placa base, case, tapas y demás componentes, verificando que no presenten daños, rayones, rajaduras, abolladuras o deformaciones.</p>
+<p class="">• Confirmar la integridad visual de todos los componentes.</p>
+</div>
+<div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+<button class="flex items-center justify-center gap-2 text-primary bg-primary-fixed hover:bg-primary-fixed-dim px-4 py-2 rounded-lg text-label-md font-label-md transition-colors w-full sm:w-auto" onclick="event.stopPropagation(); openModal('modal-1')">
+<span class="material-symbols-outlined text-[18px]">photo_library</span>Ver Instrucción (GIF/Imagen)
+        </button>
+<div class="hidden group-[.checked]:flex flex-col items-end timestamp-display bg-green-50 px-3 py-1.5 rounded-md border border-green-100">
+</div>
+</div>
+</div>
+</div>
+<!-- Task Item 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex gap-5 items-start shadow-sm hover:shadow-md transition-all group cursor-pointer" onclick="toggleTask(this)">
+<div class="pt-0.5">
+<div class="w-10 h-10 rounded-full border-2 border-outline-variant flex items-center justify-center text-outline-variant bg-surface-container-lowest group-[.checked]:bg-[#22C55E] group-[.checked]:border-[#22C55E] group-[.checked]:text-white transition-colors shadow-sm">
+<span class="material-symbols-outlined text-xl opacity-0 group-[.checked]:opacity-100 transition-opacity">check</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-label-md text-[16px] text-on-surface">3. <b>Verificar cambio de fuente de poder</b></h3>
+<span class="text-on-surface-variant font-mono-data text-label-sm bg-surface-container-low px-2 py-0.5 rounded">Paso 3</span>
+</div>
+<div class="text-body-md text-on-surface-variant mb-4 space-y-2">
+<p class="">• Verificar que la fuente de poder instalada corresponda a una unidad de 750 W con certificación 80 Plus.</p>
+<p class="">• Realizar verificación visual de modelo, potencia y certificación.</p>
+</div>
+<div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+<button class="flex items-center justify-center gap-2 text-primary bg-primary-fixed hover:bg-primary-fixed-dim px-4 py-2 rounded-lg text-label-md font-label-md transition-colors w-full sm:w-auto" onclick="event.stopPropagation(); openModal('modal-1')">
+<span class="material-symbols-outlined text-[18px]">photo_library</span>Ver Instrucción (GIF/Imagen)
+        </button>
+<div class="hidden group-[.checked]:flex flex-col items-end timestamp-display bg-green-50 px-3 py-1.5 rounded-md border border-green-100">
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Area -->
+<div class="fixed bottom-0 left-0 right-0 bg-surface-container-lowest border-t border-outline-variant p-4 md:static md:bg-transparent md:border-none md:p-0 md:mt-8 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] md:shadow-none">
+<div class="max-w-3xl mx-auto flex gap-4">
+<button class="flex-1 bg-white border-2 border-outline text-on-surface font-label-md text-[16px] py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-surface-container-low transition-colors min-h-[56px] font-semibold"><span class="material-symbols-outlined">flag</span>Reportar un Problema</button>
+<button class="flex-[2] bg-primary text-on-primary font-label-md text-[16px] py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors min-h-[56px] opacity-50 cursor-not-allowed font-semibold shadow-sm" disabled="true" id="handoverBtn"><span class="material-symbols-outlined">send</span>Enviar a Siguiente Estación</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Full Screen Modal for Instructions -->
+<div class="fixed inset-0 z-50 hidden bg-black/90 flex-col backdrop-blur-sm" id="instructionModal">
+<div class="flex justify-between items-center p-4 text-white border-b border-white/10 bg-black/50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">photo_library</span>
+<h2 class="font-headline-md text-[18px] font-semibold">Instrucción Visual: Paso 1</h2>
+</div>
+<button class="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center" onclick="closeModal()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="flex-1 flex items-center justify-center p-4 md:p-8 overflow-auto modal-scroll">
+<div class="max-w-4xl w-full bg-surface-container-lowest rounded-xl overflow-hidden shadow-2xl flex flex-col">
+<div class="p-4 border-b border-outline-variant bg-surface-container-low">
+<h3 class="font-label-md text-lg text-on-surface mb-2"><b>Agitar vertical y horizontalmente el case</b></h3>
+<p class="text-body-md text-on-surface-variant">Agite cuidadosamente para detectar elementos sueltos.</p>
+</div>
+<div class="bg-surface-container p-4 flex justify-center items-center min-h-[300px] md:min-h-[500px]">
+<div class="flex flex-col items-center justify-center text-outline gap-4">
+<span class="material-symbols-outlined text-[64px]">image</span>
+<p class="font-mono-data text-sm">[Espacio para Imagen o GIF Instructivo]</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+        const totalTasks = 3;
+        let completedTasks = 1; // Starting with 1 completed in initial HTML
+        const handoverBtn = document.getElementById('handoverBtn');
+        const counterDisplay = document.querySelector('.font-mono-data.bg-surface-container-high');
+        const instructionModal = document.getElementById('instructionModal');
+
+        function toggleTask(element) {
+            const isChecked = element.classList.contains('checked');
+            const timestampDisplay = element.querySelector('.timestamp-display');
+            
+            if (!isChecked) {
+                element.classList.add('checked');
+                const now = new Date();
+                const dateString = now.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const timeString = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true });
+                
+                timestampDisplay.innerHTML = `
+                    <div class="text-label-sm font-semibold text-green-800">Estalin Perez</div>
+                    <div class="text-[11px] text-green-600">${dateString} - ${timeString}</div>
+                `;
+                completedTasks++;
+            } else {
+                element.classList.remove('checked');
+                timestampDisplay.innerHTML = '';
+                completedTasks--;
+            }
+
+            updateProgress();
+        }
+
+        function updateProgress() {
+            counterDisplay.textContent = `${completedTasks}/10 Completed`; 
+            
+            if (completedTasks === totalTasks) {
+                handoverBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                handoverBtn.classList.add('bg-[#22C55E]', 'hover:bg-[#16a34a]', 'text-white'); 
+                handoverBtn.classList.remove('bg-primary', 'text-on-primary');
+                handoverBtn.removeAttribute('disabled');
+            } else {
+                handoverBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                handoverBtn.classList.remove('bg-[#22C55E]', 'hover:bg-[#16a34a]', 'text-white');
+                handoverBtn.classList.add('bg-primary', 'text-on-primary');
+                handoverBtn.setAttribute('disabled', 'true');
+            }
+        }
+
+        function openModal(modalId) {
+            instructionModal.classList.remove('hidden');
+            instructionModal.classList.add('flex');
+            document.body.style.overflow = 'hidden'; // Prevent scrolling behind modal
+        }
+
+        function closeModal() {
+            instructionModal.classList.add('hidden');
+            instructionModal.classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+
+        // Close modal on escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Escape" && !instructionModal.classList.contains('hidden')) {
+                closeModal();
+            }
+        });
+        
+        // Initialize state
+        updateProgress();
+    </script>
+</body></html>

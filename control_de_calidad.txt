@@ -1,0 +1,107 @@
+CHECKLIST DE CONTROL DE CALIDAD – PC KENYA PROWORK
+
+N° | OPERACIÓN | DESCRIPCIÓN | REVISIÓN DE CONTROL DE CALIDAD
+
+1 | Agitar vertical y horizontalmente el case | Agitar cuidadosamente el case en sentido vertical y horizontal para comprobar que no existan elementos sueltos en el interior. | Confirmar que no se escuchen sonidos internos por pernos sueltos, restos de cintillos u otros elementos.
+
+2 | Revisar estado físico de componentes | Revisar el estado físico de RAM, disco, tarjeta gráfica, placa base, case, tapas y demás componentes, verificando que no presenten daños, rayones, rajaduras, abolladuras o deformaciones. | Confirmar la integridad visual de todos los componentes.
+
+3 | Verificar cambio de fuente de poder | Verificar que la fuente de poder instalada corresponda a una unidad de 750 W con certificación 80 Plus. | Realizar verificación visual de modelo, potencia y certificación.
+
+4 | Verificar cables antes del encendido | Verificar que todos los cables estén firmes, correctamente conectados y ubicados antes de encender el equipo. | Confirmar conexiones correctas y firmes.
+
+5 | Revisar montaje del procesador y sistema de refrigeración | Verificar la correcta instalación de los 4 tornillos de la bomba del sistema de refrigeración líquida y su correcta conexión al PC. | Confirmar correcta instalación y conexión al CPU_FAN o conector correspondiente.
+
+6 | Revisar montaje de memoria RAM | Insertar los módulos de memoria RAM correctamente, respetando la orientación y las ranuras correspondientes. | Confirmar que los módulos estén firmes y que las muescas/pestañas de retención estén correctamente cerradas.
+
+7 | Revisar instalación de la placa base | Verificar que la placa base esté correctamente fijada al chasis del case mediante todos los tornillos correspondientes. | Confirmar tornillos correctamente instalados y conectores de la placa conectados, incluidos cables de la fuente y cables de los puertos frontales.
+
+8 | Revisar conexión y organización de cables | Organizar el cableado de manera eficiente, evitando exceso de cables, tensión, holguras innecesarias u obstrucciones. | Realizar inspección visual del cableado y su organización.
+
+9 | Verificar ventilación interna | Confirmar que no existan obstrucciones, cables mal organizados ni elementos en contacto con los ventiladores. | Validar una adecuada circulación de aire dentro del case.
+
+10 | Revisar cooler de chasis y refrigeración líquida – Sticker KENYA | Retirar la etiqueta anterior y colocar correctamente el sticker KENYA en el cooler de chasis y/o sistema de refrigeración líquida según el patrón establecido. | Verificar visibilidad, alineación y correcta adhesión del sticker KENYA.
+
+11 | Colocar sticker de serie interno | Colocar el sticker de número de serie en la parte interior del case, en la ubicación designada y siguiendo el patrón establecido. | Confirmar ubicación, alineación y correcta adhesión.
+
+12 | Retirar película protectora de la bomba y cooler | Retirar la película protectora del disipador/bomba de refrigeración líquida y de los 3 ventiladores del cooler, cuando corresponda. | Confirmar que no quede ninguna película protectora instalada.
+
+13 | Retirar película protectora de tarjeta de video | Retirar la película protectora de ambos lados de la tarjeta de video. | Confirmar que ambas caras estén libres de película protectora.
+
+14 | Retirar película protectora de tapa frontal del case | Retirar la película protectora ubicada en la parte interior de la tapa frontal del case. | Confirmar retiro completo de la película protectora.
+
+15 | Verificar instalación de fuente de alimentación | Verificar el correcto montaje de la fuente de alimentación y la conexión de todos sus cables. | Confirmar conexiones firmes, sin exceso de tensión ni holguras.
+
+16 | Revisar montaje de almacenamiento | Instalar HDD, SSD o M.2 según la ficha técnica, asegurando su correcta fijación mediante tornillos o sistema de sujeción correspondiente. | Confirmar montaje correcto y detección en BIOS y sistema operativo.
+
+17 | Verificar instalación de tarjeta gráfica (si aplica) | Confirmar que la tarjeta gráfica esté firmemente instalada en la ranura PCIe correspondiente, con sus conectores de alimentación correctamente conectados y reconocida por el sistema operativo. | Confirmar reconocimiento de la GPU, capacidad de memoria según ficha técnica y correcta visualización en el Administrador de tareas.
+
+18 | Verificar instalación de tarjeta Wi-Fi y Bluetooth (si aplica) | Instalar la tarjeta Wi-Fi/Bluetooth en la ranura correspondiente y fijarla correctamente con sus tornillos. | Confirmar detección y funcionamiento correcto en el sistema.
+
+19 | Actualizar BIOS | Actualizar la BIOS a la última versión aprobada. Para equipos GIGABYTE, la actualización es obligatoria según el procedimiento establecido. | Confirmar versión instalada, por ejemplo F15 o F16A, según corresponda al modelo.
+
+20 | Configurar BIOS | Desactivar Boot Logo y configurar RGB como Disabled, de acuerdo con el procedimiento establecido. | Confirmar que los ajustes hayan sido guardados y aplicados correctamente.
+
+21 | Revisar encendido y realizar pruebas básicas | Realizar prueba de encendido y verificar el funcionamiento de periféricos y puertos disponibles. | Confirmar POST correcto y ausencia de errores. Probar puertos USB, HDMI, VGA, DisplayPort (DP), USB Type-C y puertos Jack de audio.
+
+22 | Verificar desactivación de RGB de refrigeración líquida | Desconectar o deshabilitar el RGB de los ventiladores del case y del sistema de refrigeración líquida, según el procedimiento establecido. | Confirmar que no permanezcan encendidos los efectos RGB.
+
+23 | Instalar sistema operativo | Realizar instalación limpia de Windows 11 Pro. | Confirmar instalación correcta, limpia y sin errores.
+
+24 | Instalar drivers y actualizaciones | Instalar los controladores oficiales correspondientes y ejecutar Windows Update hasta completar las actualizaciones disponibles. | Confirmar que no existan controladores faltantes en el Administrador de dispositivos (Windows + X).
+
+25 | Test de temperatura | Realizar prueba de temperatura y verificar el comportamiento térmico del equipo. | Confirmar temperatura estable y dentro de parámetros aceptables en BIOS.
+
+26 | Test de RAM | Verificar que la capacidad instalada de memoria RAM corresponda a la ficha técnica. | Confirmar capacidad y frecuencia (MHz) de acuerdo con la ficha técnica.
+
+27 | Test de GPU (si aplica) | Verificar que el driver de video esté correctamente instalado y comprobar la configuración mediante el Panel de NVIDIA, cuando corresponda. | Confirmar reconocimiento correcto de la GPU en el Administrador de tareas y sistema operativo.
+
+28 | Test de discos | Verificar que la capacidad de los discos instalados corresponda a la ficha técnica. | Confirmar capacidad y detección correcta de cada unidad.
+
+29 | Eliminar software de pruebas | Eliminar todas las herramientas y programas utilizados durante las pruebas y el proceso de control de calidad. | Confirmar que no quede software de pruebas o de terceros no autorizado.
+
+30 | Personalización – Logo KENYA | Configurar el logo de la marca KENYA según el procedimiento establecido. | Confirmar que el logo sea visible correctamente al inicio del equipo.
+
+31 | Personalización – Software KENYA | Instalar o colocar el acceso directo del software KENYA en el escritorio. | Confirmar que el acceso directo sea visible y que el software funcione correctamente.
+
+32 | Personalización – OEM | Configurar la información OEM del sistema y mover el archivo de información OEM a la ubicación correspondiente. | Confirmar: Manufacturer="KENYA"; Model="SEGÚN FICHA"; SupportPhone="+51 958021778"; SupportHours="" (dejar en blanco); SupportURL="https://example + NÚMERO DE SERIE." Verificar que la información se muestre correctamente.
+
+33 | Personalización – Nombre del PC | Configurar el nombre del equipo según el número de parte establecido. | Confirmar que el nombre del equipo sea correcto en “Este equipo” y en la configuración del sistema.
+
+34 | Verificar instalación y visibilidad de Office Home & Business 2024 | Confirmar que Office Home & Business 2024 esté instalado y que exista un acceso directo visible en el escritorio. | Confirmar instalación y acceso correcto.
+
+35 | Eliminar accesos y archivos temporales | Eliminar carpetas, archivos y accesos directos utilizados durante el armado, pruebas y configuración. | Confirmar limpieza total del sistema y ausencia de accesos temporales.
+
+36 | Verificar etiquetas internas | Confirmar que todos los componentes que corresponda tengan colocado correctamente su sticker de garantía interna KENYA: RAM, SSD, placa base, fuente de alimentación y demás componentes. | Confirmar que no falte ningún sticker interno y que estén correctamente adheridos.
+
+37 | Verificar etiquetas externas | Confirmar que el case tenga el sticker de garantía KENYA, logo de la marca y las etiquetas obligatorias de fábrica, incluyendo el logo de INTEL o AMD según corresponda. | Confirmar visibilidad, ubicación, alineación y correcta adhesión.
+
+38 | Verificar número de serie | Confirmar que el número de serie registrado coincida con la ficha técnica, documento físico y registro digital/base de datos. | Validar coincidencia exacta del número de serie en todos los registros.
+
+39 | Registro fotográfico | Tomar fotografías de la PC armada, número de serie, etiquetas visibles y empaques para asegurar trazabilidad y evidencia ante el cliente o garantía. | Confirmar que las fotografías sean claras, completas y estén almacenadas en la carpeta asignada.
+
+40 | Revisar configuración de energía | Configurar correctamente el plan de energía según el procedimiento establecido, priorizando máximo rendimiento y evitando suspensión automática cuando corresponda. | Confirmar configuración desde Windows y verificar que los parámetros sean los establecidos.
+
+41 | Verificar idioma y región | Configurar idioma español (Perú), teclado, zona horaria, formato de fecha y hora y demás parámetros regionales. | Validar configuración desde las opciones regionales de Windows.
+
+42 | Crear punto de restauración | Crear un punto de restauración del sistema después de completar todas las configuraciones y pruebas. | Confirmar existencia del punto de restauración en “Protección del sistema”.
+
+43 | Realizar limpieza del sistema | Eliminar archivos temporales, cookies, caché y otros archivos innecesarios generados durante el proceso. | Confirmar limpieza del sistema y disponibilidad adecuada de espacio en disco.
+
+44 | Verificar activación del sistema operativo | Confirmar que Windows esté activado mediante una licencia válida o licencia por volumen, según el contrato correspondiente. | Confirmar estado de activación en la configuración del sistema.
+
+45 | Test de teclado y mouse | Verificar el funcionamiento correcto del teclado y mouse, incluyendo teclas, botones y desplazamiento. | Confirmar entrada correcta de teclas, clics y demás funciones.
+
+46 | Comprobar apagado, reinicio y suspensión | Verificar que el equipo pueda apagarse, reiniciarse y entrar en suspensión correctamente, sin errores. | Confirmar comportamiento correcto del sistema en las tres operaciones.
+
+47 | Colocar sticker de serie externo | Colocar el sticker de número de serie en la parte exterior superior del case, según la ubicación establecida. | Verificar alineación, ubicación y correcta adhesión.
+
+48 | Colocar sticker de INTEL | Colocar el sticker de INTEL en la máscara del case, encima del logo KENYA, según el patrón establecido. | Verificar alineación, ubicación y correcta adhesión.
+
+49 | Confirmar empaquetado correcto | Realizar el embalaje utilizando espuma, protecciones, guía rápida impresa, sellado de caja y cinta de seguridad. | Confirmar que el embalaje sea seguro, completo, limpio y presentable.
+
+50 | Armar caja del case | Preparar y cerrar la caja del case de acuerdo con la marca y modelo correspondiente. | Confirmar correcto armado, protección y etiquetado externo.
+
+51 | Armar caja del teclado | Preparar y embalar la caja del teclado según el modelo correspondiente. | Confirmar que el teclado esté en estado nuevo, protegido y correctamente embalado.
+
+52 | Limpieza y embalaje final | Realizar limpieza final del equipo utilizando paño de microfibra y líquido adecuado para PC. | Confirmar que el equipo quede sin huellas, polvo, manchas ni suciedad antes del embalaje final.

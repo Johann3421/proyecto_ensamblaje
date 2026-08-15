@@ -45,7 +45,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState({ id: "ADM-01", name: "Ing. Carlos Mendoza", role: "ADMIN", avatar: "CM" });
   const [activeTab, setActiveTab] = useState("matrix");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [users, setUsers] = useState(DEFAULT_USERS_FALLBACK);
+  const [users, setUsers] = useState([]);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState("ORD-2026-0892");

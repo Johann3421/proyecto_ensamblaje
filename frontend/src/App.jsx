@@ -6,7 +6,7 @@ import {
   Columns, Grid, ShieldCheck, FileText, PlusCircle, CheckSquare,
   Image as ImageIcon, PlayCircle, ArrowRightCircle, Search, Menu,
   ChevronDown, ChevronUp, LayoutDashboard, ClipboardList, Settings,
-  Wrench, Eye
+  Wrench, Eye, Users, UserPlus, Trash2, RotateCcw, Trash, UserCheck, Sparkles
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -60,6 +60,9 @@ export default function App() {
   const [activeIssueModal, setActiveIssueModal] = useState(null);
   const [emergencyModalOpen, setEmergencyModalOpen] = useState(false);
   const [selectedUnitDetail, setSelectedUnitDetail] = useState(null);
+  const [addUnitsModalOpen, setAddUnitsModalOpen] = useState(false);
+  const [resetOrderModalOpen, setResetOrderModalOpen] = useState(false);
+  const [deleteOrderModalOpen, setDeleteOrderModalOpen] = useState(false);
 
   const notify = (message, type = "success") => {
     setNotification({ message, type });
@@ -73,11 +76,18 @@ export default function App() {
         fetch(`${API_BASE}/models`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
-      if (Array.isArray(resUsers) && resUsers.length > 0) setUsers(resUsers);
+      if (Array.isArray(resUsers) && resUsers.length > 0) {
+        setUsers(resUsers);
+        // Si el usuario actual está en la lista, sincronizar su nombre
+        const currentUpdated = resUsers.find(u => u.id === currentUser.id);
+        if (currentUpdated) setCurrentUser(currentUpdated);
+      }
       if (Array.isArray(resModels)) setModels(resModels);
       if (Array.isArray(resOrders) && resOrders.length > 0) {
         setOrders(resOrders);
-        setSelectedOrder(resOrders[0].order_id);
+        if (!selectedOrder || !resOrders.some(o => o.order_id === selectedOrder)) {
+          setSelectedOrder(resOrders[0].order_id);
+        }
       }
     } catch (err) {
       console.warn("API load error:", err);
@@ -125,6 +135,7 @@ export default function App() {
   const ADMIN_TABS = [
     { id: "matrix", label: "Pipeline", shortLabel: "Pipeline", icon: Grid },
     { id: "create-order", label: "Nueva Orden", shortLabel: "Orden", icon: PlusCircle },
+    { id: "technicians", label: "Técnicos", shortLabel: "Técnicos", icon: Users },
     { id: "checklists", label: "Checklists", shortLabel: "Checks", icon: FileText },
     { id: "audit", label: "Auditoría", shortLabel: "Auditor", icon: ShieldCheck },
   ];
@@ -249,6 +260,9 @@ export default function App() {
               onOpenEmergency={() => setEmergencyModalOpen(true)}
               onSelectUnit={(unit) => setSelectedUnitDetail(unit)}
               onRefresh={() => { loadInitialData(); loadMatrixData(); }}
+              onOpenAddUnits={() => setAddUnitsModalOpen(true)}
+              onOpenResetOrder={() => setResetOrderModalOpen(true)}
+              onOpenDeleteOrder={() => setDeleteOrderModalOpen(true)}
             />
           )}
           {activeTab === "create-order" && (
@@ -261,6 +275,13 @@ export default function App() {
                 setSelectedOrder(orderId);
                 navigate("matrix");
               }}
+            />
+          )}
+          {activeTab === "technicians" && (
+            <TechniciansManagementView
+              users={users}
+              onRefreshUsers={loadInitialData}
+              notify={notify}
             />
           )}
           {activeTab === "checklists" && (
@@ -331,12 +352,50 @@ export default function App() {
           }}
         />
       )}
+      {addUnitsModalOpen && matrixData && (
+        <AddUnitsModal
+          order={matrixData.order}
+          onClose={() => setAddUnitsModalOpen(false)}
+          onSuccess={(msg) => {
+            notify(msg);
+            setAddUnitsModalOpen(false);
+            loadMatrixData();
+          }}
+        />
+      )}
+      {resetOrderModalOpen && matrixData && (
+        <ResetOrderModal
+          order={matrixData.order}
+          onClose={() => setResetOrderModalOpen(false)}
+          onSuccess={(msg) => {
+            notify(msg);
+            setResetOrderModalOpen(false);
+            loadMatrixData();
+          }}
+        />
+      )}
+      {deleteOrderModalOpen && matrixData && (
+        <DeleteOrderModal
+          order={matrixData.order}
+          onClose={() => setDeleteOrderModalOpen(false)}
+          onSuccess={(msg) => {
+            notify(msg);
+            setDeleteOrderModalOpen(false);
+            loadInitialData();
+          }}
+        />
+      )}
       {selectedUnitDetail && matrixData && (
         <UnitDetailModal
           unit={selectedUnitDetail}
           order={matrixData.order}
           stations={matrixData.stations}
           onClose={() => setSelectedUnitDetail(null)}
+          onSuccess={(msg) => {
+            notify(msg);
+            setSelectedUnitDetail(null);
+            loadMatrixData();
+          }}
         />
       )}
     </div>
@@ -346,7 +405,7 @@ export default function App() {
 // =============================================
 // 1. MATRIZ DE PIPELINE
 // =============================================
-function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh }) {
+function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder }) {
   if (!matrixData || !matrixData.order) {
     return (
       <Card className="p-8 text-center mx-auto max-w-sm space-y-4">
@@ -404,11 +463,36 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
               </select>
             )}
             <button
-              onClick={onOpenEmergency}
+              onClick={onOpenAddUnits}
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition shadow-sm touch-target"
+              title="Agregar PCs a esta orden"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Agregar PC</span>
+            </button>
+            <button
+              onClick={onOpenResetOrder}
               className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition touch-target"
+              title="Reiniciar y limpiar todo el lote a Estación 1"
+            >
+              <RotateCcw className="w-4 h-4 text-amber-600" />
+              <span className="hidden sm:inline">Limpiar </span>Lote
+            </button>
+            <button
+              onClick={onOpenEmergency}
+              className="text-xs bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300 px-2.5 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition touch-target"
+              title="Reasignación de emergencia de técnico"
             >
               <AlertCircle className="w-4 h-4 text-amber-600" />
-              <span className="hidden sm:inline">Reasignación </span>Emergencia
+              <span className="hidden md:inline">Reasignar</span>
+            </button>
+            <button
+              onClick={onOpenDeleteOrder}
+              className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition touch-target"
+              title="Eliminar orden por completo"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span className="hidden lg:inline">Eliminar</span>
             </button>
             <button
               onClick={onRefresh}
@@ -1609,44 +1693,621 @@ function ChecklistStepModal({ item, onClose, onSave }) {
 // =============================================
 // MODAL DETALLE PC
 // =============================================
-function UnitDetailModal({ unit, order, stations, onClose }) {
+function UnitDetailModal({ unit, order, stations, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleResetUnit = async () => {
+    if (!window.confirm(`¿Seguro que deseas reiniciar la PC #${unit.unit_number}? Su progreso volverá a Estación 1 y se limpiarán sus registros.`)) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}/reset`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al reiniciar");
+      onSuccess(data.message || `PC #${unit.unit_number} reiniciada`);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUnit = async () => {
+    if (!window.confirm(`¿ELIMINAR definitivamente la PC #${unit.unit_number} de la orden? Esta acción reducirá el total de unidades del lote.`)) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al eliminar");
+      onSuccess(data.message || `PC #${unit.unit_number} eliminada`);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm overflow-hidden shadow-2xl">
         <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
-          <h3 className="text-sm font-bold">PC #{unit.unit_number} — Ficha</h3>
+          <div className="flex items-center gap-2">
+            <Cpu className="w-5 h-5" />
+            <h3 className="text-sm font-bold">PC #{unit.unit_number} — Ficha de Unidad</h3>
+          </div>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="p-4 space-y-3 text-xs">
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50 p-2.5 rounded-xl">
+            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
               <span className="text-[10px] text-gray-500 font-semibold block">N° Serie</span>
               <p className="font-mono font-bold text-gray-900 text-[11px] break-all">{unit.serial_number}</p>
             </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl">
+            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
               <span className="text-[10px] text-gray-500 font-semibold block">Orden</span>
               <p className="font-bold text-blue-700">{order.order_id}</p>
             </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl">
-              <span className="text-[10px] text-gray-500 font-semibold block">Estado</span>
-              <p className="font-bold">{unit.overall_status}</p>
+            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+              <span className="text-[10px] text-gray-500 font-semibold block">Estado Actual</span>
+              <div className="mt-0.5">
+                {unit.overall_status === "PASSED" && <Badge variant="success">COMPLETADA</Badge>}
+                {unit.overall_status === "FAILED" && <Badge variant="danger">CON FALLA</Badge>}
+                {unit.overall_status === "IN_PROGRESS" && <Badge variant="warning">EN PROCESO</Badge>}
+                {unit.overall_status === "PENDING" && <Badge variant="neutral">EN COLA</Badge>}
+              </div>
             </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl">
-              <span className="text-[10px] text-gray-500 font-semibold block">Estación</span>
+            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+              <span className="text-[10px] text-gray-500 font-semibold block">Ubicación</span>
               <p className="font-bold text-emerald-700">
                 {unit.current_station > stations.length ? "EMPACADO ✓" : `Estación ${unit.current_station}`}
               </p>
             </div>
           </div>
+
+          {/* Acciones de gestión de la PC */}
+          <div className="pt-2 border-t border-gray-200 space-y-2">
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Acciones de Control</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled={loading}
+                onClick={handleResetUnit}
+                className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                <span>Reiniciar PC</span>
+              </button>
+              <button
+                disabled={loading}
+                onClick={handleDeleteUnit}
+                className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Eliminar PC</span>
+              </button>
+            </div>
+          </div>
+
           <button
             onClick={onClose}
-            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-xl text-xs transition touch-target"
+            className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-xl text-xs transition touch-target"
           >
             Cerrar
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// MODAL AGREGAR PCS AL LOTE
+// =============================================
+function AddUnitsModal({ order, onClose, onSuccess }) {
+  const [count, setCount] = useState(1);
+  const [loading, setLoading] = useState(false);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (count < 1) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: parseInt(count, 10) })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al agregar PCs");
+      onSuccess(data.message);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm overflow-hidden shadow-2xl">
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <PlusCircle className="w-5 h-5" />
+            <h3 className="text-sm font-bold">Agregar PCs a la Orden</h3>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleAdd} className="p-4 space-y-4 text-xs">
+          <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+            <p className="font-semibold text-blue-900">Orden activa: {order.order_id}</p>
+            <p className="text-blue-700 text-[11px] mt-0.5">Modelo: {order.model_name} · Total actual: {order.total_units} PCs</p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1.5">¿Cuántas PCs deseas agregar?</label>
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              {[1, 5, 10, 20].map(n => (
+                <button
+                  type="button"
+                  key={n}
+                  onClick={() => setCount(n)}
+                  className={`py-2 rounded-lg font-bold border transition ${
+                    count === n ? "bg-blue-600 text-white border-blue-600 shadow-sm" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                  }`}
+                >
+                  +{n}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              min="1"
+              max="500"
+              required
+              value={count}
+              onChange={(e) => setCount(parseInt(e.target.value, 10) || 1)}
+              className="w-full text-sm font-bold border border-gray-300 rounded-xl p-2.5 touch-target focus:border-blue-600 focus:outline-none"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">Las nuevas PCs ingresarán directamente a la cola de la Estación 1 con números de serie correlativos.</p>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition touch-target"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-3 bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
+            >
+              {loading ? "Agregando..." : `Confirmar (+${count} PCs)`}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// MODAL LIMPIAR / REINICIAR LOTE
+// =============================================
+function ResetOrderModal({ order, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleReset = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/reset`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al reiniciar");
+      onSuccess(data.message || "Lote reiniciado exitosamente");
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm overflow-hidden shadow-2xl">
+        <div className="bg-amber-600 text-white p-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="w-5 h-5" />
+            <h3 className="text-sm font-bold">Limpiar y Reiniciar Lote</h3>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-3 text-xs">
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-xl">
+            <p className="font-bold flex items-center gap-1 mb-1">
+              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span>¿Reiniciar la orden {order.order_id}?</span>
+            </p>
+            <p className="text-[11px] leading-relaxed text-amber-800">
+              Esta acción regresará todas las <strong>{order.total_units} PCs</strong> a la <strong>Estación 1</strong> con estado inicial (Pendiente / 0 pasos) y limpiará todos los registros de prueba e incidencias anteriores.
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition touch-target"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleReset}
+              className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
+            >
+              {loading ? "Reiniciando..." : "Sí, Limpiar Lote"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// MODAL ELIMINAR ORDEN
+// =============================================
+function DeleteOrderModal({ order, onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleDelete = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al eliminar");
+      onSuccess(data.message || "Orden eliminada exitosamente");
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm overflow-hidden shadow-2xl">
+        <div className="bg-rose-600 text-white p-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Trash2 className="w-5 h-5" />
+            <h3 className="text-sm font-bold">Eliminar Orden de Producción</h3>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-3 text-xs">
+          <div className="bg-rose-50 border border-rose-200 text-rose-900 p-3 rounded-xl">
+            <p className="font-bold flex items-center gap-1 mb-1">
+              <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <span>¿Eliminar orden {order.order_id}?</span>
+            </p>
+            <p className="text-[11px] leading-relaxed text-rose-800">
+              Esta acción eliminará de forma permanente la orden, todas sus estaciones asignadas, las {order.total_units} PCs y el histórico de auditoría asociado.
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition touch-target"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleDelete}
+              className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
+            >
+              {loading ? "Eliminando..." : "Sí, Eliminar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// VISTA GESTIÓN DE TÉCNICOS
+// =============================================
+function TechniciansManagementView({ users, onRefreshUsers, notify }) {
+  const [filterRole, setFilterRole] = useState("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [modalUser, setModalUser] = useState(null); // null = cerrado, { isNew: true } o { isNew: false, ...user }
+  const [loading, setLoading] = useState(false);
+
+  const filteredUsers = useMemo(() => {
+    return (users || []).filter(u => {
+      const matchRole = filterRole === "ALL" || u.role === filterRole;
+      const matchSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          u.id.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchRole && matchSearch;
+    });
+  }, [users, filterRole, searchTerm]);
+
+  const handleSaveUser = async (formData) => {
+    try {
+      setLoading(true);
+      if (modalUser.isNew) {
+        const res = await fetch(`${API_BASE}/users`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: formData.id,
+            name: formData.name,
+            role: formData.role,
+            avatar: formData.avatar
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Error al crear técnico");
+        notify("Técnico registrado correctamente");
+      } else {
+        const res = await fetch(`${API_BASE}/users/${formData.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,
+            role: formData.role,
+            avatar: formData.avatar
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Error al actualizar técnico");
+        notify("Datos del técnico actualizados correctamente");
+      }
+      setModalUser(null);
+      onRefreshUsers();
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (!window.confirm(`¿Deseas eliminar o desactivar al técnico ${user.name} (${user.id})?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/users/${user.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al eliminar");
+      notify(data.message || "Técnico eliminado");
+      onRefreshUsers();
+    } catch (err) {
+      alert("Error: " + err.message);
+    }
+  };
+
+  return (
+    <div className="space-y-4 fade-in">
+      {/* Header */}
+      <Card className="p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0078d4] flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Personal Técnico y Operarios</h2>
+              <p className="text-xs text-gray-500">Administra técnicos, cambia nombres y asigna roles de estación</p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setModalUser({ isNew: true, id: `OP-${Math.floor(100 + Math.random() * 900)}`, name: "", role: "OPERATOR", avatar: "" })}
+            className="bg-[#0078d4] hover:bg-[#106ebe] text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow transition touch-target"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>+ Registrar Nuevo Técnico</span>
+          </button>
+        </div>
+      </Card>
+
+      {/* Barra de Filtros y Búsqueda */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por nombre o ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500 shadow-sm"
+          />
+        </div>
+        <div className="flex gap-1 bg-white p-1 rounded-xl border border-gray-200 shadow-sm">
+          {[
+            { id: "ALL", label: "Todos" },
+            { id: "OPERATOR", label: "Operarios" },
+            { id: "ADMIN", label: "Admins" }
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setFilterRole(t.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                filterRole === t.id ? "bg-[#0078d4] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid de Técnicos */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {filteredUsers.map(user => {
+          const isAdmin = user.role === "ADMIN";
+          return (
+            <Card key={user.id} className="p-3.5 hover:border-blue-300 transition shadow-sm space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full font-bold text-xs flex items-center justify-center border shadow-sm ${
+                    isAdmin ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                  }`}>
+                    {user.avatar || user.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900 text-xs">{user.name}</h4>
+                    <p className="font-mono text-[10px] text-gray-500 font-medium">{user.id}</p>
+                  </div>
+                </div>
+                <Badge variant={isAdmin ? "warning" : "info"}>
+                  {isAdmin ? "ADMIN" : "OPERARIO"}
+                </Badge>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => setModalUser({ isNew: false, ...user })}
+                  className="flex-1 py-2 px-3 bg-gray-50 hover:bg-blue-50 hover:text-blue-700 text-gray-700 font-semibold rounded-lg text-xs border border-gray-200 flex items-center justify-center gap-1.5 transition touch-target"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Editar Nombre</span>
+                </button>
+                <button
+                  onClick={() => handleDeleteUser(user)}
+                  className="p-2 bg-gray-50 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-lg border border-gray-200 transition touch-target"
+                  title="Eliminar técnico"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {filteredUsers.length === 0 && (
+        <Card className="p-8 text-center text-gray-500 text-xs">
+          No se encontraron técnicos con el criterio de búsqueda.
+        </Card>
+      )}
+
+      {/* Modal Crear / Editar Técnico */}
+      {modalUser && (
+        <TechnicianFormModal
+          data={modalUser}
+          loading={loading}
+          onClose={() => setModalUser(null)}
+          onSave={handleSaveUser}
+        />
+      )}
+    </div>
+  );
+}
+
+// Formulario Modal para Técnico
+function TechnicianFormModal({ data, loading, onClose, onSave }) {
+  const [formData, setFormData] = useState({
+    id: data.id || "",
+    name: data.name || "",
+    role: data.role || "OPERATOR",
+    avatar: data.avatar || ""
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl">
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            <h3 className="text-sm font-bold">
+              {data.isNew ? "Registrar Nuevo Técnico" : `Editar Técnico — ${formData.id}`}
+            </h3>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="p-4 space-y-3.5 text-xs">
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1">Nombre Completo del Técnico / Operario</label>
+            <input
+              type="text"
+              required
+              placeholder="Ej: Carlos Mendoza Flores"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full text-xs font-medium border border-gray-300 rounded-xl p-2.5 touch-target focus:border-blue-600 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">ID de Usuario</label>
+              <input
+                type="text"
+                required
+                disabled={!data.isNew}
+                value={formData.id}
+                onChange={(e) => setFormData({ ...formData, id: e.target.value.toUpperCase() })}
+                className="w-full font-mono text-xs font-bold border border-gray-300 rounded-xl p-2.5 bg-gray-50 touch-target disabled:opacity-75"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Rol en Sistema</label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2.5 bg-white touch-target focus:border-blue-600 focus:outline-none"
+              >
+                <option value="OPERATOR">Operario de Estación</option>
+                <option value="ADMIN">Administrador QC</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1">Iniciales / Avatar (Opcional)</label>
+            <input
+              type="text"
+              maxLength="3"
+              placeholder="Ej: CM"
+              value={formData.avatar}
+              onChange={(e) => setFormData({ ...formData, avatar: e.target.value.toUpperCase() })}
+              className="w-full font-mono text-xs border border-gray-300 rounded-xl p-2.5 touch-target"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition touch-target"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-3 bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
+            >
+              {loading ? "Guardando..." : "Guardar Técnico"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

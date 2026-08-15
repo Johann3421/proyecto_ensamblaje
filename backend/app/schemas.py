@@ -12,6 +12,22 @@ class QCUserSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class QCUserCreate(BaseModel):
+    id: Optional[str] = None
+    name: str
+    role: str = "OPERATOR"
+    avatar: Optional[str] = None
+
+class QCUserUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    avatar: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class AddUnitsRequest(BaseModel):
+    count: int = 1
+    custom_prefix: Optional[str] = None
+
 class ChecklistItemSchema(BaseModel):
     id: Optional[int] = None
     model_name: str

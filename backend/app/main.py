@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from .database import engine, Base, SessionLocal, get_db
 from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog, QCIssue
 from .schemas import (
-    QCUserSchema, ModelSchema, ChecklistItemSchema,
+    QCUserSchema, QCUserCreate, QCUserUpdate, AddUnitsRequest, ModelSchema, ChecklistItemSchema,
     OrderCreateRequest, OrderDetailSchema,
     StepLogCreate, StepLogSchema,
     IssueCreate, IssueSchema,
@@ -77,8 +77,78 @@ def health_check():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "service": "QC-KENYA-API"}
 
 @api_router.get("/users", response_model=List[QCUserSchema])
-def get_users(db: Session = Depends(get_db)):
-    return db.query(QCUser).filter(QCUser.is_active == True).all()
+def get_users(include_inactive: bool = False, db: Session = Depends(get_db)):
+    query = db.query(QCUser)
+    if not include_inactive:
+        query = query.filter(QCUser.is_active == True)
+    return query.order_by(QCUser.role, QCUser.name).all()
+
+@api_router.post("/users", response_model=QCUserSchema)
+def create_user(req: QCUserCreate, db: Session = Depends(get_db)):
+    user_id = req.id.strip() if req.id else f"OP-{int(time.time()) % 10000:04d}"
+    existing = db.query(QCUser).filter(QCUser.id == user_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="El ID del usuario ya existe")
+    
+    avatar = req.avatar
+    if not avatar:
+        parts = req.name.strip().split()
+        avatar = "".join([p[0].upper() for p in parts[:2]]) if parts else "OP"
+        
+    new_user = QCUser(
+        id=user_id,
+        name=req.name.strip(),
+        role=req.role,
+        avatar=avatar,
+        is_active=True
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@api_router.put("/users/{user_id}", response_model=QCUserSchema)
+def update_user(user_id: str, req: QCUserUpdate, db: Session = Depends(get_db)):
+    user = db.query(QCUser).filter(QCUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    if req.name is not None:
+        user.name = req.name.strip()
+        # Actualizar en cascada en las asignaciones de estación activas
+        db.query(QCStationAssignment).filter(QCStationAssignment.user_id == user_id).update({
+            "user_name": user.name
+        })
+    if req.role is not None:
+        user.role = req.role
+    if req.avatar is not None:
+        user.avatar = req.avatar
+    elif req.name is not None:
+        parts = req.name.strip().split()
+        user.avatar = "".join([p[0].upper() for p in parts[:2]]) if parts else user.avatar
+    if req.is_active is not None:
+        user.is_active = req.is_active
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+@api_router.delete("/users/{user_id}")
+def delete_user(user_id: str, db: Session = Depends(get_db)):
+    user = db.query(QCUser).filter(QCUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # Si tiene asignaciones activas, se desactiva en vez de borrar físicamente
+    active_assignments = db.query(QCStationAssignment).filter(QCStationAssignment.user_id == user_id).count()
+    if active_assignments > 0:
+        user.is_active = False
+        db.commit()
+        return {"message": f"Técnico {user.name} desactivado (conserva histórico)"}
+    
+    db.delete(user)
+    db.commit()
+    return {"message": f"Técnico {user.name} eliminado exitosamente"}
 
 @api_router.get("/models")
 def get_models(db: Session = Depends(get_db)):
@@ -320,6 +390,115 @@ def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
         "logs_count": len(logs),
         "issues": issues
     }
+
+@api_router.post("/orders/{order_id}/reset")
+def reset_order(order_id: str, db: Session = Depends(get_db)):
+    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    
+    # Limpiar logs e incidencias de esta orden
+    db.query(QCStepLog).filter(QCStepLog.order_id == order_id).delete()
+    db.query(QCIssue).filter(QCIssue.order_id == order_id).delete()
+    
+    # Reiniciar todas las unidades al estado inicial
+    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).all()
+    for u in units:
+        u.current_station = 1
+        u.overall_status = "PENDING"
+        u.current_step_progress = 0
+        u.started_at = None
+        u.completed_at = None
+    
+    order.status = "IN_PROGRESS"
+    db.commit()
+    return {"message": f"Orden {order_id} reiniciada por completo. {len(units)} PCs listas en Estación 1."}
+
+@api_router.delete("/orders/{order_id}")
+def delete_order(order_id: str, db: Session = Depends(get_db)):
+    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    
+    db.query(QCStepLog).filter(QCStepLog.order_id == order_id).delete()
+    db.query(QCIssue).filter(QCIssue.order_id == order_id).delete()
+    db.query(QCStationAssignment).filter(QCStationAssignment.order_id == order_id).delete()
+    db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).delete()
+    db.delete(order)
+    db.commit()
+    return {"message": f"Orden {order_id} y todos sus registros han sido eliminados"}
+
+@api_router.post("/orders/{order_id}/units")
+def add_units_to_order(order_id: str, req: AddUnitsRequest, db: Session = Depends(get_db)):
+    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    
+    existing_units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).all()
+    max_unit_num = max([u.unit_number for u in existing_units]) if existing_units else 0
+    
+    count = max(1, req.count)
+    added_unit_numbers = []
+    prefix = req.custom_prefix or f"KEN-{order.model_name[:3]}-{order.order_id[-4:]}"
+
+    for i in range(1, count + 1):
+        u_num = max_unit_num + i
+        new_unit = QCPCUnit(
+            order_id=order_id,
+            unit_number=u_num,
+            serial_number=f"{prefix}-{u_num:03d}",
+            current_station=1,
+            overall_status="PENDING",
+            current_step_progress=0
+        )
+        db.add(new_unit)
+        added_unit_numbers.append(u_num)
+    
+    db.commit()
+    order.total_units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).count()
+    db.commit()
+    
+    return {
+        "message": f"Se agregaron {count} PC(s) a la orden {order_id} (PCs #{added_unit_numbers[0]} a #{added_unit_numbers[-1]})",
+        "total_units": order.total_units
+    }
+
+@api_router.delete("/orders/{order_id}/units/{unit_number}")
+def delete_unit_from_order(order_id: str, unit_number: int, db: Session = Depends(get_db)):
+    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    
+    unit = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id, QCPCUnit.unit_number == unit_number).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail=f"PC #{unit_number} no encontrada en esta orden")
+    
+    db.query(QCStepLog).filter(QCStepLog.order_id == order_id, QCStepLog.unit_number == unit_number).delete()
+    db.query(QCIssue).filter(QCIssue.order_id == order_id, QCIssue.unit_number == unit_number).delete()
+    db.delete(unit)
+    db.commit()
+    
+    order.total_units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).count()
+    db.commit()
+    return {"message": f"PC #{unit_number} eliminada de la orden {order_id}", "total_units": order.total_units}
+
+@api_router.post("/orders/{order_id}/units/{unit_number}/reset")
+def reset_single_unit(order_id: str, unit_number: int, db: Session = Depends(get_db)):
+    unit = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id, QCPCUnit.unit_number == unit_number).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail=f"PC #{unit_number} no encontrada")
+    
+    db.query(QCStepLog).filter(QCStepLog.order_id == order_id, QCStepLog.unit_number == unit_number).delete()
+    db.query(QCIssue).filter(QCIssue.order_id == order_id, QCIssue.unit_number == unit_number).delete()
+    
+    unit.current_station = 1
+    unit.overall_status = "PENDING"
+    unit.current_step_progress = 0
+    unit.started_at = None
+    unit.completed_at = None
+    
+    db.commit()
+    return {"message": f"PC #{unit_number} reiniciada a Estación 1 con progreso en 0"}
 
 @api_router.get("/operator/{user_id}/station")
 def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Session = Depends(get_db)):

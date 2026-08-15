@@ -4,58 +4,61 @@ services:
   # Base de Datos PostgreSQL
   postgres:
     image: postgres:16-alpine
-    container_name: qc_kenya_postgres
+    container_name: qc_kenya_postgres_15
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-qc_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-KenyaQC2026Secure!}
       POSTGRES_DB: ${POSTGRES_DB:-qc_kenya_db}
+    ports:
+      - "${POSTGRES_PORT:-5415}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_15:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U qc_admin -d qc_kenya_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qc_admin} -d ${POSTGRES_DB:-qc_kenya_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
-      - qc_network
+      - qc_network_15
 
   # Backend FastAPI
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: qc_kenya_backend
+    container_name: qc_kenya_backend_15
     restart: always
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-qc_admin}:${POSTGRES_PASSWORD:-KenyaQC2026Secure!}@postgres:5432/${POSTGRES_DB:-qc_kenya_db}
       PORT: 8000
+      DOMAIN: ${DOMAIN:-ensamblaje.sekaitech.com.pe}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - backend_uploads:/app/uploads
+      - backend_uploads_15:/app/uploads
     networks:
-      - qc_network
+      - qc_network_15
 
-  # Frontend React (Nginx)
+  # Frontend React + Nginx Proxy
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: qc_kenya_frontend
+    container_name: qc_kenya_frontend_15
     restart: always
     ports:
-      - "${PORT:-80}:80"
+      - "${PORT:-3015}:80"
     depends_on:
       - backend
     networks:
-      - qc_network
+      - qc_network_15
 
 volumes:
-  postgres_data:
-  backend_uploads:
+  postgres_data_15:
+  backend_uploads_15:
 
 networks:
-  qc_network:
+  qc_network_15:
     driver: bridge

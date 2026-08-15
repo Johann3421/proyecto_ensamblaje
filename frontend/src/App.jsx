@@ -1,32 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  Check,
-  CheckCircle,
-  AlertTriangle,
-  AlertCircle,
-  Plus,
-  Edit,
-  Download,
-  Upload,
-  Loader2,
-  Play,
-  Coffee,
-  Inbox,
-  Shield,
-  Cpu,
-  RefreshCw,
-  X,
-  Columns,
-  Grid,
-  ShieldCheck,
-  FileText,
-  PlusCircle,
-  CheckSquare,
-  Image as ImageIcon,
-  PlayCircle,
-  ArrowRightCircle,
-  Search
+  Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Download,
+  Upload, Loader2, Play, Coffee, Inbox, Shield, Cpu, RefreshCw, X,
+  Columns, Grid, ShieldCheck, FileText, PlusCircle, CheckSquare,
+  Image as ImageIcon, PlayCircle, ArrowRightCircle, Search, Menu,
+  ChevronDown, ChevronUp, LayoutDashboard, ClipboardList, Settings,
+  Wrench, Eye
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -50,29 +30,31 @@ const Badge = ({ children, variant = "neutral", className = "" }) => {
     info: "bg-blue-50 text-blue-700 border-blue-200",
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${styles[variant] || styles.neutral} ${className}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${styles[variant] || styles.neutral} ${className}`}>
       {children}
     </span>
   );
 };
 
 const Card = ({ children, className = "", ...props }) => (
-  <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`} {...props}>
+  <div className={`bg-white rounded-xl border border-gray-200 shadow-sm ${className}`} {...props}>
     {children}
   </div>
 );
 
+// =============================================
+// APP PRINCIPAL
+// =============================================
 export default function App() {
-  const [currentUser, setCurrentUser] = useState({ id: "ADM-01", name: "Ing. Carlos Mendoza", role: "ADMIN" });
+  const [currentUser, setCurrentUser] = useState({ id: "ADM-01", name: "Ing. Carlos Mendoza", role: "ADMIN", avatar: "CM" });
   const [activeTab, setActiveTab] = useState("matrix");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [users, setUsers] = useState(DEFAULT_USERS_FALLBACK);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState("ORD-2026-0892");
   const [matrixData, setMatrixData] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
-
   const [operatorWorkspace, setOperatorWorkspace] = useState(null);
   const [activeMediaModal, setActiveMediaModal] = useState(null);
   const [activeIssueModal, setActiveIssueModal] = useState(null);
@@ -86,41 +68,30 @@ export default function App() {
 
   const loadInitialData = async () => {
     try {
-      setLoading(true);
       const [resUsers, resModels, resOrders] = await Promise.all([
         fetch(`${API_BASE}/users`).then(r => r.ok ? r.json() : DEFAULT_USERS_FALLBACK).catch(() => DEFAULT_USERS_FALLBACK),
         fetch(`${API_BASE}/models`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
-
       if (Array.isArray(resUsers) && resUsers.length > 0) setUsers(resUsers);
       if (Array.isArray(resModels)) setModels(resModels);
       if (Array.isArray(resOrders) && resOrders.length > 0) {
         setOrders(resOrders);
         setSelectedOrder(resOrders[0].order_id);
-      } else {
-        setSelectedOrder("ORD-2026-0892");
       }
     } catch (err) {
       console.warn("API load error:", err);
-      setSelectedOrder("ORD-2026-0892");
-    } finally {
-      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  useEffect(() => {
+  const loadMatrixData = () => {
     if (selectedOrder) {
       fetch(`${API_BASE}/orders/${selectedOrder}/matrix`)
         .then(r => r.ok ? r.json() : null)
         .then(data => { if (data) setMatrixData(data); })
         .catch(err => console.error("Error matriz:", err));
     }
-  }, [selectedOrder]);
+  };
 
   const loadOperatorWorkspace = () => {
     fetch(`${API_BASE}/operator/${currentUser.id}/station`)
@@ -129,6 +100,8 @@ export default function App() {
       .catch(err => console.error("Error workspace operario:", err));
   };
 
+  useEffect(() => { loadInitialData(); }, []);
+  useEffect(() => { loadMatrixData(); }, [selectedOrder]);
   useEffect(() => {
     if (activeTab === "operator" || currentUser.role === "OPERATOR") {
       loadOperatorWorkspace();
@@ -139,121 +112,134 @@ export default function App() {
     const u = users.find(x => x.id === userId);
     if (u) {
       setCurrentUser(u);
-      if (u.role === "OPERATOR") {
-        setActiveTab("operator");
-      } else {
-        setActiveTab("matrix");
-      }
+      setMobileMenuOpen(false);
+      setActiveTab(u.role === "OPERATOR" ? "operator" : "matrix");
     }
   };
 
+  const navigate = (tab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  };
+
+  const ADMIN_TABS = [
+    { id: "matrix", label: "Pipeline", shortLabel: "Pipeline", icon: Grid },
+    { id: "create-order", label: "Nueva Orden", shortLabel: "Orden", icon: PlusCircle },
+    { id: "checklists", label: "Checklists", shortLabel: "Checks", icon: FileText },
+    { id: "audit", label: "Auditoría", shortLabel: "Auditor", icon: ShieldCheck },
+  ];
+
+  const OPERATOR_TABS = [
+    { id: "operator", label: "Mi Estación", shortLabel: "Trabajo", icon: CheckSquare },
+  ];
+
+  const tabs = currentUser.role === "ADMIN" ? ADMIN_TABS : OPERATOR_TABS;
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      {/* NAVBAR */}
-      <header className="bg-[#0078d4] text-white shadow-md flex-shrink-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-white p-1.5 rounded flex items-center justify-center text-[#0078d4] font-black text-sm tracking-wider">
+    <div className="flex flex-col h-screen overflow-hidden bg-[#f3f2f1]">
+      {/* ——— HEADER ——— */}
+      <header className="bg-[#0078d4] text-white shadow-md flex-shrink-0 z-40">
+        <div className="px-3 sm:px-4 h-14 flex items-center justify-between max-w-7xl mx-auto">
+          {/* Logo */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="bg-white px-2 py-1 rounded text-[#0078d4] font-black text-sm tracking-wider flex-shrink-0">
               KENYA
             </div>
-            <div className="h-5 w-px bg-blue-300/40"></div>
-            <h1 className="font-semibold text-base tracking-wide flex items-center gap-2">
+            <div className="hidden sm:block h-5 w-px bg-blue-300/40"></div>
+            <h1 className="hidden sm:flex font-semibold text-sm tracking-wide items-center gap-2">
               <span>Control de Calidad</span>
               <span className="text-xs bg-blue-900/40 px-2 py-0.5 rounded text-blue-100 font-mono">
-                PIPELINE V2.0
+                V2.0
               </span>
             </h1>
           </div>
 
-          <div className="hidden md:flex items-center space-x-1">
-            {currentUser.role === "ADMIN" ? (
-              <>
-                <button
-                  onClick={() => setActiveTab("matrix")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
-                    activeTab === "matrix" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
-                  }`}
-                >
-                  <Grid className="w-4 h-4" />
-                  <span>Monitoreo Pipeline</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("create-order")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
-                    activeTab === "create-order" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
-                  }`}
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>Nueva Orden (Lote)</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("checklists")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
-                    activeTab === "checklists" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
-                  }`}
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Modelos & Checklists</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("audit")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
-                    activeTab === "audit" ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
-                  }`}
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Auditoría Forense</span>
-                </button>
-              </>
-            ) : (
+          {/* Nav Desktop */}
+          <nav className="hidden md:flex items-center gap-1">
+            {tabs.map(tab => (
               <button
-                onClick={() => setActiveTab("operator")}
-                className="px-3 py-1.5 bg-white/20 rounded-md text-xs font-semibold text-white flex items-center gap-1.5"
+                key={tab.id}
+                onClick={() => navigate(tab.id)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
+                  activeTab === tab.id ? "bg-white/20 text-white font-semibold" : "hover:bg-white/10 text-blue-100"
+                }`}
               >
-                <CheckSquare className="w-4 h-4" />
-                <span>Mi Estación de Trabajo</span>
+                <tab.icon className="w-4 h-4" />
+                <span>{tab.label}</span>
               </button>
-            )}
-          </div>
+            ))}
+          </nav>
 
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center gap-2 bg-blue-900/40 px-3 py-1 rounded-lg border border-blue-400/30 text-xs">
-              <span className="text-blue-200 hidden sm:inline">Sesión:</span>
+          {/* Controles derecha */}
+          <div className="flex items-center gap-2">
+            {/* Selector de usuario */}
+            <div className="flex items-center gap-1.5 bg-blue-900/40 px-2 py-1 rounded-lg border border-blue-400/30 text-xs">
+              <span className="hidden sm:inline text-blue-200">Sesión:</span>
               <select
                 value={currentUser.id}
                 onChange={(e) => handleUserChange(e.target.value)}
-                className="bg-transparent text-white font-medium focus:outline-none cursor-pointer text-xs"
+                className="bg-transparent text-white font-medium focus:outline-none cursor-pointer text-xs max-w-[110px] sm:max-w-none"
               >
                 {Array.isArray(users) && users.map(u => (
                   <option key={u.id} value={u.id} className="text-gray-900 bg-white">
-                    {u.role === "ADMIN" ? "👑 Admin: " : "🔧 Op: "}{u.name}
+                    {u.role === "ADMIN" ? "👑 " : "🔧 "}{u.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="w-8 h-8 rounded-full bg-white text-[#0078d4] font-bold text-xs flex items-center justify-center shadow">
+            {/* Avatar */}
+            <div className="w-8 h-8 rounded-full bg-white text-[#0078d4] font-bold text-xs flex items-center justify-center shadow flex-shrink-0">
               {currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}
             </div>
+
+            {/* Botón menú mobile */}
+            <button
+              className="md:hidden p-1.5 rounded-lg hover:bg-white/20 transition"
+              onClick={() => setMobileMenuOpen(prev => !prev)}
+              aria-label="Abrir menú"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Dropdown Menú Mobile */}
+        {mobileMenuOpen && (
+          <div className="md:hidden bg-[#005a9e] border-t border-blue-500/50 px-3 py-2 space-y-1 fade-in z-50">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => navigate(tab.id)}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition touch-target ${
+                  activeTab === tab.id
+                    ? "bg-white/20 text-white font-semibold"
+                    : "text-blue-100 hover:bg-white/10"
+                }`}
+              >
+                <tab.icon className="w-5 h-5 flex-shrink-0" />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* NOTIFICACIÓN FLOTANTE */}
       {notification && (
-        <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg border text-sm font-medium flex items-center gap-2 fade-in ${
-          notification.type === "success" 
-            ? "bg-emerald-600 text-white border-emerald-700" 
+        <div className={`fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium flex items-center gap-2 fade-in w-[calc(100%-2rem)] max-w-md ${
+          notification.type === "success"
+            ? "bg-emerald-600 text-white border-emerald-700"
             : "bg-rose-600 text-white border-rose-700"
         }`}>
-          {notification.type === "success" ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-          <span>{notification.message}</span>
+          {notification.type === "success" ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertTriangle className="w-5 h-5 flex-shrink-0" />}
+          <span className="text-sm">{notification.message}</span>
         </div>
       )}
 
       {/* CONTENIDO PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#f3f2f1]">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
+        <div className="max-w-7xl mx-auto space-y-4">
           {activeTab === "matrix" && (
             <PipelineMatrixView
               matrixData={matrixData}
@@ -262,17 +248,9 @@ export default function App() {
               setSelectedOrder={setSelectedOrder}
               onOpenEmergency={() => setEmergencyModalOpen(true)}
               onSelectUnit={(unit) => setSelectedUnitDetail(unit)}
-              onRefresh={() => {
-                loadInitialData();
-                if (selectedOrder) {
-                  fetch(`${API_BASE}/orders/${selectedOrder}/matrix`)
-                    .then(r => r.ok ? r.json() : null)
-                    .then(data => { if (data) setMatrixData(data); });
-                }
-              }}
+              onRefresh={() => { loadInitialData(); loadMatrixData(); }}
             />
           )}
-
           {activeTab === "create-order" && (
             <CreateOrderView
               models={models}
@@ -281,11 +259,10 @@ export default function App() {
                 notify("¡Orden y línea de producción creada exitosamente!");
                 loadInitialData();
                 setSelectedOrder(orderId);
-                setActiveTab("matrix");
+                navigate("matrix");
               }}
             />
           )}
-
           {activeTab === "checklists" && (
             <ChecklistEditorView
               models={models}
@@ -293,11 +270,9 @@ export default function App() {
               onRefreshModels={loadInitialData}
             />
           )}
-
           {activeTab === "audit" && (
             <AuditLogsView selectedOrder={selectedOrder} orders={orders} />
           )}
-
           {activeTab === "operator" && (
             <OperatorWorkspaceView
               workspace={operatorWorkspace}
@@ -311,11 +286,24 @@ export default function App() {
         </div>
       </main>
 
-      {/* MODALES */}
-      {activeMediaModal && (
-        <MediaViewerModal item={activeMediaModal} onClose={() => setActiveMediaModal(null)} />
-      )}
+      {/* ——— BOTTOM NAV MOBILE ——— */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-bottom z-40 flex">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => navigate(tab.id)}
+            className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 touch-target transition-colors ${
+              activeTab === tab.id ? "text-[#0078d4]" : "text-gray-500"
+            }`}
+          >
+            <tab.icon className="w-5 h-5" />
+            <span className="text-[10px] font-medium leading-none">{tab.shortLabel}</span>
+          </button>
+        ))}
+      </nav>
 
+      {/* MODALES */}
+      {activeMediaModal && <MediaViewerModal item={activeMediaModal} onClose={() => setActiveMediaModal(null)} />}
       {activeIssueModal && (
         <IssueReportModal
           data={activeIssueModal}
@@ -330,7 +318,6 @@ export default function App() {
           }}
         />
       )}
-
       {emergencyModalOpen && matrixData && (
         <EmergencyReassignModal
           order={matrixData.order}
@@ -344,7 +331,6 @@ export default function App() {
           }}
         />
       )}
-
       {selectedUnitDetail && matrixData && (
         <UnitDetailModal
           unit={selectedUnitDetail}
@@ -357,28 +343,27 @@ export default function App() {
   );
 }
 
+// =============================================
 // 1. MATRIZ DE PIPELINE
+// =============================================
 function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh }) {
   if (!matrixData || !matrixData.order) {
     return (
-      <Card className="p-8 text-center max-w-md mx-auto space-y-4">
+      <Card className="p-8 text-center mx-auto max-w-sm space-y-4">
         <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
         <div>
-          <h3 className="text-sm font-bold text-gray-800">Conectando con la Matriz de Producción...</h3>
-          <p className="text-xs text-gray-500 mt-1">Obteniendo estado en tiempo real del pipeline de ensamble.</p>
+          <h3 className="text-sm font-bold text-gray-800">Conectando con el Pipeline...</h3>
+          <p className="text-xs text-gray-500 mt-1">Obteniendo estado en tiempo real.</p>
         </div>
-        <button
-          onClick={onRefresh}
-          className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-4 py-2 rounded-md shadow inline-flex items-center gap-1.5 transition"
-        >
+        <button onClick={onRefresh} className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-4 py-2 rounded-lg shadow inline-flex items-center gap-1.5 transition">
           <RefreshCw className="w-3.5 h-3.5" />
-          <span>Actualizar Datos</span>
+          <span>Reintentar Conexión</span>
         </button>
       </Card>
     );
   }
 
-  const { order, stations = [], units = [], logs_count = 0, issues = [] } = matrixData;
+  const { order, stations = [], units = [], issues = [] } = matrixData;
   const total = units.length;
   const passed = units.filter(u => u.overall_status === "PASSED").length;
   const failed = units.filter(u => u.overall_status === "FAILED").length;
@@ -387,205 +372,163 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
   const completionPercentage = total > 0 ? Math.round((passed / total) * 100) : 0;
 
   return (
-    <div className="space-y-6 fade-in">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 text-[#0078d4] flex items-center justify-center font-bold">
-            <Cpu className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-gray-900">{order.order_id}</h2>
-              <Badge variant="info">Modelo: {order.model_name}</Badge>
-              <Badge variant="neutral">Parte: {order.part_number}</Badge>
+    <div className="space-y-4 fade-in">
+      {/* Header de orden */}
+      <Card className="p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-blue-50 text-[#0078d4] flex items-center justify-center flex-shrink-0">
+              <Cpu className="w-5 h-5" />
             </div>
-            <p className="text-xs text-gray-500">Lote de {order.total_units} PCs divididas en {order.total_stations} Estaciones de Control</p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2 className="text-sm font-bold text-gray-900 truncate">{order.order_id}</h2>
+                <Badge variant="info">{order.model_name}</Badge>
+              </div>
+              <p className="text-xs text-gray-500 truncate">{order.total_units} PCs · {order.total_stations} Estaciones</p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {orders.length > 0 && (
-            <select
-              value={selectedOrder || ""}
-              onChange={(e) => setSelectedOrder(e.target.value)}
-              className="text-xs border border-gray-300 rounded px-2.5 py-1.5 bg-gray-50 font-medium text-gray-700"
+          <div className="flex flex-wrap items-center gap-2">
+            {orders.length > 0 && (
+              <select
+                value={selectedOrder || ""}
+                onChange={(e) => setSelectedOrder(e.target.value)}
+                className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-gray-50 font-medium text-gray-700 touch-target"
+              >
+                {orders.map(o => (
+                  <option key={o.order_id} value={o.order_id}>
+                    {o.order_id} ({o.model_name})
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={onOpenEmergency}
+              className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition touch-target"
             >
-              {orders.map(o => (
-                <option key={o.order_id} value={o.order_id}>
-                  {o.order_id} ({o.model_name} - {o.total_units} PCs)
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button
-            onClick={onOpenEmergency}
-            className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded font-semibold flex items-center gap-1.5 transition"
-          >
-            <AlertCircle className="w-4 h-4 text-amber-600" />
-            <span>Reasignación de Emergencia</span>
-          </button>
-
-          <button
-            onClick={onRefresh}
-            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium flex items-center gap-1 transition"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Actualizar</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Card className="p-3.5 border-l-4 border-l-blue-600">
-          <p className="text-xs font-semibold text-gray-500 uppercase">Total Lote</p>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold text-gray-900">{total}</span>
-            <span className="text-xs text-blue-600 font-medium">{order.model_name}</span>
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              <span className="hidden sm:inline">Reasignación </span>Emergencia
+            </button>
+            <button
+              onClick={onRefresh}
+              className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition touch-target"
+              title="Actualizar"
+            >
+              <RefreshCw className="w-4 h-4 text-gray-600" />
+            </button>
           </div>
-        </Card>
+        </div>
+      </Card>
 
-        <Card className="p-3.5 border-l-4 border-l-emerald-600">
-          <p className="text-xs font-semibold text-emerald-700 uppercase">Terminadas OK</p>
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="p-3 border-l-4 border-l-emerald-600">
+          <p className="text-[10px] font-bold text-emerald-700 uppercase">Completadas</p>
           <div className="flex items-baseline justify-between mt-1">
             <span className="text-2xl font-bold text-emerald-600">{passed}</span>
-            <span className="text-xs text-emerald-700 font-semibold">{completionPercentage}%</span>
+            <span className="text-xs text-emerald-700 font-bold">{completionPercentage}%</span>
           </div>
         </Card>
-
-        <Card className="p-3.5 border-l-4 border-l-amber-500">
-          <p className="text-xs font-semibold text-amber-700 uppercase">En Proceso</p>
+        <Card className="p-3 border-l-4 border-l-amber-500">
+          <p className="text-[10px] font-bold text-amber-700 uppercase">En Proceso</p>
           <div className="flex items-baseline justify-between mt-1">
             <span className="text-2xl font-bold text-amber-600">{inProgress}</span>
-            <span className="text-xs text-amber-700">En estaciones</span>
+            <span className="text-xs text-amber-600">activas</span>
           </div>
         </Card>
-
-        <Card className="p-3.5 border-l-4 border-l-rose-600">
-          <p className="text-xs font-semibold text-rose-700 uppercase">Con Falla / Alerta</p>
+        <Card className="p-3 border-l-4 border-l-rose-600">
+          <p className="text-[10px] font-bold text-rose-700 uppercase">Con Falla</p>
           <div className="flex items-baseline justify-between mt-1">
             <span className="text-2xl font-bold text-rose-600">{failed}</span>
-            <span className="text-xs text-rose-700 font-medium">{issues.length} tickets</span>
+            <span className="text-xs text-rose-600">{issues.length} tickets</span>
           </div>
         </Card>
-
-        <Card className="p-3.5 border-l-4 border-l-gray-400">
-          <p className="text-xs font-semibold text-gray-500 uppercase">En Espera (Cola)</p>
+        <Card className="p-3 border-l-4 border-l-gray-400">
+          <p className="text-[10px] font-bold text-gray-500 uppercase">En Cola</p>
           <div className="flex items-baseline justify-between mt-1">
             <span className="text-2xl font-bold text-gray-700">{pending}</span>
-            <span className="text-xs text-gray-500">Por iniciar</span>
+            <span className="text-xs text-gray-500">pendiente</span>
           </div>
         </Card>
       </div>
 
-      <Card className="p-5 overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-200 mb-4 gap-2">
-          <div>
-            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-              <Columns className="w-4 h-4 text-blue-600" />
-              <span>Matriz de Trazabilidad en Cadena (Pipeline Matrix)</span>
-            </h3>
-            <p className="text-xs text-gray-500">Visualice la posición exacta de cada una de las {total} PCs a lo largo de las estaciones</p>
-          </div>
+      {/* Barra progreso general */}
+      <Card className="p-3">
+        <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1.5">
+          <span>Progreso del Lote</span>
+          <span>{passed} / {total} PCs</span>
+        </div>
+        <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+          <div
+            className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+            style={{ width: `${completionPercentage}%` }}
+          ></div>
+        </div>
+      </Card>
 
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-              <span className="text-gray-600">Completada</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
-              <span className="text-gray-600">En Revisión</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-rose-500"></span>
-              <span className="text-gray-600">Falla</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-gray-300"></span>
-              <span className="text-gray-600">En Cola</span>
-            </div>
+      {/* Tabla scroll horizontal en mobile */}
+      <Card className="overflow-hidden">
+        <div className="p-3 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-bold text-gray-900 text-xs flex items-center gap-1.5">
+            <Columns className="w-4 h-4 text-blue-600" />
+            <span>Matriz de Trazabilidad</span>
+          </h3>
+          <div className="flex items-center gap-3 text-[10px] text-gray-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>OK</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block animate-pulse"></span>Activo</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>Falla</span>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="table-mobile-scroll">
+          <table className="w-full text-left border-collapse text-xs min-w-[480px]">
             <thead>
               <tr className="bg-gray-50 text-gray-700 border-b border-gray-200">
-                <th className="py-2.5 px-3 font-bold w-24">N° Unidad</th>
-                <th className="py-2.5 px-3 font-bold w-36">N° Serie</th>
+                <th className="py-2 px-3 font-bold sticky left-0 bg-gray-50 z-10 w-20">PC</th>
                 {stations.map(st => (
-                  <th key={st.station_number} className="py-2.5 px-3 font-bold border-l border-gray-200">
-                    <div className="text-gray-900 font-semibold">{st.station_name || `Estación ${st.station_number}`}</div>
-                    <div className="text-[10px] text-gray-500 font-normal">
-                      {st.user_name} (Pasos {st.start_step}-{st.end_step})
+                  <th key={st.station_number} className="py-2 px-3 font-bold border-l border-gray-200 whitespace-nowrap">
+                    <div className="text-gray-800 font-semibold">E{st.station_number}</div>
+                    <div className="text-[10px] text-gray-500 font-normal hidden sm:block truncate max-w-[100px]">
+                      {st.user_name}
                     </div>
                   </th>
                 ))}
-                <th className="py-2.5 px-3 font-bold border-l border-gray-200 text-center w-28">Estado Final</th>
+                <th className="py-2 px-3 font-bold border-l border-gray-200 text-center w-24">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {units.map((unit) => {
-                const isUnitFinished = unit.overall_status === "PASSED";
-                const isUnitFailed = unit.overall_status === "FAILED";
-
+                const isFinished = unit.overall_status === "PASSED";
+                const isFailed = unit.overall_status === "FAILED";
                 return (
                   <tr
                     key={unit.unit_number}
                     onClick={() => onSelectUnit(unit)}
-                    className="hover:bg-blue-50/50 cursor-pointer transition"
+                    className="hover:bg-blue-50/50 active:bg-blue-100 cursor-pointer transition"
                   >
-                    <td className="py-2 px-3 font-semibold text-gray-900">
-                      PC #{unit.unit_number.toString().padStart(2, '0')}
+                    <td className="py-2 px-3 font-bold text-gray-900 sticky left-0 bg-white z-10">
+                      #{unit.unit_number.toString().padStart(2, '0')}
                     </td>
-                    <td className="py-2 px-3 font-mono text-gray-600 text-[11px]">
-                      {unit.serial_number || `KEN-2026-${unit.unit_number.toString().padStart(3, '0')}`}
-                    </td>
-
                     {stations.map(st => {
-                      let cellState = "queue";
-                      if (isUnitFailed && unit.current_station === st.station_number) {
-                        cellState = "failed";
-                      } else if (unit.current_station > st.station_number) {
-                        cellState = "passed";
-                      } else if (unit.current_station === st.station_number && !isUnitFinished) {
-                        cellState = "active";
-                      }
+                      let state = "queue";
+                      if (isFailed && unit.current_station === st.station_number) state = "failed";
+                      else if (unit.current_station > st.station_number) state = "passed";
+                      else if (unit.current_station === st.station_number && !isFinished) state = "active";
 
                       return (
-                        <td key={st.station_number} className="py-2 px-3 border-l border-gray-200">
-                          {cellState === "passed" && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                              <Check className="w-3 h-3 text-emerald-600" />
-                              <span>OK</span>
-                            </span>
-                          )}
-                          {cellState === "active" && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded pulse-glow">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-ping"></span>
-                              <span>En Turno</span>
-                            </span>
-                          )}
-                          {cellState === "failed" && (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
-                              <X className="w-3 h-3 text-rose-600" />
-                              <span>Falla</span>
-                            </span>
-                          )}
-                          {cellState === "queue" && (
-                            <span className="text-[11px] text-gray-400 font-mono">•••</span>
-                          )}
+                        <td key={st.station_number} className="py-2 px-2 border-l border-gray-200 text-center">
+                          {state === "passed" && <Check className="w-4 h-4 text-emerald-600 mx-auto" />}
+                          {state === "active" && <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping mx-auto block"></span>}
+                          {state === "failed" && <X className="w-4 h-4 text-rose-600 mx-auto" />}
+                          {state === "queue" && <span className="text-gray-300 text-xs">—</span>}
                         </td>
                       );
                     })}
-
-                    <td className="py-2 px-3 border-l border-gray-200 text-center">
-                      {isUnitFinished && <Badge variant="success">EMPACADO</Badge>}
-                      {isUnitFailed && <Badge variant="danger">BLOQUEADO</Badge>}
-                      {!isUnitFinished && !isUnitFailed && (
-                        <Badge variant="warning">Estación {unit.current_station}</Badge>
-                      )}
+                    <td className="py-2 px-2 border-l border-gray-200 text-center">
+                      {isFinished && <Badge variant="success">OK</Badge>}
+                      {isFailed && <Badge variant="danger">Falla</Badge>}
+                      {!isFinished && !isFailed && <Badge variant="warning">E{unit.current_station}</Badge>}
                     </td>
                   </tr>
                 );
@@ -598,7 +541,9 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
   );
 }
 
+// =============================================
 // 2. CREADOR DE ORDEN
+// =============================================
 function CreateOrderView({ models, users, onSuccess }) {
   const [modelName, setModelName] = useState(models[0]?.name || "PROWORK");
   const [orderId, setOrderId] = useState(`ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -613,82 +558,61 @@ function CreateOrderView({ models, users, onSuccess }) {
     fetch(`${API_BASE}/models/${modelName}/checklist`)
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setModelSteps(data); })
-      .catch(err => console.error("Error pasos:", err));
+      .catch(() => {});
   }, [modelName]);
 
   useEffect(() => {
-    const initial = [];
-    for (let i = 0; i < stationCount; i++) {
-      const op = users[i % users.length] || { id: `OP-${101 + i}`, name: `Operario ${i + 1}` };
-      initial.push({
-        station_number: i + 1,
-        user_id: op.id,
-        user_name: op.name,
-        station_name: getStationDefaultName(i + 1)
-      });
-    }
-    setSelectedOperators(initial);
-  }, [stationCount, users]);
-
-  function getStationDefaultName(idx) {
-    const names = [
+    const defaultNames = [
       "Chasis, Montaje y Placas",
       "Protecciones, Discos y GPU",
       "BIOS, SO Windows y Pruebas",
       "Personalización, Software y Serie",
       "Stickers, Limpieza y Embalaje"
     ];
-    return names[idx - 1] || `Estación ${idx} de Ensamblaje`;
-  }
+    const initial = Array.from({ length: stationCount }, (_, i) => {
+      const op = users[i % users.length] || { id: `OP-${101 + i}`, name: `Operario ${i + 1}` };
+      return {
+        station_number: i + 1,
+        user_id: op.id,
+        user_name: op.name,
+        station_name: defaultNames[i] || `Estación ${i + 1}`
+      };
+    });
+    setSelectedOperators(initial);
+  }, [stationCount, users]);
 
   const partitionPreview = useMemo(() => {
     const totalSteps = modelSteps.length || 52;
     const baseCount = Math.floor(totalSteps / stationCount);
     const remainder = totalSteps % stationCount;
-
-    const partitions = [];
     let currentStart = 1;
-
-    for (let i = 1; i <= stationCount; i++) {
-      const extra = i <= remainder ? 1 : 0;
+    return Array.from({ length: stationCount }, (_, i) => {
+      const extra = i + 1 <= remainder ? 1 : 0;
       const count = baseCount + extra;
       const currentEnd = currentStart + count - 1;
-      partitions.push({
-        station: i,
-        startStep: currentStart,
-        endStep: currentEnd,
-        stepCount: count,
-        percentage: Math.round((count / totalSteps) * 100)
-      });
+      const p = { station: i + 1, startStep: currentStart, endStep: currentEnd, stepCount: count, percentage: Math.round((count / totalSteps) * 100) };
       currentStart = currentEnd + 1;
-    }
-    return partitions;
+      return p;
+    });
   }, [modelSteps, stationCount]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       setSubmitting(true);
-      const payload = {
-        order_id: orderId,
-        model_name: modelName,
-        part_number: partNumber,
-        total_units: parseInt(totalUnits, 10),
-        stations: selectedOperators,
-        created_by: "Ing. Carlos Mendoza (Admin QC)"
-      };
-
       const res = await fetch(`${API_BASE}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          order_id: orderId,
+          model_name: modelName,
+          part_number: partNumber,
+          total_units: parseInt(totalUnits, 10),
+          stations: selectedOperators,
+          created_by: "Admin QC"
+        })
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Error al crear la orden");
-      }
-
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || "Error"); }
       onSuccess(orderId);
     } catch (err) {
       alert(err.message);
@@ -698,99 +622,70 @@ function CreateOrderView({ models, users, onSuccess }) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 fade-in">
-      <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-        <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+    <div className="max-w-2xl mx-auto space-y-4 fade-in">
+      <Card className="p-4">
+        <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
           <PlusCircle className="w-5 h-5 text-blue-600" />
-          <span>Lanzar Nueva Orden de Producción y Control de Calidad</span>
+          <span>Nueva Orden de Producción</span>
         </h2>
-        <p className="text-xs text-gray-500 mb-6">
-          Configure los parámetros del lote y la división equitativa de pasos entre las estaciones de la línea continua.
-        </p>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">1. Parámetros del Lote</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Modelo de Computadora</label>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Parámetros */}
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">Parámetros del Lote</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Modelo</label>
                 <select
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
-                  className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white font-medium"
+                  className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-medium touch-target"
                 >
                   {models.map(m => (
-                    <option key={m.name} value={m.name}>{m.name}</option>
+                    <option key={m.name} value={m.name}>{m.name} ({m.step_count} pasos)</option>
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">N° de Orden</label>
-                <input
-                  type="text"
-                  value={orderId}
-                  onChange={(e) => setOrderId(e.target.value)}
-                  required
-                  className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white font-mono font-semibold"
-                />
+                <input type="text" value={orderId} onChange={(e) => setOrderId(e.target.value)} required className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-mono touch-target" />
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">N° de Parte</label>
-                <input
-                  type="text"
-                  value={partNumber}
-                  onChange={(e) => setPartNumber(e.target.value)}
-                  required
-                  className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white font-mono"
-                />
-              </div>
-
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Cantidad de PCs</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="500"
-                  value={totalUnits}
-                  onChange={(e) => setTotalUnits(e.target.value)}
-                  required
-                  className="w-full text-xs border border-gray-300 rounded-md p-2 bg-white font-bold text-blue-700"
-                />
+                <input type="number" min="1" max="500" value={totalUnits} onChange={(e) => setTotalUnits(e.target.value)} required className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-bold text-blue-700 touch-target" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">N° de Parte</label>
+                <input type="text" value={partNumber} onChange={(e) => setPartNumber(e.target.value)} required className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-mono touch-target" />
               </div>
             </div>
           </div>
 
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+          {/* Estaciones */}
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">2. Asignación de Operarios por Estación</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-600 font-medium">N° de Estaciones:</span>
-                <select
-                  value={stationCount}
-                  onChange={(e) => setStationCount(parseInt(e.target.value, 10))}
-                  className="text-xs border border-gray-300 rounded px-2 py-1 bg-white font-bold text-blue-600"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
-                    <option key={n} value={n}>{n} Estaciones</option>
-                  ))}
-                </select>
-              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">Estaciones</h3>
+              <select
+                value={stationCount}
+                onChange={(e) => setStationCount(parseInt(e.target.value, 10))}
+                className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white font-bold text-blue-600 touch-target"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                  <option key={n} value={n}>{n} estaciones</option>
+                ))}
+              </select>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {selectedOperators.map((st, idx) => {
                 const partition = partitionPreview[idx] || {};
                 return (
-                  <div key={idx} className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded border border-gray-200">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
-                      {st.station_number}
-                    </div>
-
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                      <div>
-                        <span className="block text-[10px] text-gray-500 font-semibold">Nombre de Estación</span>
+                  <div key={idx} className="bg-white p-3 rounded-xl border border-gray-200 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
+                        {st.station_number}
+                      </div>
+                      <div className="flex-1 min-w-0">
                         <input
                           type="text"
                           value={st.station_name}
@@ -799,136 +694,79 @@ function CreateOrderView({ models, users, onSuccess }) {
                             copy[idx].station_name = e.target.value;
                             setSelectedOperators(copy);
                           }}
-                          className="w-full text-xs border border-gray-300 rounded p-1.5 font-medium"
+                          placeholder="Nombre de estación"
+                          className="w-full text-xs border border-gray-300 rounded-lg p-2 touch-target"
                         />
                       </div>
-
-                      <div>
-                        <span className="block text-[10px] text-gray-500 font-semibold">Técnico / Operario Asignado</span>
-                        <select
-                          value={st.user_id}
-                          onChange={(e) => {
-                            const copy = [...selectedOperators];
-                            const selectedUser = users.find(u => u.id === e.target.value);
-                            copy[idx].user_id = e.target.value;
-                            copy[idx].user_name = selectedUser ? selectedUser.name : e.target.value;
-                            setSelectedOperators(copy);
-                          }}
-                          className="w-full text-xs border border-gray-300 rounded p-1.5 font-medium bg-white"
-                        >
-                          {users.map(u => (
-                            <option key={u.id} value={u.id}>{u.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                      {partition.stepCount && (
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 flex-shrink-0">
+                          {partition.stepCount}p
+                        </span>
+                      )}
                     </div>
-
-                    <div className="text-right flex-shrink-0 bg-blue-50 px-3 py-1.5 rounded border border-blue-200">
-                      <span className="text-[10px] text-blue-700 font-semibold block">Pasos Asignados</span>
-                      <span className="text-xs font-bold text-blue-900">
-                        {partition.startStep} al {partition.endStep} ({partition.stepCount} pasos)
-                      </span>
-                    </div>
+                    <select
+                      value={st.user_id}
+                      onChange={(e) => {
+                        const copy = [...selectedOperators];
+                        const u = users.find(u => u.id === e.target.value);
+                        copy[idx].user_id = e.target.value;
+                        copy[idx].user_name = u ? u.name : e.target.value;
+                        setSelectedOperators(copy);
+                      }}
+                      className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white touch-target"
+                    >
+                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
                   </div>
                 );
               })}
             </div>
-          </div>
 
-          <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-200 space-y-2">
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-blue-900">Distribución de Carga del Checklist ({modelSteps.length} Pasos Totales)</span>
-              <span className="text-blue-700 font-semibold">Equilibrio Óptimo Sin Cuellos de Botella</span>
-            </div>
-            <div className="flex h-6 rounded-lg overflow-hidden border border-blue-300 shadow-inner">
+            {/* Barra distribución */}
+            <div className="flex h-5 rounded-lg overflow-hidden border border-blue-200 shadow-inner">
               {partitionPreview.map((p, i) => {
                 const colors = ["bg-blue-600", "bg-emerald-600", "bg-amber-600", "bg-purple-600", "bg-cyan-600", "bg-rose-600", "bg-indigo-600", "bg-teal-600"];
                 return (
-                  <div
-                    key={i}
-                    style={{ width: `${p.percentage}%` }}
-                    className={`${colors[i % colors.length]} text-white text-[10px] font-bold flex items-center justify-center transition-all`}
-                    title={`Estación ${p.station}: ${p.stepCount} pasos (${p.startStep}-${p.endStep})`}
-                  >
-                    E{p.station}: {p.stepCount}p
+                  <div key={i} style={{ width: `${p.percentage}%` }} className={`${colors[i % colors.length]} text-white text-[9px] font-bold flex items-center justify-center`}>
+                    E{p.station}
                   </div>
                 );
               })}
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold text-xs px-6 py-2.5 rounded-lg shadow transition flex items-center gap-2"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Creando Orden...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Iniciar Cadena de Producción</span>
-                </>
-              )}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-3.5 bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target"
+          >
+            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-white" />}
+            <span>{submitting ? "Creando..." : "Iniciar Línea de Producción"}</span>
+          </button>
         </form>
-      </div>
+      </Card>
     </div>
   );
 }
 
+// =============================================
 // 3. EDITOR DE CHECKLISTS
+// =============================================
 function ChecklistEditorView({ models, notify, onRefreshModels }) {
   const [selectedModel, setSelectedModel] = useState(models[0]?.name || "PROWORK");
   const [steps, setSteps] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingItem, setEditingItem] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [expandedStep, setExpandedStep] = useState(null);
 
   const loadSteps = () => {
-    setLoading(true);
     fetch(`${API_BASE}/models/${selectedModel}/checklist`)
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setSteps(data); })
-      .catch(err => console.error("Error pasos:", err))
-      .finally(() => setLoading(false));
+      .catch(() => {});
   };
 
-  useEffect(() => {
-    loadSteps();
-  }, [selectedModel]);
-
-  const handleExportExcel = () => {
-    window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank");
-    notify("Descargando archivo Excel oficial...");
-  };
-
-  const handleImportExcel = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      notify("Procesando e importando archivo Excel...", "info");
-      const res = await fetch(`${API_BASE}/models/${selectedModel}/import-excel`, {
-        method: "POST",
-        body: formData
-      });
-      if (!res.ok) throw new Error("Error al procesar el archivo Excel");
-      const data = await res.json();
-      notify(data.message);
-      loadSteps();
-    } catch (err) {
-      alert("Error: " + err.message);
-    }
-  };
+  useEffect(() => { loadSteps(); }, [selectedModel]);
 
   const filteredSteps = steps.filter(s =>
     (s.operation || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -936,106 +774,105 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   );
 
   return (
-    <div className="space-y-6 fade-in">
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-bold text-gray-700">Modelo Seleccionado:</label>
+    <div className="space-y-4 fade-in">
+      {/* Toolbar */}
+      <Card className="p-3">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              className="text-xs font-bold border border-gray-300 rounded px-3 py-1.5 bg-gray-50 text-blue-800"
+              className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-blue-800 touch-target"
             >
-              {models.map(m => (
-                <option key={m.name} value={m.name}>{m.name}</option>
-              ))}
+              {models.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
             </select>
-            <Badge variant="info">{steps.length} Pasos Activos</Badge>
+            <Badge variant="info">{steps.length} Pasos</Badge>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setEditingItem({ model_name: selectedModel, step_number: steps.length + 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
-              className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 shadow transition"
+              className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition touch-target"
             >
               <Plus className="w-4 h-4" />
               <span>Nuevo Paso</span>
             </button>
-
             <button
-              onClick={handleExportExcel}
-              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 shadow transition"
+              onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank")}
+              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition touch-target"
             >
               <Download className="w-4 h-4" />
-              <span>Exportar Excel (.xlsx)</span>
+              <span>Excel</span>
             </button>
-
-            <label className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 cursor-pointer transition">
+            <label className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition touch-target">
               <Upload className="w-4 h-4" />
-              <span>Importar Excel</span>
-              <input type="file" accept=".xlsx, .xls" onChange={handleImportExcel} className="hidden" />
+              <span>Importar</span>
+              <input type="file" accept=".xlsx,.xls" onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const fd = new FormData();
+                fd.append("file", file);
+                const res = await fetch(`${API_BASE}/models/${selectedModel}/import-excel`, { method: "POST", body: fd });
+                if (res.ok) { notify("Importación exitosa"); loadSteps(); }
+              }} className="hidden" />
             </label>
+          </div>
+
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2">
+            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Buscar paso..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full text-xs bg-transparent focus:outline-none"
+            />
           </div>
         </div>
       </Card>
 
-      <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
-        <Search className="w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Buscar por operación, descripción o criterio de calidad..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full text-xs focus:outline-none"
-        />
-      </div>
+      {/* Lista de pasos como acordeón en mobile */}
+      <div className="space-y-2">
+        {filteredSteps.map((st) => (
+          <Card key={st.step_number} className="overflow-hidden">
+            <button
+              onClick={() => setExpandedStep(expandedStep === st.step_number ? null : st.step_number)}
+              className="w-full flex items-center gap-3 p-3 text-left touch-target"
+            >
+              <span className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
+                {st.step_number}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
+                {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate">{st.qc_criteria}</p>}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {st.media_url && <ImageIcon className="w-3.5 h-3.5 text-blue-500" />}
+                {expandedStep === st.step_number ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              </div>
+            </button>
 
-      <Card className="p-4 overflow-x-auto">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="bg-gray-50 text-gray-700 border-b border-gray-200">
-              <th className="py-2.5 px-3 font-bold w-12 text-center">N°</th>
-              <th className="py-2.5 px-3 font-bold w-1/4">Operación</th>
-              <th className="py-2.5 px-3 font-bold w-1/3">Criterio de Control de Calidad</th>
-              <th className="py-2.5 px-3 font-bold text-center w-28">Multimedia</th>
-              <th className="py-2.5 px-3 font-bold text-right w-24">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filteredSteps.map((st) => (
-              <tr key={st.step_number} className="hover:bg-gray-50 transition">
-                <td className="py-2.5 px-3 font-bold text-center text-blue-700 bg-gray-50/50">
-                  {st.step_number}
-                </td>
-                <td className="py-2.5 px-3 font-semibold text-gray-900">
-                  {st.operation}
-                  {st.description && <p className="text-[11px] text-gray-500 font-normal mt-0.5">{st.description}</p>}
-                </td>
-                <td className="py-2.5 px-3 text-gray-700">{st.qc_criteria}</td>
-                <td className="py-2.5 px-3 text-center">
-                  {st.media_url ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">
-                      <ImageIcon className="w-3 h-3" />
-                      <span>{st.media_type === "gif" ? "GIF Animado" : "Foto HD"}</span>
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 text-[10px]">Sin multimedia</span>
-                  )}
-                </td>
-                <td className="py-2.5 px-3 text-right">
-                  <button
-                    onClick={() => setEditingItem(st)}
-                    className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
-                    title="Editar paso"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+            {expandedStep === st.step_number && (
+              <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-2 fade-in">
+                {st.description && <p className="text-xs text-gray-700">{st.description}</p>}
+                <div className="bg-blue-50 p-2 rounded-lg text-xs text-blue-800">
+                  <span className="font-semibold">Criterio QC: </span>{st.qc_criteria}
+                </div>
+                {st.media_url && (
+                  <img src={st.media_url} alt={st.operation} className="w-full max-h-40 object-cover rounded-lg" />
+                )}
+                <button
+                  onClick={() => setEditingItem(st)}
+                  className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Editar Paso</span>
+                </button>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
 
       {editingItem && (
         <ChecklistStepModal
@@ -1047,7 +884,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(saved)
             });
-            notify("Paso y multimedia guardados correctamente");
+            notify("Paso guardado correctamente");
             setEditingItem(null);
             loadSteps();
           }}
@@ -1057,15 +894,17 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   );
 }
 
+// =============================================
 // 4. ESPACIO DE TRABAJO DEL OPERARIO
+// =============================================
 function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
     return (
-      <Card className="p-8 text-center max-w-lg mx-auto">
+      <Card className="p-8 text-center max-w-sm mx-auto">
         <Coffee className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-        <h3 className="text-base font-bold text-gray-900">Sin Tareas Asignadas en este Momento</h3>
-        <p className="text-xs text-gray-500 mt-1">El administrador aún no ha lanzado un lote o no estás asignado a una estación activa.</p>
-        <button onClick={onRefresh} className="mt-4 text-xs bg-blue-600 text-white px-4 py-2 rounded font-semibold">
+        <h3 className="text-sm font-bold text-gray-900">Sin Tareas Asignadas</h3>
+        <p className="text-xs text-gray-500 mt-1">El administrador no ha lanzado un lote o no estás asignado.</p>
+        <button onClick={onRefresh} className="mt-4 text-xs bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold touch-target">
           Comprobar Nuevamente
         </button>
       </Card>
@@ -1077,42 +916,33 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   const [submittingStep, setSubmittingStep] = useState(null);
   const [finishingUnit, setFinishingUnit] = useState(false);
 
-  useEffect(() => {
-    setCompletedSteps(completed_step_numbers || []);
-  }, [completed_step_numbers]);
+  useEffect(() => { setCompletedSteps(completed_step_numbers || []); }, [completed_step_numbers]);
 
   const totalStationSteps = station_steps.length;
-  const currentStationApprovedCount = completedSteps.length;
-  const isStationComplete = totalStationSteps > 0 && currentStationApprovedCount >= totalStationSteps;
+  const isStationComplete = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
 
   const handleToggleStep = async (step) => {
     if (completedSteps.includes(step.step_number)) return;
-
     try {
       setSubmittingStep(step.step_number);
-      const payload = {
-        order_id: order.order_id,
-        unit_number: active_unit.unit_number,
-        step_number: step.step_number,
-        station_number: assignment.station_number,
-        user_id: currentUser.id,
-        user_name: currentUser.name,
-        status: "PASS",
-        notes: "Aprobado por operario en línea"
-      };
-
       const res = await fetch(`${API_BASE}/operator/submit-step`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          order_id: order.order_id,
+          unit_number: active_unit.unit_number,
+          step_number: step.step_number,
+          station_number: assignment.station_number,
+          user_id: currentUser.id,
+          user_name: currentUser.name,
+          status: "PASS",
+          notes: "Aprobado por operario"
+        })
       });
-
       if (!res.ok) throw new Error("Error registrando el paso");
-
       setCompletedSteps(prev => [...prev, step.step_number]);
-      notify(`Paso #${step.step_number} verificado y auditado`);
-
-      if (currentStationApprovedCount + 1 >= totalStationSteps && confetti) {
+      notify(`✓ Paso #${step.step_number} verificado`);
+      if (completedSteps.length + 1 >= totalStationSteps && confetti) {
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
       }
     } catch (err) {
@@ -1131,12 +961,10 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
         body: JSON.stringify({
           order_id: order.order_id,
           unit_number: active_unit.unit_number,
-          station_number: assignment.station_number,
-          user_name: currentUser.name
+          station_number: assignment.station_number
         })
       });
-
-      if (!res.ok) throw new Error("Error al despachar la unidad");
+      if (!res.ok) throw new Error("Error al despachar");
       const data = await res.json();
       notify(data.message);
       setCompletedSteps([]);
@@ -1149,365 +977,291 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 fade-in pb-12">
-      <div className="bg-white p-4 rounded-lg border-l-4 border-l-[#0078d4] border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-white bg-[#0078d4] px-2 py-0.5 rounded">
-              Estación #{assignment.station_number}
-            </span>
-            <h2 className="text-base font-bold text-gray-900">{assignment.station_name || `Línea ${assignment.station_number}`}</h2>
+    <div className="max-w-xl mx-auto space-y-4 fade-in pb-4">
+      {/* Header estación */}
+      <Card className="p-3 border-l-4 border-l-[#0078d4]">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white bg-[#0078d4] px-2 py-0.5 rounded">
+                E{assignment.station_number}
+              </span>
+              <h2 className="text-sm font-bold text-gray-900 truncate">{assignment.station_name}</h2>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Orden: <span className="font-semibold">{order.order_id}</span> · <span className="font-semibold">{order.model_name}</span>
+            </p>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Orden: <span className="font-semibold text-gray-700">{order.order_id}</span> ({order.model_name}) | Operario: <span className="font-semibold text-gray-700">{currentUser.name}</span>
-          </p>
-        </div>
-
-        <div className="text-right">
-          <span className="text-xs text-gray-500 block">Rango de Responsabilidad</span>
-          <span className="text-xs font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">
-            Pasos {assignment.start_step} al {assignment.end_step} ({totalStationSteps} pasos)
+          <span className="text-xs font-bold text-blue-800 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 flex-shrink-0 whitespace-nowrap">
+            P{assignment.start_step}–{assignment.end_step}
           </span>
         </div>
-      </div>
+      </Card>
 
       {active_unit ? (
-        <Card className="p-5 border-2 border-blue-400 shadow-md">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-200 gap-3">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                EN TRABAJO ACTIVO
-              </span>
-              <h3 className="text-xl font-black text-gray-900 mt-1 flex items-center gap-2">
-                <span>🖥️ Computadora #{active_unit.unit_number.toString().padStart(2, '0')}</span>
-                <span className="text-xs font-mono font-normal text-gray-500">
-                  (Serie: {active_unit.serial_number || `KEN-2026-${active_unit.unit_number}`})
-                </span>
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-2">
+        <Card className="overflow-hidden border-2 border-blue-400">
+          {/* Header PC activa */}
+          <div className="bg-gradient-to-r from-[#0078d4] to-[#106ebe] text-white p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Trabajando en</span>
+                <h3 className="text-lg font-black">🖥️ PC #{active_unit.unit_number.toString().padStart(2, '0')}</h3>
+                <p className="text-xs text-blue-200 font-mono">{active_unit.serial_number}</p>
+              </div>
               <button
                 onClick={() => onOpenIssue(active_unit, station_steps[0])}
-                className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition"
+                className="flex flex-col items-center gap-1 bg-white/20 hover:bg-white/30 px-3 py-2 rounded-xl transition touch-target"
               >
-                <AlertTriangle className="w-4 h-4 text-rose-600" />
-                <span>Reportar Falla</span>
+                <AlertTriangle className="w-5 h-5 text-amber-300" />
+                <span className="text-[10px] font-bold text-white">Falla</span>
               </button>
             </div>
+
+            {/* Progreso */}
+            <div className="mt-3">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-blue-200">Progreso Estación</span>
+                <span className="font-bold">{completedSteps.length}/{totalStationSteps}</span>
+              </div>
+              <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-emerald-400 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${(completedSteps.length / totalStationSteps) * 100}%` }}
+                ></div>
+              </div>
+            </div>
           </div>
 
-          <div className="py-4 space-y-1.5">
-            <div className="flex justify-between text-xs font-bold">
-              <span className="text-gray-700">Progreso en tu Estación</span>
-              <span className="text-blue-700">{currentStationApprovedCount} de {totalStationSteps} Pasos Completados</span>
-            </div>
-            <div className="w-full bg-gray-200 h-3 rounded-full overflow-hidden">
-              <div
-                className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                style={{ width: `${(currentStationApprovedCount / totalStationSteps) * 100}%` }}
-              ></div>
-            </div>
-          </div>
-
-          <div className="space-y-3 pt-2">
+          {/* Lista de pasos */}
+          <div className="p-3 space-y-2.5">
             {station_steps.map((st) => {
               const isDone = completedSteps.includes(st.step_number);
-
               return (
                 <div
                   key={st.step_number}
-                  className={`p-4 rounded-lg border transition-all ${
-                    isDone
-                      ? "bg-emerald-50/70 border-emerald-300"
-                      : "bg-white border-gray-300 hover:border-blue-400 shadow-sm"
-                  }`}
+                  className={`rounded-xl border p-3 transition-all ${isDone ? "bg-emerald-50 border-emerald-300" : "bg-white border-gray-300"}`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${
-                          isDone ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"
-                        }`}>
-                          {st.step_number}
+                  <div className="flex items-start gap-3">
+                    <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5 ${isDone ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"}`}>
+                      {st.step_number}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-bold ${isDone ? "text-emerald-900" : "text-gray-900"}`}>{st.operation}</p>
+                      {st.description && <p className="text-[10px] text-gray-500 mt-0.5">{st.description}</p>}
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        <span className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded border border-blue-100 font-medium">
+                          🔍 {st.qc_criteria}
                         </span>
-                        <h4 className={`text-sm font-bold ${isDone ? "text-emerald-900" : "text-gray-900"}`}>
-                          {st.operation}
-                        </h4>
-                      </div>
-
-                      {st.description && (
-                        <p className="text-xs text-gray-600 pl-8">{st.description}</p>
-                      )}
-
-                      <div className="pl-8 pt-1 flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-medium text-blue-950 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                          🔍 Criterio: {st.qc_criteria}
-                        </span>
-
                         {st.media_url && (
                           <button
                             onClick={() => onOpenMedia(st)}
-                            className="text-xs text-blue-700 hover:text-blue-900 bg-blue-100/70 hover:bg-blue-100 px-2.5 py-1 rounded font-semibold flex items-center gap-1 transition"
+                            className="text-[10px] text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded font-semibold flex items-center gap-1 touch-target"
                           >
-                            <PlayCircle className="w-3.5 h-3.5" />
-                            <span>Ver Guía (GIF/Foto)</span>
+                            <PlayCircle className="w-3 h-3" />
+                            <span>Ver Guía</span>
                           </button>
                         )}
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex-shrink-0 pt-2 sm:pt-0">
-                      {isDone ? (
-                        <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-100 px-4 py-2.5 rounded-lg font-bold text-xs">
-                          <CheckCircle className="w-5 h-5 text-emerald-600" />
-                          <span>VALIDADO OK</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleToggleStep(st)}
-                          disabled={submittingStep === st.step_number}
-                          className="w-full sm:w-auto min-h-[48px] px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow flex items-center justify-center gap-2 transition"
-                        >
-                          {submittingStep === st.step_number ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Check className="w-4 h-4" />
-                              <span>Marcar Conforme</span>
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
+                  {/* Botón de aprobación — touch 48px */}
+                  <div className="mt-2.5">
+                    {isDone ? (
+                      <div className="flex items-center gap-2 text-emerald-700 bg-emerald-100 px-4 py-2 rounded-xl font-bold text-xs w-full justify-center">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        <span>VALIDADO ✓</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleToggleStep(st)}
+                        disabled={submittingStep === st.step_number}
+                        className="w-full min-h-[52px] px-4 py-3 bg-[#0078d4] hover:bg-[#106ebe] active:scale-[0.98] text-white font-bold text-sm rounded-xl shadow flex items-center justify-center gap-2 transition touch-target"
+                      >
+                        {submittingStep === st.step_number ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>
+                            <Check className="w-5 h-5" />
+                            <span>Marcar Conforme</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="mt-6 pt-4 border-t border-gray-200">
+          {/* Botón finalizar */}
+          <div className="p-3 pt-0">
             {isStationComplete ? (
               <button
                 onClick={handleFinishStation}
                 disabled={finishingUnit}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-sm sm:text-base rounded-xl shadow-lg flex items-center justify-center gap-3 transition pulse-glow"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-base rounded-xl shadow-lg flex items-center justify-center gap-3 transition pulse-glow touch-target"
               >
                 {finishingUnit ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Despachando PC...</span>
-                  </>
+                  <><Loader2 className="w-6 h-6 animate-spin" /><span>Enviando...</span></>
                 ) : (
-                  <>
-                    <ArrowRightCircle className="w-6 h-6" />
-                    <span>
-                      FINALIZAR MI PARTE Y ENVIAR PC #{active_unit.unit_number} A SIGUIENTE ESTACIÓN
-                    </span>
-                  </>
+                  <><ArrowRightCircle className="w-6 h-6" /><span>Enviar PC #{active_unit.unit_number} a siguiente estación</span></>
                 )}
               </button>
             ) : (
-              <div className="bg-gray-100 p-3 rounded-lg text-center text-xs text-gray-500 font-medium">
-                Complete todos los {totalStationSteps} pasos asignados arriba para habilitar el envío continuo a la siguiente estación.
+              <div className="bg-gray-50 p-3 rounded-xl text-center text-xs text-gray-500 border border-gray-200">
+                Completa los {totalStationSteps} pasos para habilitar el envío.
               </div>
             )}
           </div>
         </Card>
       ) : (
         <Card className="p-8 text-center">
-          <Inbox className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-          <h3 className="text-sm font-bold text-gray-700">No hay computadoras pendientes en tu estación</h3>
-          <p className="text-xs text-gray-500">Tan pronto la estación anterior finalice una PC, aparecerá automáticamente aquí.</p>
+          <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-gray-700">Sin PCs en tu estación</h3>
+          <p className="text-xs text-gray-400 mt-1">Esperando la estación anterior...</p>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <h4 className="text-xs font-bold text-gray-700 uppercase mb-3 flex items-center gap-1.5">
+      {/* Cola y completadas */}
+      {queue_units.length > 0 && (
+        <Card className="p-3">
+          <h4 className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1.5">
             <RefreshCw className="w-4 h-4 text-blue-600" />
-            <span>Cola de Entrada ({queue_units.length} PCs en espera)</span>
+            <span>Cola: {queue_units.length} PCs esperando</span>
           </h4>
-          {queue_units.length > 0 ? (
-            <div className="space-y-2">
-              {queue_units.map(u => (
-                <div key={u.unit_number} className="flex justify-between items-center p-2.5 bg-gray-50 rounded border border-gray-200 text-xs">
-                  <span className="font-semibold text-gray-900">PC #{u.unit_number.toString().padStart(2, '0')}</span>
-                  <span className="text-gray-500 font-mono">{u.serial_number}</span>
-                  <Badge variant="neutral">En cola</Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic">No hay más PCs en espera inmediata.</p>
-          )}
+          <div className="space-y-1.5">
+            {queue_units.slice(0, 5).map(u => (
+              <div key={u.unit_number} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border text-xs">
+                <span className="font-bold">PC #{u.unit_number.toString().padStart(2, '0')}</span>
+                <span className="text-gray-400 font-mono text-[10px]">{u.serial_number}</span>
+              </div>
+            ))}
+          </div>
         </Card>
-
-        <Card className="p-4">
-          <h4 className="text-xs font-bold text-gray-700 uppercase mb-3 flex items-center gap-1.5">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span>Despachadas en tu Turno ({completed_units.length})</span>
-          </h4>
-          {completed_units.length > 0 ? (
-            <div className="space-y-2 max-h-44 overflow-y-auto">
-              {completed_units.map(u => (
-                <div key={u.unit_number} className="flex justify-between items-center p-2.5 bg-emerald-50/50 rounded border border-emerald-200 text-xs">
-                  <span className="font-semibold text-emerald-900">PC #{u.unit_number.toString().padStart(2, '0')}</span>
-                  <span className="text-emerald-700 font-mono text-[11px]">{u.serial_number}</span>
-                  <Badge variant="success">Enviada a E{u.current_station}</Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic">Aún no has despachado PCs en este lote.</p>
-          )}
-        </Card>
-      </div>
+      )}
     </div>
   );
 }
 
+// =============================================
 // 5. AUDITORÍA FORENSE
+// =============================================
 function AuditLogsView({ selectedOrder, orders }) {
   const [logs, setLogs] = useState([]);
-  const [activeOrderId, setActiveOrderId] = useState(selectedOrder || orders[0]?.order_id || "ORD-2026-0892");
+  const [activeOrderId, setActiveOrderId] = useState(selectedOrder || "ORD-2026-0892");
   const [filterUser, setFilterUser] = useState("");
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (activeOrderId) {
-      setLoading(true);
       fetch(`${API_BASE}/orders/${activeOrderId}/logs`)
         .then(r => r.ok ? r.json() : [])
         .then(data => { if (Array.isArray(data)) setLogs(data); })
-        .catch(err => console.error("Error logs:", err))
-        .finally(() => setLoading(false));
+        .catch(() => {});
     }
   }, [activeOrderId]);
 
   const filteredLogs = logs.filter(l =>
-    !filterUser || (l.user_name || "").toLowerCase().includes(filterUser.toLowerCase()) || (l.user_id || "").toLowerCase().includes(filterUser.toLowerCase())
+    !filterUser || (l.user_name || "").toLowerCase().includes(filterUser.toLowerCase())
   );
 
   return (
-    <div className="space-y-6 fade-in">
-      <Card className="p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-              <Shield className="w-4 h-4 text-blue-600" />
-              <span>Registro de Auditoría e Integridad Forense</span>
-            </h3>
-            <p className="text-xs text-gray-500">Trazabilidad inmutable de cada 'check' realizado con fecha, hora exacta y operador responsable.</p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {orders.length > 0 && (
-              <select
-                value={activeOrderId || ""}
-                onChange={(e) => setActiveOrderId(e.target.value)}
-                className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-gray-50 font-semibold"
-              >
-                {orders.map(o => (
-                  <option key={o.order_id} value={o.order_id}>{o.order_id}</option>
-                ))}
-              </select>
-            )}
-
-            <input
-              type="text"
-              placeholder="Filtrar por técnico..."
-              value={filterUser}
-              onChange={(e) => setFilterUser(e.target.value)}
-              className="text-xs border border-gray-300 rounded px-3 py-1.5"
-            />
-          </div>
+    <div className="space-y-4 fade-in">
+      <Card className="p-3">
+        <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2 mb-3">
+          <Shield className="w-4 h-4 text-blue-600" />
+          <span>Registro de Auditoría Forense</span>
+        </h3>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {orders.length > 0 && (
+            <select
+              value={activeOrderId || ""}
+              onChange={(e) => setActiveOrderId(e.target.value)}
+              className="text-xs border border-gray-300 rounded-lg px-3 py-2.5 bg-gray-50 font-semibold touch-target"
+            >
+              {orders.map(o => <option key={o.order_id} value={o.order_id}>{o.order_id}</option>)}
+            </select>
+          )}
+          <input
+            type="text"
+            placeholder="Filtrar por técnico..."
+            value={filterUser}
+            onChange={(e) => setFilterUser(e.target.value)}
+            className="text-xs border border-gray-300 rounded-lg px-3 py-2.5 touch-target w-full"
+          />
         </div>
       </Card>
 
-      <Card className="p-4 overflow-x-auto">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="bg-gray-50 text-gray-700 border-b border-gray-200">
-              <th className="py-2.5 px-3 font-bold w-16">Log ID</th>
-              <th className="py-2.5 px-3 font-bold w-36">Fecha y Hora Exacta</th>
-              <th className="py-2.5 px-3 font-bold w-20">Unidad</th>
-              <th className="py-2.5 px-3 font-bold w-20">Paso #</th>
-              <th className="py-2.5 px-3 font-bold w-24">Estación</th>
-              <th className="py-2.5 px-3 font-bold">Auditor / Operador</th>
-              <th className="py-2.5 px-3 font-bold text-center w-24">Estado</th>
-              <th className="py-2.5 px-3 font-bold">Observación / Notas</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filteredLogs.map(l => (
-              <tr key={l.id} className="hover:bg-gray-50 transition">
-                <td className="py-2 px-3 font-mono text-gray-500 font-semibold">#{l.id}</td>
-                <td className="py-2 px-3 font-mono text-gray-600 text-[11px]">
-                  {new Date(l.timestamp).toLocaleString("es-PE")}
-                </td>
-                <td className="py-2 px-3 font-bold text-gray-900">PC #{l.unit_number.toString().padStart(2, '0')}</td>
-                <td className="py-2 px-3 font-bold text-blue-700">Paso {l.step_number}</td>
-                <td className="py-2 px-3 text-gray-700">Estación {l.station_number}</td>
-                <td className="py-2 px-3 font-semibold text-gray-900">
-                  {l.user_name} <span className="text-gray-400 font-normal text-[10px]">({l.user_id})</span>
-                </td>
-                <td className="py-2 px-3 text-center">
-                  {l.status === "PASS" && <Badge variant="success">PASS</Badge>}
-                  {l.status === "FAIL" && <Badge variant="danger">FAIL</Badge>}
-                  {l.status === "REASSIGNED" && <Badge variant="warning">REASIGNADO</Badge>}
-                </td>
-                <td className="py-2 px-3 text-gray-600 italic text-[11px]">{l.notes || "-"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+      {/* Logs como tarjetas en mobile */}
+      <div className="space-y-2">
+        {filteredLogs.map(l => (
+          <Card key={l.id} className="p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-gray-900">PC #{l.unit_number.toString().padStart(2, '0')}</span>
+                  <span className="text-xs text-blue-700 font-semibold">Paso {l.step_number}</span>
+                  <span className="text-[10px] text-gray-500">E{l.station_number}</span>
+                </div>
+                <p className="text-xs font-semibold text-gray-800 truncate">{l.user_name}</p>
+                <p className="text-[10px] text-gray-400 font-mono">{new Date(l.timestamp).toLocaleString("es-PE")}</p>
+                {l.notes && <p className="text-[10px] text-gray-500 italic">{l.notes}</p>}
+              </div>
+              <div className="flex-shrink-0">
+                {l.status === "PASS" && <Badge variant="success">PASS</Badge>}
+                {l.status === "FAIL" && <Badge variant="danger">FAIL</Badge>}
+                {l.status === "REASSIGNED" && <Badge variant="warning">REASIG.</Badge>}
+              </div>
+            </div>
+          </Card>
+        ))}
+        {filteredLogs.length === 0 && (
+          <Card className="p-8 text-center">
+            <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-xs text-gray-400">No hay registros de auditoría aún.</p>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
 
+// =============================================
 // MODAL VISOR MULTIMEDIA
+// =============================================
 function MediaViewerModal({ item, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
-      <div className="bg-white rounded-xl max-w-2xl w-full overflow-hidden shadow-2xl">
-        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Guía de Control de Calidad</span>
-            <h3 className="text-sm font-bold">Paso #{item.step_number}: {item.operation}</h3>
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl">
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-start">
+          <div className="min-w-0 pr-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Guía Visual</span>
+            <h3 className="text-sm font-bold leading-tight">Paso #{item.step_number}: {item.operation}</h3>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded flex-shrink-0 touch-target flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        <div className="p-6 space-y-4">
-          <div className="bg-gray-900 rounded-lg overflow-hidden flex items-center justify-center min-h-[260px]">
+        <div className="p-4 space-y-3">
+          <div className="bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center min-h-[200px] max-h-[350px]">
             {item.media_url ? (
-              <img
-                src={item.media_url}
-                alt={item.operation}
-                className="max-h-[380px] w-auto object-contain rounded"
-              />
+              <img src={item.media_url} alt={item.operation} className="max-h-[350px] w-full object-contain" />
             ) : (
               <div className="text-gray-400 text-center p-8">
-                <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p className="text-xs">No hay imagen o GIF asignado para este paso</p>
+                <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                <p className="text-xs">Sin imagen asignada</p>
               </div>
             )}
           </div>
-
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <h4 className="text-xs font-bold text-blue-900 uppercase">Criterio Específico de Aceptación:</h4>
-            <p className="text-xs text-blue-800 mt-1 font-medium">{item.qc_criteria}</p>
+          <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+            <h4 className="text-xs font-bold text-blue-900">Criterio de Aceptación:</h4>
+            <p className="text-xs text-blue-800 mt-1">{item.qc_criteria}</p>
           </div>
-
           <button
             onClick={onClose}
-            className="w-full py-2.5 bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold text-xs rounded-lg shadow transition"
+            className="w-full py-3 bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold text-sm rounded-xl shadow touch-target transition"
           >
-            Entendido, Regresar al Checklist
+            Entendido, Regresar
           </button>
         </div>
       </div>
@@ -1515,7 +1269,9 @@ function MediaViewerModal({ item, onClose }) {
   );
 }
 
+// =============================================
 // MODAL REPORTE DE FALLAS
+// =============================================
 function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, onSuccess }) {
   const { unit, step } = data;
   const [issueTitle, setIssueTitle] = useState("");
@@ -1537,11 +1293,10 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
           station_number: stationNumber || 1,
           reported_by: currentUser.name,
           issue_title: issueTitle,
-          description: description,
-          severity: severity
+          description,
+          severity
         })
       });
-
       if (!res.ok) throw new Error("Error registrando incidencia");
       onSuccess();
     } catch (err) {
@@ -1552,71 +1307,59 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
-      <div className="bg-white rounded-xl max-w-md w-full overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl">
         <div className="bg-rose-600 text-white p-4 flex justify-between items-center">
           <h3 className="text-sm font-bold flex items-center gap-1.5">
             <AlertTriangle className="w-4 h-4" />
-            <span>Reportar Falla en PC #{unit.unit_number}</span>
+            <span>Reportar Falla — PC #{unit.unit_number}</span>
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Título de la Falla</label>
             <input
               type="text"
               required
-              placeholder="Ej: Rayón en tapa frontal / BIOS no detecta GPU"
+              placeholder="Ej: Rayón en tapa frontal / GPU no detectada"
               value={issueTitle}
               onChange={(e) => setIssueTitle(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded p-2 focus:ring-2 focus:ring-rose-500"
+              className="w-full text-xs border border-gray-300 rounded-xl p-3 touch-target focus:ring-2 focus:ring-rose-500 focus:outline-none"
             />
           </div>
-
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Severidad</label>
             <select
               value={severity}
               onChange={(e) => setSeverity(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded p-2 font-bold"
+              className="w-full text-xs border border-gray-300 rounded-xl p-3 font-bold touch-target"
             >
-              <option value="LOW">Baja (Detalle cosmético subsanable)</option>
-              <option value="MEDIUM">Media (Requiere ajuste menor)</option>
-              <option value="HIGH">Alta (Reemplazo de componente)</option>
-              <option value="CRITICAL">Crítica (Bloqueo total de PC)</option>
+              <option value="LOW">Baja (Cosmético)</option>
+              <option value="MEDIUM">Media (Ajuste menor)</option>
+              <option value="HIGH">Alta (Reemplazo)</option>
+              <option value="CRITICAL">Crítica (Bloqueo total)</option>
             </select>
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción Detallada</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción</label>
             <textarea
               rows="3"
               required
               placeholder="Detalle exactamente lo observado..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded p-2"
+              className="w-full text-xs border border-gray-300 rounded-xl p-3 touch-target focus:outline-none"
             ></textarea>
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded"
-            >
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded shadow transition"
-            >
-              Bloquear PC y Registrar
+            <button type="submit" disabled={submitting} className="flex-1 py-3 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow transition touch-target">
+              {submitting ? "Registrando..." : "Bloquear PC"}
             </button>
           </div>
         </form>
@@ -1625,18 +1368,19 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
   );
 }
 
+// =============================================
 // MODAL REASIGNACIÓN DE EMERGENCIA
+// =============================================
 function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess }) {
   const [stationNumber, setStationNumber] = useState(stations[0]?.station_number || 1);
   const [newUserId, setNewUserId] = useState(operators[0]?.id || "");
-  const [reason, setReason] = useState("Ausencia / Retraso de Operario en Línea");
+  const [reason, setReason] = useState("Ausencia / Retraso de Operario");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const targetUser = operators.find(o => o.id === newUserId);
     if (!targetUser) return;
-
     try {
       setSubmitting(true);
       const res = await fetch(`${API_BASE}/orders/reassign-emergency`, {
@@ -1647,11 +1391,10 @@ function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess
           station_number: parseInt(stationNumber, 10),
           new_user_id: targetUser.id,
           new_user_name: targetUser.name,
-          reason: reason
+          reason
         })
       });
-
-      if (!res.ok) throw new Error("Error al reasignar estación");
+      if (!res.ok) throw new Error("Error al reasignar");
       const data = await res.json();
       onSuccess(data.message);
     } catch (err) {
@@ -1662,81 +1405,61 @@ function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
-      <div className="bg-white rounded-xl max-w-lg w-full overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl">
         <div className="bg-amber-600 text-white p-4 flex justify-between items-center">
           <h3 className="text-sm font-bold flex items-center gap-2">
             <AlertCircle className="w-5 h-5" />
-            <span>Reasignación de Emergencia de Estación</span>
+            <span>Reasignación de Emergencia</span>
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <p className="text-xs text-gray-600">
-            Transfiera la carga activa de una estación a otro técnico conservando intacto el historial de trazabilidad previo en la base de datos.
-          </p>
-
+        <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Estación a Transferir</label>
             <select
               value={stationNumber}
               onChange={(e) => setStationNumber(parseInt(e.target.value, 10))}
-              className="w-full text-xs border border-gray-300 rounded p-2 font-medium"
+              className="w-full text-xs border border-gray-300 rounded-xl p-3 touch-target"
             >
               {stations.map(st => (
                 <option key={st.station_number} value={st.station_number}>
-                  Estación {st.station_number}: {st.station_name} (Actual: {st.user_name})
+                  E{st.station_number}: {st.station_name} ({st.user_name})
                 </option>
               ))}
             </select>
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Nuevo Técnico Responsable</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Nuevo Técnico</label>
             <select
               value={newUserId}
               onChange={(e) => setNewUserId(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded p-2 font-bold text-blue-700"
+              className="w-full text-xs border border-gray-300 rounded-xl p-3 font-bold text-blue-700 touch-target"
             >
-              {operators.map(op => (
-                <option key={op.id} value={op.id}>{op.name} ({op.id})</option>
-              ))}
+              {operators.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Motivo de Reasignación</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Motivo</label>
             <input
               type="text"
               required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded p-2"
+              className="w-full text-xs border border-gray-300 rounded-xl p-3 touch-target"
             />
           </div>
-
-          <div className="bg-amber-50 p-3 rounded border border-amber-200 text-[11px] text-amber-900 space-y-1">
-            <p className="font-bold">✓ Política de Integridad:</p>
-            <p>El sistema mantendrá el registro inmutable del operador anterior hasta la última PC auditada y registrará al nuevo técnico desde este momento.</p>
+          <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-[10px] text-amber-900">
+            El historial previo queda intacto. El nuevo técnico inicia desde este momento.
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded"
-            >
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded shadow transition"
-            >
-              Confirmar y Reasignar
+            <button type="submit" disabled={submitting} className="flex-1 py-3 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow transition touch-target">
+              {submitting ? "Reasignando..." : "Confirmar"}
             </button>
           </div>
         </form>
@@ -1745,7 +1468,9 @@ function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess
   );
 }
 
+// =============================================
 // MODAL EDICIÓN PASO CHECKLIST
+// =============================================
 function ChecklistStepModal({ item, onClose, onSave }) {
   const [formData, setFormData] = useState({ ...item });
   const [uploading, setUploading] = useState(false);
@@ -1753,23 +1478,14 @@ function ChecklistStepModal({ item, onClose, onSave }) {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const fd = new FormData();
     fd.append("file", file);
-
     try {
       setUploading(true);
-      const res = await fetch(`${API_BASE}/upload-media`, {
-        method: "POST",
-        body: fd
-      });
-      if (!res.ok) throw new Error("Error al subir multimedia");
+      const res = await fetch(`${API_BASE}/upload-media`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Error al subir");
       const data = await res.json();
-      setFormData(prev => ({
-        ...prev,
-        media_url: data.url,
-        media_type: data.type
-      }));
+      setFormData(prev => ({ ...prev, media_url: data.url, media_type: data.type }));
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
@@ -1778,97 +1494,80 @@ function ChecklistStepModal({ item, onClose, onSave }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
-      <div className="bg-white rounded-xl max-w-xl w-full overflow-hidden shadow-2xl">
-        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
           <h3 className="text-sm font-bold">
-            {formData.id ? `Editar Paso #${formData.step_number}` : "Nuevo Paso de Control"}
+            {formData.id ? `Editar Paso #${formData.step_number}` : "Nuevo Paso"}
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="p-5 space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+        <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="p-4 space-y-3">
+          <div className="grid grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">N° de Paso</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">N°</label>
               <input
                 type="number"
                 required
                 value={formData.step_number}
                 onChange={(e) => setFormData({ ...formData, step_number: parseInt(e.target.value, 10) })}
-                className="w-full text-xs border border-gray-300 rounded p-2 font-bold"
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5 font-bold touch-target"
               />
             </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Operación / Título</label>
+            <div className="col-span-3">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Operación</label>
               <input
                 type="text"
                 required
                 value={formData.operation}
                 onChange={(e) => setFormData({ ...formData, operation: e.target.value })}
-                className="w-full text-xs border border-gray-300 rounded p-2"
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target"
               />
             </div>
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción Detallada</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción</label>
             <textarea
               rows="2"
               value={formData.description || ""}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full text-xs border border-gray-300 rounded p-2"
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
             ></textarea>
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Criterio de Control de Calidad</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Criterio de Calidad</label>
             <textarea
               rows="2"
               required
               value={formData.qc_criteria}
               onChange={(e) => setFormData({ ...formData, qc_criteria: e.target.value })}
-              className="w-full text-xs border border-gray-300 rounded p-2"
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
             ></textarea>
           </div>
-
-          <div className="p-3 bg-gray-50 rounded border border-gray-200 space-y-2">
-            <label className="block text-xs font-bold text-gray-700">Recurso Multimedia Instructivo (GIF o Imagen HD)</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                placeholder="URL o ruta de imagen/GIF..."
-                value={formData.media_url || ""}
-                onChange={(e) => setFormData({ ...formData, media_url: e.target.value })}
-                className="w-full text-xs border border-gray-300 rounded p-2 bg-white"
-              />
-              <label className="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded cursor-pointer hover:bg-blue-100 flex-shrink-0">
-                <span>{uploading ? "Subiendo..." : "Subir Archivo"}</span>
-                <input type="file" accept="image/*,.gif" onChange={handleFileUpload} className="hidden" />
-              </label>
-            </div>
-
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2">
+            <label className="block text-xs font-bold text-gray-700">Multimedia (GIF/Imagen)</label>
+            <input
+              type="text"
+              placeholder="URL de imagen o GIF..."
+              value={formData.media_url || ""}
+              onChange={(e) => setFormData({ ...formData, media_url: e.target.value })}
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
+            />
+            <label className="block w-full py-2.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold rounded-xl cursor-pointer hover:bg-blue-100 text-center touch-target">
+              {uploading ? "Subiendo..." : "📁 Subir Archivo"}
+              <input type="file" accept="image/*,.gif" onChange={handleFileUpload} className="hidden" />
+            </label>
             {formData.media_url && (
-              <div className="mt-2 text-center bg-gray-900 rounded p-2">
-                <img src={formData.media_url} alt="Preview" className="max-h-32 mx-auto rounded" />
-              </div>
+              <img src={formData.media_url} alt="Preview" className="w-full max-h-32 object-cover rounded-xl" />
             )}
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded"
-            >
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
               Cancelar
             </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-xs font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white rounded shadow transition"
-            >
+            <button type="submit" className="flex-1 py-3 text-xs font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-xl shadow transition touch-target">
               Guardar Paso
             </button>
           </div>
@@ -1878,45 +1577,45 @@ function ChecklistStepModal({ item, onClose, onSave }) {
   );
 }
 
+// =============================================
 // MODAL DETALLE PC
+// =============================================
 function UnitDetailModal({ unit, order, stations, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in">
-      <div className="bg-white rounded-xl max-w-md w-full overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm overflow-hidden shadow-2xl">
         <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
-          <h3 className="text-sm font-bold">Ficha de Trazabilidad: PC #{unit.unit_number}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded">
+          <h3 className="text-sm font-bold">PC #{unit.unit_number} — Ficha</h3>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        <div className="p-5 space-y-4 text-xs">
-          <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded border border-gray-200">
-            <div>
-              <span className="text-[10px] text-gray-500 font-semibold">N° Serie:</span>
-              <p className="font-mono font-bold text-gray-900">{unit.serial_number}</p>
+        <div className="p-4 space-y-3 text-xs">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 p-2.5 rounded-xl">
+              <span className="text-[10px] text-gray-500 font-semibold block">N° Serie</span>
+              <p className="font-mono font-bold text-gray-900 text-[11px] break-all">{unit.serial_number}</p>
             </div>
-            <div>
-              <span className="text-[10px] text-gray-500 font-semibold">Orden:</span>
+            <div className="bg-gray-50 p-2.5 rounded-xl">
+              <span className="text-[10px] text-gray-500 font-semibold block">Orden</span>
               <p className="font-bold text-blue-700">{order.order_id}</p>
             </div>
-            <div>
-              <span className="text-[10px] text-gray-500 font-semibold">Estado Actual:</span>
+            <div className="bg-gray-50 p-2.5 rounded-xl">
+              <span className="text-[10px] text-gray-500 font-semibold block">Estado</span>
               <p className="font-bold">{unit.overall_status}</p>
             </div>
-            <div>
-              <span className="text-[10px] text-gray-500 font-semibold">Estación Actual:</span>
+            <div className="bg-gray-50 p-2.5 rounded-xl">
+              <span className="text-[10px] text-gray-500 font-semibold block">Estación</span>
               <p className="font-bold text-emerald-700">
-                {unit.current_station > stations.length ? "EMPACADO (OK)" : `Estación ${unit.current_station}`}
+                {unit.current_station > stations.length ? "EMPACADO ✓" : `Estación ${unit.current_station}`}
               </p>
             </div>
           </div>
-
           <button
             onClick={onClose}
-            className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded text-xs"
+            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-xl text-xs transition touch-target"
           >
-            Cerrar Ficha
+            Cerrar
           </button>
         </div>
       </div>

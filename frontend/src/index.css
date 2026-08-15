@@ -7,12 +7,13 @@ body {
   -webkit-tap-highlight-color: transparent;
   background-color: #f3f2f1;
   color: #323130;
+  overscroll-behavior: none;
 }
 
 /* Scrollbar sutil estilo Microsoft */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: #edebe9;
@@ -40,4 +41,40 @@ body {
 @keyframes pulseGlow {
   0%, 100% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(0, 120, 212, 0); }
+}
+
+/* Safe area para iPhones con notch */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Touch targets mínimos de 48px para móvil */
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* Tabla responsiva en móvil */
+.table-mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+}
+
+/* Menú móvil deslizante */
+.mobile-menu {
+  transition: transform 0.25s ease-in-out, opacity 0.25s ease-in-out;
+}
+.mobile-menu.open {
+  transform: translateY(0);
+  opacity: 1;
+}
+.mobile-menu.closed {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Bottom nav activo */
+.bottom-nav-item.active {
+  color: #0078d4;
 }

@@ -107,6 +107,15 @@ class StepLogCreate(BaseModel):
     status: str # PASS, FAIL
     notes: Optional[str] = ""
 
+class StepUncheckRequest(BaseModel):
+    order_id: str
+    unit_number: int
+    step_number: int
+    station_number: int
+    user_id: str
+    user_name: str
+    reason: Optional[str] = "Corrección de marcado"
+
 class StepLogSchema(BaseModel):
     id: int
     order_id: str

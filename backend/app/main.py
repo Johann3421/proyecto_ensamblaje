@@ -15,7 +15,7 @@ from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignme
 from .schemas import (
     QCUserSchema, QCUserCreate, QCUserUpdate, AddUnitsRequest, ModelSchema, ChecklistItemSchema,
     OrderCreateRequest, OrderDetailSchema,
-    StepLogCreate, StepLogSchema,
+    StepLogCreate, StepLogSchema, StepUncheckRequest,
     IssueCreate, IssueSchema,
     ReassignEmergencyRequest,
     AuthRegister, AuthLogin, TokenResponse
@@ -710,6 +710,48 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
 
     db.commit()
     return {"message": "Paso registrado con trazabilidad completa", "log_id": new_log.id, "timestamp": new_log.timestamp}
+
+@api_router.post("/operator/uncheck-step")
+def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
+    """Desmarcar un proceso previamente aprobado para permitir correcciones inmediatas"""
+    # 1. Eliminar o invalidar el registro de PASS de este paso para esta PC
+    db.query(QCStepLog).filter(
+        QCStepLog.order_id == req.order_id,
+        QCStepLog.unit_number == req.unit_number,
+        QCStepLog.step_number == req.step_number,
+        QCStepLog.status == "PASS"
+    ).delete()
+
+    # 2. Registrar log de desmarcado en la auditoría
+    uncheck_log = QCStepLog(
+        order_id=req.order_id,
+        unit_number=req.unit_number,
+        step_number=req.step_number,
+        station_number=req.station_number,
+        user_id=req.user_id,
+        user_name=req.user_name,
+        status="UNCHECK",
+        notes=req.reason or "Paso desmarcado para corrección por el técnico",
+        timestamp=datetime.utcnow()
+    )
+    db.add(uncheck_log)
+
+    # 3. Recalcular el progreso acumulado de la PC
+    unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == req.order_id,
+        QCPCUnit.unit_number == req.unit_number
+    ).first()
+    
+    if unit:
+        remaining_logs = db.query(QCStepLog).filter(
+            QCStepLog.order_id == req.order_id,
+            QCStepLog.unit_number == req.unit_number,
+            QCStepLog.status == "PASS"
+        ).all()
+        unit.current_step_progress = max([l.step_number for l in remaining_logs], default=0)
+        
+    db.commit()
+    return {"message": f"Paso #{req.step_number} desmarcado", "step_number": req.step_number}
 
 @api_router.post("/operator/finish-station")
 def finish_station(data: dict, db: Session = Depends(get_db)):

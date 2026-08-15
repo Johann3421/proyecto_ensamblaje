@@ -1088,28 +1088,49 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   const isStationComplete = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
 
   const handleToggleStep = async (step) => {
-    if (completedSteps.includes(step.step_number)) return;
+    const isDone = completedSteps.includes(step.step_number);
     try {
       setSubmittingStep(step.step_number);
-      const res = await fetch(`${API_BASE}/operator/submit-step`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: order.order_id,
-          unit_number: active_unit.unit_number,
-          step_number: step.step_number,
-          station_number: assignment.station_number,
-          user_id: currentUser.id,
-          user_name: currentUser.name,
-          status: "PASS",
-          notes: "Aprobado por operario"
-        })
-      });
-      if (!res.ok) throw new Error("Error registrando el paso");
-      setCompletedSteps(prev => [...prev, step.step_number]);
-      notify(`✓ Paso #${step.step_number} verificado`);
-      if (completedSteps.length + 1 >= totalStationSteps && confetti) {
-        confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
+      if (isDone) {
+        // Desmarcar paso
+        const res = await fetch(`${API_BASE}/operator/uncheck-step`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: order.order_id,
+            unit_number: active_unit.unit_number,
+            step_number: step.step_number,
+            station_number: assignment.station_number,
+            user_id: currentUser.id,
+            user_name: currentUser.name,
+            reason: "Desmarcado por operario para corrección"
+          })
+        });
+        if (!res.ok) throw new Error("Error al desmarcar el paso");
+        setCompletedSteps(prev => prev.filter(num => num !== step.step_number));
+        notify(`↩ Paso #${step.step_number} desmarcado`);
+      } else {
+        // Marcar paso conforme
+        const res = await fetch(`${API_BASE}/operator/submit-step`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: order.order_id,
+            unit_number: active_unit.unit_number,
+            step_number: step.step_number,
+            station_number: assignment.station_number,
+            user_id: currentUser.id,
+            user_name: currentUser.name,
+            status: "PASS",
+            notes: "Aprobado por operario"
+          })
+        });
+        if (!res.ok) throw new Error("Error registrando el paso");
+        setCompletedSteps(prev => [...prev, step.step_number]);
+        notify(`✓ Paso #${step.step_number} verificado`);
+        if (completedSteps.length + 1 >= totalStationSteps && confetti) {
+          confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
+        }
       }
     } catch (err) {
       alert("Error: " + err.message);
@@ -1198,7 +1219,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             </div>
           </div>
 
-          {/* Lista de pasos — Toda la tarjeta es tappable */}
+          {/* Lista de pasos — Toda la tarjeta es interactiva (marcar/desmarcar) */}
           <div className="p-3 space-y-3">
             {station_steps.map((st) => {
               const isDone = completedSteps.includes(st.step_number);
@@ -1207,20 +1228,20 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
               return (
                 <button
                   key={st.step_number}
-                  onClick={() => !isDone && handleToggleStep(st)}
-                  disabled={isDone || isSubmitting}
+                  onClick={() => handleToggleStep(st)}
+                  disabled={isSubmitting}
                   className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all duration-200 select-none
                     ${ isDone
-                        ? 'bg-emerald-50 border-emerald-400 shadow-sm cursor-default'
+                        ? 'bg-emerald-50 border-emerald-400 hover:border-emerald-500 hover:shadow-md cursor-pointer active:scale-[0.98]'
                         : isSubmitting
                           ? 'bg-blue-50 border-blue-300 scale-[0.99] opacity-80'
                           : 'bg-white border-gray-200 active:scale-[0.97] active:border-blue-500 active:shadow-lg hover:border-blue-300 hover:shadow-md shadow-sm'
                     }`}
                 >
                   <div className="flex items-stretch">
-                    {/* Panel izquierdo — Checkbox visual grande, el CTA principal */}
+                    {/* Panel izquierdo — Checkbox visual grande interactivo */}
                     <div className={`w-14 sm:w-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 py-4 transition-colors
-                      ${ isDone ? 'bg-emerald-500' : isSubmitting ? 'bg-blue-400' : 'bg-gray-100 group-hover:bg-gray-200'}`}
+                      ${ isDone ? 'bg-emerald-500 hover:bg-emerald-600' : isSubmitting ? 'bg-blue-400' : 'bg-gray-100 group-hover:bg-gray-200'}`}
                     >
                       {isSubmitting ? (
                         <Loader2 className="w-7 h-7 text-white animate-spin" />
@@ -1228,6 +1249,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                         <>
                           <CheckCircle className="w-7 h-7 text-white" />
                           <span className="text-[9px] font-bold text-emerald-100 uppercase">Hecho</span>
+                          <span className="text-[8px] text-emerald-200 opacity-90 font-mono">(Quitar)</span>
                         </>
                       ) : (
                         <>
@@ -1262,7 +1284,11 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                               {st.qc_criteria}
                             </span>
                           </div>
-                          {!isDone && !isSubmitting && (
+                          {isDone ? (
+                            <p className="text-[9px] text-emerald-600 mt-2 flex items-center gap-1 font-medium">
+                              <span>↩</span> Toca esta tarjeta para desmarcar si hubo una equivocación
+                            </p>
+                          ) : !isSubmitting && (
                             <p className="text-[9px] text-gray-400 mt-2 flex items-center gap-1">
                               <Check className="w-2.5 h-2.5" />
                               Toca toda esta tarjeta para marcar conforme

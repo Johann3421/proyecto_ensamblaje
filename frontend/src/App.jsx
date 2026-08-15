@@ -1032,64 +1032,93 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             </div>
           </div>
 
-          {/* Lista de pasos */}
-          <div className="p-3 space-y-2.5">
+          {/* Lista de pasos — Toda la tarjeta es tappable */}
+          <div className="p-3 space-y-3">
             {station_steps.map((st) => {
               const isDone = completedSteps.includes(st.step_number);
+              const isSubmitting = submittingStep === st.step_number;
+
               return (
-                <div
+                <button
                   key={st.step_number}
-                  className={`rounded-xl border p-3 transition-all ${isDone ? "bg-emerald-50 border-emerald-300" : "bg-white border-gray-300"}`}
+                  onClick={() => !isDone && handleToggleStep(st)}
+                  disabled={isDone || isSubmitting}
+                  className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all duration-200 select-none
+                    ${ isDone
+                        ? 'bg-emerald-50 border-emerald-400 shadow-sm cursor-default'
+                        : isSubmitting
+                          ? 'bg-blue-50 border-blue-300 scale-[0.99] opacity-80'
+                          : 'bg-white border-gray-200 active:scale-[0.97] active:border-blue-500 active:shadow-lg hover:border-blue-300 hover:shadow-md shadow-sm'
+                    }`}
                 >
-                  <div className="flex items-start gap-3">
-                    <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5 ${isDone ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"}`}>
-                      {st.step_number}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-bold ${isDone ? "text-emerald-900" : "text-gray-900"}`}>{st.operation}</p>
-                      {st.description && <p className="text-[10px] text-gray-500 mt-0.5">{st.description}</p>}
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        <span className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded border border-blue-100 font-medium">
-                          🔍 {st.qc_criteria}
-                        </span>
+                  <div className="flex items-stretch">
+                    {/* Panel izquierdo — Checkbox visual grande, el CTA principal */}
+                    <div className={`w-14 sm:w-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 py-4 transition-colors
+                      ${ isDone ? 'bg-emerald-500' : isSubmitting ? 'bg-blue-400' : 'bg-gray-100 group-hover:bg-gray-200'}`}
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="w-7 h-7 text-white animate-spin" />
+                      ) : isDone ? (
+                        <>
+                          <CheckCircle className="w-7 h-7 text-white" />
+                          <span className="text-[9px] font-bold text-emerald-100 uppercase">Hecho</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-gray-400 bg-white flex items-center justify-center">
+                            <Check className="w-4 h-4 text-gray-300" />
+                          </div>
+                          <span className="text-[9px] font-bold text-gray-500 uppercase">Toca</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Contenido del paso */}
+                    <div className="flex-1 min-w-0 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-bold leading-snug mb-1
+                            ${ isDone ? 'text-emerald-800 line-through decoration-emerald-400 decoration-1' : 'text-gray-900'}`}>
+                            <span className={`text-[10px] font-bold mr-1.5 px-1.5 py-0.5 rounded
+                              ${isDone ? 'bg-emerald-200 text-emerald-700' : 'bg-gray-200 text-gray-500'}`}>
+                              #{st.step_number}
+                            </span>
+                            {st.operation}
+                          </p>
+                          {st.description && (
+                            <p className="text-[11px] text-gray-500 leading-relaxed mb-2">{st.description}</p>
+                          )}
+                          <div className={`flex items-start gap-1.5 rounded-lg px-2 py-1.5
+                            ${isDone ? 'bg-emerald-100/70' : 'bg-blue-50 border border-blue-100'}`}>
+                            <span className="text-[10px] flex-shrink-0">🔍</span>
+                            <span className={`text-[10px] font-medium leading-snug
+                              ${isDone ? 'text-emerald-700' : 'text-blue-800'}`}>
+                              {st.qc_criteria}
+                            </span>
+                          </div>
+                          {!isDone && !isSubmitting && (
+                            <p className="text-[9px] text-gray-400 mt-2 flex items-center gap-1">
+                              <Check className="w-2.5 h-2.5" />
+                              Toca toda esta tarjeta para marcar conforme
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Botón guía — aislado del click principal */}
                         {st.media_url && (
                           <button
-                            onClick={() => onOpenMedia(st)}
-                            className="text-[10px] text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded font-semibold flex items-center gap-1 touch-target"
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onOpenMedia(st); }}
+                            className="flex-shrink-0 w-9 h-9 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-xl flex items-center justify-center transition ml-1"
+                            title="Ver guía visual"
                           >
-                            <PlayCircle className="w-3 h-3" />
-                            <span>Ver Guía</span>
+                            <PlayCircle className="w-5 h-5" />
                           </button>
                         )}
                       </div>
                     </div>
                   </div>
-
-                  {/* Botón de aprobación — touch 48px */}
-                  <div className="mt-2.5">
-                    {isDone ? (
-                      <div className="flex items-center gap-2 text-emerald-700 bg-emerald-100 px-4 py-2 rounded-xl font-bold text-xs w-full justify-center">
-                        <CheckCircle className="w-4 h-4 text-emerald-600" />
-                        <span>VALIDADO ✓</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleToggleStep(st)}
-                        disabled={submittingStep === st.step_number}
-                        className="w-full min-h-[52px] px-4 py-3 bg-[#0078d4] hover:bg-[#106ebe] active:scale-[0.98] text-white font-bold text-sm rounded-xl shadow flex items-center justify-center gap-2 transition touch-target"
-                      >
-                        {submittingStep === st.step_number ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <>
-                            <Check className="w-5 h-5" />
-                            <span>Marcar Conforme</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
+                </button>
               );
             })}
           </div>

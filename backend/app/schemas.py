@@ -2,9 +2,28 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
+
+# ——— Auth Schemas ———
+class AuthRegister(BaseModel):
+    user_id: str          # ID existente del técnico (ej: "OP-102")
+    email: str
+    password: str
+
+class AuthLogin(BaseModel):
+    email: str
+    password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: "QCUserSchema"
+
+
+
 class QCUserSchema(BaseModel):
     id: str
     name: str
+    email: Optional[str] = None
     role: str
     avatar: Optional[str] = None
     is_active: bool = True

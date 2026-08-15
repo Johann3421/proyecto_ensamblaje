@@ -16,10 +16,12 @@ from .schemas import (
     OrderCreateRequest, OrderDetailSchema,
     StepLogCreate, StepLogSchema,
     IssueCreate, IssueSchema,
-    ReassignEmergencyRequest
+    ReassignEmergencyRequest,
+    AuthRegister, AuthLogin, TokenResponse
 )
 from .seed_data import seed_database
 from .excel_handler import generate_checklist_excel, parse_checklist_excel
+from .auth import hash_password, verify_password, create_access_token, require_auth
 
 app = FastAPI(
     title="QC KENYA - API de Control de Calidad Industrial",
@@ -75,6 +77,66 @@ api_router = APIRouter()
 @api_router.get("/health")
 def health_check():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "service": "QC-KENYA-API"}
+
+# =============================================
+# AUTH ENDPOINTS
+# =============================================
+@api_router.post("/auth/register", response_model=TokenResponse)
+def register_user(req: AuthRegister, db: Session = Depends(get_db)):
+    """Vincular email y contraseña a un usuario EXISTENTE."""
+    # Verificar que el usuario existe
+    user = db.query(QCUser).filter(QCUser.id == req.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No se encontró un técnico con ese ID. El administrador debe crear el usuario primero.")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Este usuario está desactivado.")
+    
+    # Verificar que el email no esté ya en uso
+    existing_email = db.query(QCUser).filter(QCUser.email == req.email).first()
+    if existing_email and existing_email.id != req.user_id:
+        raise HTTPException(status_code=400, detail="Este email ya está registrado por otro usuario.")
+    
+    # Verificar que el usuario no tenga ya credenciales
+    if user.password_hash:
+        raise HTTPException(status_code=400, detail="Este usuario ya tiene credenciales registradas. Use login.")
+    
+    # Registrar credenciales
+    user.email = req.email.strip().lower()
+    user.password_hash = hash_password(req.password)
+    db.commit()
+    db.refresh(user)
+    
+    # Generar token
+    token = create_access_token({"sub": user.id, "role": user.role})
+    return TokenResponse(
+        access_token=token,
+        user=QCUserSchema.model_validate(user)
+    )
+
+@api_router.post("/auth/login", response_model=TokenResponse)
+def login_user(req: AuthLogin, db: Session = Depends(get_db)):
+    """Autenticar usuario con email y contraseña."""
+    user = db.query(QCUser).filter(QCUser.email == req.email.strip().lower()).first()
+    if not user or not user.password_hash:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas.")
+    
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas.")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Usuario desactivado. Contacte al administrador.")
+    
+    token = create_access_token({"sub": user.id, "role": user.role})
+    return TokenResponse(
+        access_token=token,
+        user=QCUserSchema.model_validate(user)
+    )
+
+@api_router.get("/auth/me", response_model=QCUserSchema)
+def get_current_user_info(current_user: QCUser = Depends(require_auth)):
+    """Obtener información del usuario autenticado."""
+    return current_user
 
 @api_router.get("/users", response_model=List[QCUserSchema])
 def get_users(include_inactive: bool = False, db: Session = Depends(get_db)):

@@ -8,9 +8,12 @@ class QCUser(Base):
 
     id = Column(String(50), primary_key=True) # ej: "USR-01", "ADM-01"
     name = Column(String(100), nullable=False)
+    email = Column(String(150), unique=True, nullable=True)
+    password_hash = Column(String(255), nullable=True)
     role = Column(String(20), default="OPERATOR") # "ADMIN" o "OPERATOR"
     avatar = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
+
 
 class QCModel(Base):
     __tablename__ = "qc_models"

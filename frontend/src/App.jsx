@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import LoginPage from './LoginPage';
 import {
   Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Download,
   Upload, Loader2, Play, Coffee, Inbox, Shield, Cpu, RefreshCw, X,
@@ -46,6 +47,11 @@ const Card = ({ children, className = "", ...props }) => (
 // APP PRINCIPAL
 // =============================================
 export default function App() {
+  // ——— Auth State ———
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authToken, setAuthToken] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [currentUser, setCurrentUser] = useState({ id: "ADM-01", name: "Ing. Carlos Mendoza", role: "ADMIN", avatar: "CM" });
   const [activeTab, setActiveTab] = useState("matrix");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -63,6 +69,60 @@ export default function App() {
   const [addUnitsModalOpen, setAddUnitsModalOpen] = useState(false);
   const [resetOrderModalOpen, setResetOrderModalOpen] = useState(false);
   const [deleteOrderModalOpen, setDeleteOrderModalOpen] = useState(false);
+
+  // ——— Auth: Check saved token on mount ———
+  useEffect(() => {
+    const savedToken = localStorage.getItem('qc_token');
+    const savedUser = localStorage.getItem('qc_user');
+    if (savedToken && savedUser) {
+      // Verify token is still valid
+      fetch(`${API_BASE}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${savedToken}` }
+      })
+        .then(r => {
+          if (r.ok) return r.json();
+          throw new Error('Token expired');
+        })
+        .then(user => {
+          setAuthToken(savedToken);
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+          setActiveTab(user.role === 'OPERATOR' ? 'operator' : 'matrix');
+        })
+        .catch(() => {
+          localStorage.removeItem('qc_token');
+          localStorage.removeItem('qc_user');
+        })
+        .finally(() => setAuthLoading(false));
+    } else {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const handleLogin = (token, user) => {
+    setAuthToken(token);
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setActiveTab(user.role === 'OPERATOR' ? 'operator' : 'matrix');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('qc_token');
+    localStorage.removeItem('qc_user');
+    setAuthToken(null);
+    setIsAuthenticated(false);
+    setCurrentUser({ id: '', name: '', role: '', avatar: '' });
+    setOrders([]);
+    setMatrixData(null);
+    setOperatorWorkspace(null);
+  };
+
+  // Helper to add auth headers to fetch calls
+  const authHeaders = () => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    return headers;
+  };
 
   const notify = (message, type = "success") => {
     setNotification({ message, type });
@@ -110,7 +170,7 @@ export default function App() {
       .catch(err => console.error("Error workspace operario:", err));
   };
 
-  useEffect(() => { loadInitialData(); }, []);
+  useEffect(() => { if (isAuthenticated) loadInitialData(); }, [isAuthenticated]);
   useEffect(() => { loadMatrixData(); }, [selectedOrder]);
   useEffect(() => {
     if (activeTab === "operator" || currentUser.role === "OPERATOR") {
@@ -118,12 +178,14 @@ export default function App() {
     }
   }, [activeTab, currentUser]);
 
+  // User change is no longer needed - auth handles this
+  // Kept for backward compatibility with technicians panel
   const handleUserChange = (userId) => {
+    // Only admin can switch to view other users' perspectives
+    if (currentUser.role !== 'ADMIN') return;
     const u = users.find(x => x.id === userId);
     if (u) {
-      setCurrentUser(u);
       setMobileMenuOpen(false);
-      setActiveTab(u.role === "OPERATOR" ? "operator" : "matrix");
     }
   };
 
@@ -145,6 +207,23 @@ export default function App() {
   ];
 
   const tabs = currentUser.role === "ADMIN" ? ADMIN_TABS : OPERATOR_TABS;
+
+  // ——— Auth Loading Screen ———
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0f172a]">
+        <div className="text-center">
+          <div className="inline-block w-10 h-10 border-3 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" style={{ borderWidth: '3px' }} />
+          <p className="text-slate-400 text-sm mt-4">Verificando sesión...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ——— Show Login Page if not authenticated ———
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f3f2f1]">
@@ -183,26 +262,29 @@ export default function App() {
 
           {/* Controles derecha */}
           <div className="flex items-center gap-2">
-            {/* Selector de usuario */}
+            {/* User info badge */}
             <div className="flex items-center gap-1.5 bg-blue-900/40 px-2 py-1 rounded-lg border border-blue-400/30 text-xs">
-              <span className="hidden sm:inline text-blue-200">Sesión:</span>
-              <select
-                value={currentUser.id}
-                onChange={(e) => handleUserChange(e.target.value)}
-                className="bg-transparent text-white font-medium focus:outline-none cursor-pointer text-xs max-w-[110px] sm:max-w-none"
-              >
-                {Array.isArray(users) && users.map(u => (
-                  <option key={u.id} value={u.id} className="text-gray-900 bg-white">
-                    {u.role === "ADMIN" ? "👑 " : "🔧 "}{u.name}
-                  </option>
-                ))}
-              </select>
+              <span className="hidden sm:inline text-blue-200">
+                {currentUser.role === 'ADMIN' ? '👑' : '🔧'}
+              </span>
+              <span className="text-white font-medium text-xs max-w-[120px] sm:max-w-none truncate">
+                {currentUser.name}
+              </span>
             </div>
 
             {/* Avatar */}
             <div className="w-8 h-8 rounded-full bg-white text-[#0078d4] font-bold text-xs flex items-center justify-center shadow flex-shrink-0">
-              {currentUser.avatar || currentUser.name.slice(0, 2).toUpperCase()}
+              {currentUser.avatar || (currentUser.name ? currentUser.name.slice(0, 2).toUpperCase() : 'U')}
             </div>
+
+            {/* Logout button */}
+            <button
+              onClick={handleLogout}
+              className="p-1.5 rounded-lg hover:bg-white/20 transition text-blue-100 hover:text-white"
+              title="Cerrar sesión"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
 
             {/* Botón menú mobile */}
             <button

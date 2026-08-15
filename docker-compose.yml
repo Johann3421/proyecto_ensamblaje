@@ -16,48 +16,36 @@ services:
       - postgres_data_15:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qc_admin} -d ${POSTGRES_DB:-qc_kenya_db}"]
-      interval: 5s
-      timeout: 5s
+      interval: 3s
+      timeout: 3s
       retries: 5
     networks:
       - qc_network_15
 
-  # Backend FastAPI
-  backend:
+  # Aplicación QC KENYA (Frontend React Compilado + Backend FastAPI)
+  app:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: qc_kenya_backend_15
+    container_name: qc_kenya_app_15
     restart: always
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-qc_admin}:${POSTGRES_PASSWORD:-KenyaQC2026Secure!}@postgres:5432/${POSTGRES_DB:-qc_kenya_db}
       PORT: 8000
       DOMAIN: ${DOMAIN:-ensamblaje.sekaitech.com.pe}
+    ports:
+      - "${PORT:-3015}:8000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - backend_uploads_15:/app/uploads
-    networks:
-      - qc_network_15
-
-  # Frontend React + Nginx Proxy
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: qc_kenya_frontend_15
-    restart: always
-    ports:
-      - "${PORT:-3015}:80"
-    depends_on:
-      - backend
+      - app_uploads_15:/app/uploads
     networks:
       - qc_network_15
 
 volumes:
   postgres_data_15:
-  backend_uploads_15:
+  app_uploads_15:
 
 networks:
   qc_network_15:

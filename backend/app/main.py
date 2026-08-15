@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -26,7 +27,7 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# Middleware de log para ver cada petición en los logs de Dokploy
+# Logger HTTP para Dokploy
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
@@ -35,7 +36,7 @@ async def log_requests(request: Request, call_next):
     print(f"[HTTP] {request.method} {request.url.path} -> {response.status_code} ({process_time:.1f}ms)")
     return response
 
-# Habilitar CORS amplio
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,54 +45,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Servir archivos subidos
+# Directorio de subidas
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# Inicialización resiliente de la base de datos
+# Inicialización de base de datos en startup
 @app.on_event("startup")
 def startup_db_init():
-    print("[DB] Iniciando conexión y verificación de base de datos...")
+    print("[DB] Verificando tablas y sembrando datos iniciales...")
     for attempt in range(1, 11):
         db_session = None
         try:
             Base.metadata.create_all(bind=engine)
             db_session = SessionLocal()
             seed_database(db_session)
-            print(f"[DB] Base de datos y datos maestros inicializados correctamente en intento {attempt}.")
+            print(f"[DB] Base de datos y orden inicial sembrada correctamente.")
             break
         except Exception as e:
             print(f"[DB Warning] Intento {attempt}/10 falló: {e}")
-            if attempt == 10:
-                print("[DB Error] No se pudo inicializar la base de datos tras 10 intentos.")
             time.sleep(1)
         finally:
             if db_session:
                 db_session.close()
 
-# Router principal
+# Router de API
 api_router = APIRouter()
-
-# ==========================================
-# RUTAS: HEALTH CHECK
-# ==========================================
 
 @api_router.get("/health")
 def health_check():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "service": "QC-KENYA-API"}
 
-# ==========================================
-# RUTAS: USUARIOS Y AUTENTICACIÓN / ROLES
-# ==========================================
-
 @api_router.get("/users", response_model=List[QCUserSchema])
 def get_users(db: Session = Depends(get_db)):
     return db.query(QCUser).filter(QCUser.is_active == True).all()
-
-# ==========================================
-# RUTAS: GESTIÓN DE MODELOS Y CHECKLISTS
-# ==========================================
 
 @api_router.get("/models")
 def get_models(db: Session = Depends(get_db)):
@@ -166,10 +153,6 @@ def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(g
     db.commit()
     return {"message": "Paso eliminado correctamente"}
 
-# ==========================================
-# RUTAS: IMPORTACIÓN / EXPORTACIÓN EXCEL
-# ==========================================
-
 @api_router.get("/models/{model_name}/export-excel")
 def export_model_excel(model_name: str, db: Session = Depends(get_db)):
     items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number).all()
@@ -212,10 +195,6 @@ async def import_model_excel(model_name: str, file: UploadFile = File(...), db: 
         ))
     db.commit()
     return {"message": f"Se importaron {len(parsed_items)} pasos correctamente para el modelo {model_name}"}
-
-# ==========================================
-# RUTAS: GESTIÓN DE ÓRDENES Y PIPELINE
-# ==========================================
 
 @api_router.get("/orders")
 def list_orders(db: Session = Depends(get_db)):
@@ -341,10 +320,6 @@ def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
         "logs_count": len(logs),
         "issues": issues
     }
-
-# ==========================================
-# RUTAS: EJECUCIÓN DE ESTACIÓN (OPERARIO)
-# ==========================================
 
 @api_router.get("/operator/{user_id}/station")
 def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Session = Depends(get_db)):
@@ -535,6 +510,22 @@ async def upload_media(file: UploadFile = File(...)):
 def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
     return db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()
 
-# Registrar todas las rutas bajo /api y también en la raíz
+# Registrar todas las rutas de API
 app.include_router(api_router, prefix="/api")
-app.include_router(api_router, prefix="")
+
+# Servir Frontend Compilado (Vite React) de forma integrada
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "static")
+if os.path.exists(STATIC_DIR):
+    assets_dir = os.path.join(STATIC_DIR, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        file_path = os.path.join(STATIC_DIR, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_file = os.path.join(STATIC_DIR, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"message": "QC KENYA API activa", "status": "ok"}

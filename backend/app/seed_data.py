@@ -125,7 +125,7 @@ PROWORK_52_STEPS = [
 ]
 
 def seed_database(db: Session):
-    # 1. Crear o actualizar usuarios por defecto con sus credenciales
+    # 1. Crear usuarios por defecto o asegurar credenciales sin sobreescribir nombres personalizados
     for u in DEFAULT_USERS:
         raw_password = u.get("password")
         pwd_hash = hash_password(raw_password) if raw_password else None
@@ -143,11 +143,13 @@ def seed_database(db: Session):
                 is_active=True
             ))
         else:
-            # Sincronizar email y contraseña si faltan o se actualizaron
-            existing.email = clean_email
-            existing.password_hash = pwd_hash
-            existing.role = u["role"]
-            existing.name = u["name"]
+            # Sincronizar email y contraseña si faltan, pero NO sobreescribir el nombre personalizado
+            if not existing.email and clean_email:
+                existing.email = clean_email
+            if not existing.password_hash and pwd_hash:
+                existing.password_hash = pwd_hash
+            if not existing.avatar and u.get("avatar"):
+                existing.avatar = u.get("avatar")
     db.commit()
 
     # 2. Crear modelos base

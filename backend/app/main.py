@@ -487,6 +487,11 @@ def get_order_detail(order_id: str, db: Session = Depends(get_db)):
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     stations = db.query(QCStationAssignment).filter(QCStationAssignment.order_id == order_id).order_by(QCStationAssignment.station_number).all()
+    for st in stations:
+        u = db.query(QCUser).filter(QCUser.id == st.user_id).first()
+        if u and u.name != st.user_name:
+            st.user_name = u.name
+            db.commit()
     units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).order_by(QCPCUnit.unit_number).all()
     return {"order": order, "stations": stations, "units": units}
 
@@ -497,6 +502,12 @@ def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     
     stations = db.query(QCStationAssignment).filter(QCStationAssignment.order_id == order_id).order_by(QCStationAssignment.station_number).all()
+    for st in stations:
+        u = db.query(QCUser).filter(QCUser.id == st.user_id).first()
+        if u and u.name != st.user_name:
+            st.user_name = u.name
+            db.commit()
+
     units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).order_by(QCPCUnit.unit_number).all()
     logs = db.query(QCStepLog).filter(QCStepLog.order_id == order_id).all()
     issues = db.query(QCIssue).filter(QCIssue.order_id == order_id).all()
@@ -639,6 +650,12 @@ def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Ses
         assignment = db.query(QCStationAssignment).first()
         if not assignment:
             return {"active": False, "message": "No hay asignaciones activas para este usuario"}
+
+    # Sincronizar con el nombre más reciente del técnico
+    u_latest = db.query(QCUser).filter(QCUser.id == assignment.user_id).first()
+    if u_latest and u_latest.name != assignment.user_name:
+        assignment.user_name = u_latest.name
+        db.commit()
 
     order = db.query(QCOrder).filter(QCOrder.order_id == assignment.order_id).first()
     all_steps = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).order_by(QCChecklistItem.step_number).all()

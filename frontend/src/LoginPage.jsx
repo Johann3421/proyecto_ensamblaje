@@ -357,105 +357,76 @@ export default function LoginPage({ onLogin }) {
                   <span>Acceso Rápido por Estación:</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('admin@sekaitech.com.pe');
-                      setPassword('admin123');
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 border border-blue-500/20 text-left text-xs text-blue-200 transition"
-                  >
-                    <span>👑</span>
-                    <div className="truncate">
-                      <div className="font-bold text-white text-[11px]">Admin QC</div>
-                      <div className="text-[9px] text-blue-300 truncate">admin@sekaitech...</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('estacion1@sekaitech.com.pe');
-                      setPassword('kenya123');
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
-                  >
-                    <span>🔧</span>
-                    <div className="truncate">
-                      <div className="font-bold text-white text-[11px]">Estación 1 (Carlos)</div>
-                      <div className="text-[9px] text-slate-400 truncate">estacion1@sekaitech...</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('estacion2@sekaitech.com.pe');
-                      setPassword('kenya123');
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
-                  >
-                    <span>🔧</span>
-                    <div className="truncate">
-                      <div className="font-bold text-white text-[11px]">Estación 2 (Ana)</div>
-                      <div className="text-[9px] text-slate-400 truncate">estacion2@sekaitech...</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('estacion3@sekaitech.com.pe');
-                      setPassword('kenya123');
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
-                  >
-                    <span>🔧</span>
-                    <div className="truncate">
-                      <div className="font-bold text-white text-[11px]">Estación 3 (Roberto)</div>
-                      <div className="text-[9px] text-slate-400 truncate">estacion3@sekaitech...</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('estacion4@sekaitech.com.pe');
-                      setPassword('kenya123');
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
-                  >
-                    <span>🔧</span>
-                    <div className="truncate">
-                      <div className="font-bold text-white text-[11px]">Estación 4 (Elena)</div>
-                      <div className="text-[9px] text-slate-400 truncate">estacion4@sekaitech...</div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('estacion5@sekaitech.com.pe');
-                      setPassword('kenya123');
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
-                  >
-                    <span>🔧</span>
-                    <div className="truncate">
-                      <div className="font-bold text-white text-[11px]">Estación 5 (Marco)</div>
-                      <div className="text-[9px] text-slate-400 truncate">estacion5@sekaitech...</div>
-                    </div>
-                  </button>
+                  {/* Admin */}
+                  {(() => {
+                    const u = availableUsers.find(x => x.role === 'ADMIN' || x.id === 'ADM-01');
+                    const uEmail = u?.email || 'admin@sekaitech.com.pe';
+                    const uName = u?.name || 'Admin QC';
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmail(uEmail);
+                          setPassword('admin123');
+                        }}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 border border-blue-500/20 text-left text-xs text-blue-200 transition"
+                      >
+                        <span>👑</span>
+                        <div className="truncate">
+                          <div className="font-bold text-white text-[11px] truncate">{uName}</div>
+                          <div className="text-[9px] text-blue-300 truncate">{uEmail}</div>
+                        </div>
+                      </button>
+                    );
+                  })()}
+
+                  {/* Estaciones 1 a 5 */}
+                  {[1, 2, 3, 4, 5].map((stNum) => {
+                    const opId = `OP-10${stNum}`;
+                    const u = availableUsers.find(x => x.id === opId);
+                    const uEmail = u?.email || `estacion${stNum}@sekaitech.com.pe`;
+                    const uName = u?.name || `Estación ${stNum}`;
+                    return (
+                      <button
+                        key={opId}
+                        type="button"
+                        onClick={() => {
+                          setEmail(uEmail);
+                          setPassword('kenya123');
+                        }}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
+                      >
+                        <span>🔧</span>
+                        <div className="truncate">
+                          <div className="font-bold text-white text-[11px] truncate">E{stNum}: {uName}</div>
+                          <div className="text-[9px] text-slate-400 truncate">{uEmail}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="mt-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('apoyo@sekaitech.com.pe');
-                      setPassword('kenya123');
-                    }}
-                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-xs text-amber-200 transition"
-                  >
-                    <span>⚡</span>
-                    <span className="font-semibold text-[11px]">Suplente / Apoyo (Jorge Valdivia)</span>
-                    <span className="text-[10px] text-amber-300 opacity-70">apoyo@sekaitech...</span>
-                  </button>
-                </div>
+                {/* Apoyo / Suplente */}
+                {(() => {
+                  const u = availableUsers.find(x => x.id === 'OP-106');
+                  const uEmail = u?.email || 'apoyo@sekaitech.com.pe';
+                  const uName = u?.name || 'Jorge Valdivia (Suplente/Apoyo)';
+                  return (
+                    <div className="mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmail(uEmail);
+                          setPassword('kenya123');
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-xs text-amber-200 transition"
+                      >
+                        <span>⚡</span>
+                        <span className="font-semibold text-[11px] truncate">{uName}</span>
+                        <span className="text-[10px] text-amber-300 opacity-70 truncate">{uEmail}</span>
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </form>

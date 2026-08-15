@@ -139,8 +139,11 @@ export default function App() {
       if (Array.isArray(resUsers) && resUsers.length > 0) {
         setUsers(resUsers);
         // Si el usuario actual está en la lista, sincronizar su nombre
-        const currentUpdated = resUsers.find(u => u.id === currentUser.id);
-        if (currentUpdated) setCurrentUser(currentUpdated);
+        const currentUpdated = resUsers.find(u => u.id === currentUser?.id);
+        if (currentUpdated) {
+          setCurrentUser(currentUpdated);
+          localStorage.setItem('qc_user', JSON.stringify(currentUpdated));
+        }
       }
       if (Array.isArray(resModels)) setModels(resModels);
       if (Array.isArray(resOrders) && resOrders.length > 0) {
@@ -362,7 +365,11 @@ export default function App() {
           {activeTab === "technicians" && (
             <TechniciansManagementView
               users={users}
-              onRefreshUsers={loadInitialData}
+              onRefreshUsers={() => {
+                loadInitialData();
+                loadMatrixData();
+                loadOperatorWorkspace();
+              }}
               notify={notify}
             />
           )}

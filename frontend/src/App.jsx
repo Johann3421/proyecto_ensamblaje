@@ -156,8 +156,13 @@ export default function App() {
     }
   };
 
-  const loadOperatorWorkspace = () => {
-    fetch(`${API_BASE}/operator/${currentUser.id}/station`)
+  const loadOperatorWorkspace = (unitNumber = null) => {
+    if (!currentUser?.id) return;
+    let url = `${API_BASE}/operator/${currentUser.id}/station`;
+    if (unitNumber) {
+      url += `?unit_number=${unitNumber}`;
+    }
+    fetch(url)
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setOperatorWorkspace(data); })
       .catch(err => console.error("Error workspace operario:", err));
@@ -379,7 +384,8 @@ export default function App() {
               currentUser={currentUser}
               onOpenMedia={(item) => setActiveMediaModal(item)}
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
-              onRefresh={loadOperatorWorkspace}
+              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum)}
+              onRefresh={() => loadOperatorWorkspace()}
               notify={notify}
             />
           )}
@@ -1122,9 +1128,9 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
 }
 
 // =============================================
-// 4. ESPACIO DE TRABAJO DEL OPERARIO
+// 4. ESPACIO DE TRABAJO DEL OPERARIO (CON SELECCIÓN LIBRE DE PC)
 // =============================================
-function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onRefresh, notify }) {
+function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onSelectUnit, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
     return (
       <Card className="p-8 text-center max-w-sm mx-auto">
@@ -1138,12 +1144,14 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
     );
   }
 
-  const { assignment, order, station_steps = [], active_unit, completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
+  const { assignment, order, station_steps = [], active_unit, units_in_station = [], completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
   const [completedSteps, setCompletedSteps] = useState(completed_step_numbers || []);
   const [submittingStep, setSubmittingStep] = useState(null);
   const [finishingUnit, setFinishingUnit] = useState(false);
 
-  useEffect(() => { setCompletedSteps(completed_step_numbers || []); }, [completed_step_numbers]);
+  useEffect(() => {
+    setCompletedSteps(completed_step_numbers || []);
+  }, [completed_step_numbers, active_unit?.unit_number]);
 
   const totalStationSteps = station_steps.length;
   const isStationComplete = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
@@ -1225,7 +1233,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-4 fade-in pb-4">
+    <div className="max-w-xl mx-auto space-y-3.5 fade-in pb-4">
       {/* Header estación */}
       <Card className="p-3 border-l-4 border-l-[#0078d4]">
         <div className="flex items-start justify-between gap-2">
@@ -1246,6 +1254,42 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
         </div>
       </Card>
 
+      {/* SELECTOR RÁPIDO DE PCs (Libre Selección por el Técnico) */}
+      {units_in_station.length > 1 && (
+        <Card className="p-2.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-blue-200 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5 px-0.5">
+            <span className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-blue-600" />
+              <span>Selección libre de PCs en tu estación ({units_in_station.length}):</span>
+            </span>
+            <span className="text-[9px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded-md border border-blue-200">
+              Toca para cambiar
+            </span>
+          </div>
+
+          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {units_in_station.map(u => {
+              const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
+              return (
+                <button
+                  key={u.unit_number}
+                  type="button"
+                  onClick={() => onSelectUnit && onSelectUnit(u.unit_number)}
+                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1 ${
+                    isCurrent
+                      ? "bg-[#0078d4] text-white shadow-md scale-105"
+                      : "bg-white hover:bg-blue-100 text-gray-700 border border-gray-200"
+                  }`}
+                >
+                  <span>🖥️ #{u.unit_number.toString().padStart(2, '0')}</span>
+                  {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {active_unit ? (
         <Card className="overflow-hidden border-2 border-blue-400">
           {/* Header PC activa */}
@@ -1253,7 +1297,23 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Trabajando en</span>
-                <h3 className="text-lg font-black">🖥️ PC #{active_unit.unit_number.toString().padStart(2, '0')}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black">🖥️ PC #{active_unit.unit_number.toString().padStart(2, '0')}</h3>
+                  {units_in_station.length > 1 && (
+                    <select
+                      value={active_unit.unit_number}
+                      onChange={(e) => onSelectUnit && onSelectUnit(parseInt(e.target.value, 10))}
+                      className="text-xs bg-white/20 text-white font-bold border border-white/40 rounded-lg px-2 py-0.5 focus:outline-none touch-target"
+                      title="Cambiar a otra PC disponible"
+                    >
+                      {units_in_station.map(u => (
+                        <option key={u.unit_number} value={u.unit_number} className="text-gray-900 font-semibold">
+                          PC #{u.unit_number.toString().padStart(2, '0')} {u.unit_number === active_unit.unit_number ? '(Activa)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <p className="text-xs text-blue-200 font-mono">{active_unit.serial_number}</p>
               </div>
               <button
@@ -1268,7 +1328,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             {/* Progreso */}
             <div className="mt-3">
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-blue-200">Progreso Estación</span>
+                <span className="text-blue-200">Progreso PC #{active_unit.unit_number}</span>
                 <span className="font-bold">{completedSteps.length}/{totalStationSteps}</span>
               </div>
               <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
@@ -1392,7 +1452,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
               </button>
             ) : (
               <div className="bg-gray-50 p-3 rounded-xl text-center text-xs text-gray-500 border border-gray-200">
-                Completa los {totalStationSteps} pasos para habilitar el envío.
+                Completa los {totalStationSteps} pasos de la <strong>PC #{active_unit.unit_number}</strong> para habilitar su despacho.
               </div>
             )}
           </div>
@@ -1401,22 +1461,37 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
         <Card className="p-8 text-center">
           <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
           <h3 className="text-sm font-bold text-gray-700">Sin PCs en tu estación</h3>
-          <p className="text-xs text-gray-400 mt-1">Esperando la estación anterior...</p>
+          <p className="text-xs text-gray-400 mt-1">Esperando que la estación anterior despache unidades...</p>
         </Card>
       )}
 
-      {/* Cola y completadas */}
+      {/* Cola de otras PCs disponibles en esta estación */}
       {queue_units.length > 0 && (
         <Card className="p-3">
-          <h4 className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1.5">
-            <RefreshCw className="w-4 h-4 text-blue-600" />
-            <span>Cola: {queue_units.length} PCs esperando</span>
-          </h4>
-          <div className="space-y-1.5">
-            {queue_units.slice(0, 5).map(u => (
-              <div key={u.unit_number} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border text-xs">
-                <span className="font-bold">PC #{u.unit_number.toString().padStart(2, '0')}</span>
-                <span className="text-gray-400 font-mono text-[10px]">{u.serial_number}</span>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+              <RefreshCw className="w-4 h-4 text-blue-600" />
+              <span>Otras PCs en tu estación ({queue_units.length}):</span>
+            </h4>
+            <span className="text-[10px] text-gray-400">Toca para cambiar</span>
+          </div>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+            {queue_units.map(u => (
+              <div
+                key={u.unit_number}
+                onClick={() => onSelectUnit && onSelectUnit(u.unit_number)}
+                className="flex justify-between items-center p-2.5 bg-gray-50 hover:bg-blue-50 active:bg-blue-100 rounded-xl border border-gray-200 cursor-pointer transition touch-target"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gray-900 text-xs">🖥️ PC #{u.unit_number.toString().padStart(2, '0')}</span>
+                  <span className="text-gray-400 font-mono text-[10px] hidden sm:inline">{u.serial_number}</span>
+                </div>
+                <button
+                  type="button"
+                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-[11px] rounded-lg transition"
+                >
+                  ⚡ Trabajar en esta PC
+                </button>
               </div>
             ))}
           </div>

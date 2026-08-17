@@ -638,7 +638,12 @@ def reset_single_unit(order_id: str, unit_number: int, db: Session = Depends(get
     return {"message": f"PC #{unit_number} reiniciada a Estación 1 con progreso en 0"}
 
 @api_router.get("/operator/{user_id}/station")
-def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_operator_workspace(
+    user_id: str,
+    order_id: Optional[str] = None,
+    unit_number: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
     query = db.query(QCStationAssignment).join(QCOrder).filter(
         QCStationAssignment.user_id == user_id,
         QCOrder.status == "IN_PROGRESS"
@@ -668,7 +673,12 @@ def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Ses
         QCPCUnit.overall_status.in_(["PENDING", "IN_PROGRESS"])
     ).order_by(QCPCUnit.unit_number).all()
 
-    active_unit = units_in_station[0] if units_in_station else None
+    # Selección libre de PC: si el técnico especificó una PC concreta disponible en su estación, usarla
+    active_unit = None
+    if unit_number is not None:
+        active_unit = next((u for u in units_in_station if u.unit_number == unit_number), None)
+    if not active_unit:
+        active_unit = units_in_station[0] if units_in_station else None
 
     completed_steps_ids = []
     if active_unit:
@@ -680,11 +690,11 @@ def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Ses
         ).all()
         completed_steps_ids = [l.step_number for l in logs]
 
-    queue_units = units_in_station[1:] if len(units_in_station) > 1 else []
+    queue_units = [u for u in units_in_station if active_unit and u.unit_number != active_unit.unit_number]
     completed_units = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order.order_id,
         QCPCUnit.current_station > assignment.station_number
-    ).order_by(QCPCUnit.unit_number.desc()).limit(10).all()
+    ).order_by(QCPCUnit.unit_number.desc()).limit(15).all()
 
     return {
         "active": True,
@@ -692,6 +702,7 @@ def get_operator_workspace(user_id: str, order_id: Optional[str] = None, db: Ses
         "order": order,
         "station_steps": station_steps,
         "active_unit": active_unit,
+        "units_in_station": units_in_station,
         "completed_step_numbers": completed_steps_ids,
         "queue_units": queue_units,
         "completed_units": completed_units

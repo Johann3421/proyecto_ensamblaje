@@ -188,6 +188,15 @@ class TransferUnitRequest(BaseModel):
     transferred_by: str
     reason: Optional[str] = "Derivado a otra estación"
 
+class StepReassignRequest(BaseModel):
+    order_id: str
+    unit_number: Optional[int] = None # None = todo el lote, int = PC individual
+    step_number: int
+    from_station: int
+    target_station: int
+    transferred_by: str
+    reason: Optional[str] = "Paso derivado a otra estación"
+
 class OrderDetailSchema(BaseModel):
     order_id: str
     model_name: str

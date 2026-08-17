@@ -112,3 +112,16 @@ class QCIssue(Base):
     photo_url = Column(String(500), nullable=True)
     status = Column(String(20), default="OPEN") # OPEN, RESOLVED, DISMISSED
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class QCStepStationOverride(Base):
+    __tablename__ = "qc_step_station_overrides"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(String(50), nullable=False)
+    unit_number = Column(Integer, nullable=True) # None = aplica a todo el lote, o número específico de PC
+    step_number = Column(Integer, nullable=False)
+    from_station = Column(Integer, nullable=False)
+    target_station = Column(Integer, nullable=False)
+    transferred_by = Column(String(100), nullable=False)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

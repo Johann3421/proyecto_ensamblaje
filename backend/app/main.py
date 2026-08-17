@@ -11,13 +11,13 @@ from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, SessionLocal, get_db
-from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog, QCIssue
+from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog, QCIssue, QCStepStationOverride
 from .schemas import (
     QCUserSchema, QCUserCreate, QCUserUpdate, AddUnitsRequest, ModelSchema, ChecklistItemSchema,
     OrderCreateRequest, OrderDetailSchema,
     StepLogCreate, StepLogSchema, StepUncheckRequest,
     IssueCreate, IssueSchema,
-    ReassignEmergencyRequest, TransferUnitRequest,
+    ReassignEmergencyRequest, TransferUnitRequest, StepReassignRequest,
     AuthRegister, AuthLogin, TokenResponse
 )
 from .seed_data import seed_database, DEFAULT_USERS
@@ -61,6 +61,17 @@ def auto_migrate_schema():
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS avatar VARCHAR(255);",
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
         "ALTER TABLE qc_issues ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
+        """CREATE TABLE IF NOT EXISTS qc_step_station_overrides (
+            id SERIAL PRIMARY KEY,
+            order_id VARCHAR(50) NOT NULL,
+            unit_number INTEGER,
+            step_number INTEGER NOT NULL,
+            from_station INTEGER NOT NULL,
+            target_station INTEGER NOT NULL,
+            transferred_by VARCHAR(100) NOT NULL,
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );""",
     ]
     for sql in migrations:
         try:
@@ -665,7 +676,6 @@ def get_operator_workspace(
 
     order = db.query(QCOrder).filter(QCOrder.order_id == assignment.order_id).first()
     all_steps = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).order_by(QCChecklistItem.step_number).all()
-    station_steps = [s for s in all_steps if assignment.start_step <= s.step_number <= assignment.end_step]
 
     units_in_station = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order.order_id,
@@ -680,6 +690,61 @@ def get_operator_workspace(
     if not active_unit:
         active_unit = units_in_station[0] if units_in_station else None
 
+    # Consultar reasignaciones / derivaciones de pasos para esta orden
+    overrides = db.query(QCStepStationOverride).filter(QCStepStationOverride.order_id == order.order_id).all()
+    active_overrides = [
+        o for o in overrides 
+        if o.unit_number is None or (active_unit and o.unit_number == active_unit.unit_number)
+    ]
+    out_step_map = {o.step_number: o for o in active_overrides if o.from_station == assignment.station_number}
+    in_step_map = {o.step_number: o for o in active_overrides if o.target_station == assignment.station_number}
+
+    # Calcular la lista de pasos que esta estación debe ejecutar
+    station_steps = []
+    for s in all_steps:
+        if s.step_number in in_step_map:
+            # Paso recibido de otra estación
+            o = in_step_map[s.step_number]
+            station_steps.append({
+                "id": s.id,
+                "model_name": s.model_name,
+                "step_number": s.step_number,
+                "operation": s.operation,
+                "description": s.description,
+                "qc_criteria": s.qc_criteria,
+                "media_url": s.media_url,
+                "media_type": s.media_type,
+                "is_delegated_in": True,
+                "delegated_from_station": o.from_station,
+                "delegated_reason": o.reason
+            })
+        elif assignment.start_step <= s.step_number <= assignment.end_step and s.step_number not in out_step_map:
+            # Paso original propio de la estación
+            station_steps.append({
+                "id": s.id,
+                "model_name": s.model_name,
+                "step_number": s.step_number,
+                "operation": s.operation,
+                "description": s.description,
+                "qc_criteria": s.qc_criteria,
+                "media_url": s.media_url,
+                "media_type": s.media_type,
+                "is_delegated_in": False
+            })
+
+    # Pasos transferidos fuera de esta estación
+    transferred_out_steps = []
+    for s in all_steps:
+        if s.step_number in out_step_map:
+            o = out_step_map[s.step_number]
+            transferred_out_steps.append({
+                "step_number": s.step_number,
+                "operation": s.operation,
+                "target_station": o.target_station,
+                "reason": o.reason,
+                "transferred_by": o.transferred_by
+            })
+
     completed_steps_ids = []
     pending_prior_steps = []
     if active_unit:
@@ -690,9 +755,12 @@ def get_operator_workspace(
         ).all()
         completed_steps_ids = [l.step_number for l in logs]
         # Identificar si hay pasos de estaciones previas que aún falten completar
+        current_station_step_nums = {s["step_number"] for s in station_steps}
         pending_prior_steps = [
             s for s in all_steps
-            if s.step_number < assignment.start_step and s.step_number not in completed_steps_ids
+            if s.step_number < assignment.start_step 
+            and s.step_number not in completed_steps_ids 
+            and s.step_number not in current_station_step_nums
         ]
 
     queue_units = [u for u in units_in_station if active_unit and u.unit_number != active_unit.unit_number]
@@ -710,6 +778,7 @@ def get_operator_workspace(
         "assignment": assignment,
         "order": order,
         "station_steps": station_steps,
+        "transferred_out_steps": transferred_out_steps,
         "pending_prior_steps": pending_prior_steps,
         "all_stations": all_stations,
         "active_unit": active_unit,
@@ -908,6 +977,57 @@ def transfer_unit_station(req: TransferUnitRequest, db: Session = Depends(get_db
     db.commit()
     return {
         "message": f"PC #{req.unit_number} derivada exitosamente a Estación {req.target_station}",
+        "target_station": req.target_station
+    }
+
+@api_router.post("/operator/reassign-step")
+def reassign_step_to_station(req: StepReassignRequest, db: Session = Depends(get_db)):
+    """Reasignar un paso individual de checklist a otra estación (para la PC actual o para todo el lote)"""
+    existing = db.query(QCStepStationOverride).filter(
+        QCStepStationOverride.order_id == req.order_id,
+        QCStepStationOverride.unit_number == req.unit_number,
+        QCStepStationOverride.step_number == req.step_number
+    ).first()
+
+    if existing:
+        existing.from_station = req.from_station
+        existing.target_station = req.target_station
+        existing.transferred_by = req.transferred_by
+        existing.reason = req.reason
+    else:
+        override = QCStepStationOverride(
+            order_id=req.order_id,
+            unit_number=req.unit_number,
+            step_number=req.step_number,
+            from_station=req.from_station,
+            target_station=req.target_station,
+            transferred_by=req.transferred_by,
+            reason=req.reason
+        )
+        db.add(override)
+
+    # Registrar en auditoría forense
+    scope_text = f"PC #{req.unit_number}" if req.unit_number else "Todo el lote"
+    step_item = db.query(QCChecklistItem).filter(QCChecklistItem.step_number == req.step_number).first()
+    op_name = step_item.operation if step_item else f"Paso #{req.step_number}"
+    
+    log = QCStepLog(
+        order_id=req.order_id,
+        unit_number=req.unit_number or 0,
+        step_number=req.step_number,
+        station_number=req.from_station,
+        user_id=req.transferred_by,
+        user_name=req.transferred_by,
+        status="REASSIGN_STEP",
+        notes=f"Paso #{req.step_number} ({op_name}) derivado: E{req.from_station} ➔ E{req.target_station} [{scope_text}]. Motivo: {req.reason}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "message": f"Paso #{req.step_number} reasignado exitosamente a Estación {req.target_station}",
+        "step_number": req.step_number,
         "target_station": req.target_station
     }
 

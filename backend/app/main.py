@@ -60,6 +60,7 @@ def auto_migrate_schema():
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);",
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS avatar VARCHAR(255);",
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
+        "ALTER TABLE qc_issues ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
     ]
     for sql in migrations:
         try:
@@ -812,9 +813,24 @@ def report_issue(req: IssueCreate, db: Session = Depends(get_db)):
         issue_title=req.issue_title,
         description=req.description,
         severity=req.severity,
+        photo_url=req.photo_url,
         status="OPEN"
     )
     db.add(issue)
+
+    # Registrar el evento FAIL en QCStepLog para auditoría forense
+    fail_log = QCStepLog(
+        order_id=req.order_id,
+        unit_number=req.unit_number,
+        step_number=req.step_number,
+        station_number=req.station_number,
+        user_id=req.reported_by,
+        user_name=req.reported_by,
+        status="FAIL",
+        notes=f"[{req.severity}] {req.issue_title}: {req.description}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(fail_log)
 
     unit = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == req.order_id,
@@ -824,7 +840,12 @@ def report_issue(req: IssueCreate, db: Session = Depends(get_db)):
         unit.overall_status = "FAILED"
 
     db.commit()
-    return {"message": "Incidencia registrada y PC bloqueada", "issue_id": issue.id}
+    return {
+        "message": f"Falla registrada con evidencia fotográfica en PC #{req.unit_number}. Unidad aislada del pipeline.",
+        "issue_id": issue.id,
+        "photo_url": req.photo_url,
+        "unit_number": req.unit_number
+    }
 
 @api_router.post("/orders/reassign-emergency")
 def reassign_station_emergency(req: ReassignEmergencyRequest, db: Session = Depends(get_db)):

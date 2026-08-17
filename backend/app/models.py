@@ -109,5 +109,6 @@ class QCIssue(Base):
     issue_title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     severity = Column(String(20), default="CRITICAL") # LOW, MEDIUM, HIGH, CRITICAL
+    photo_url = Column(String(500), nullable=True)
     status = Column(String(20), default="OPEN") # OPEN, RESOLVED, DISMISSED
     created_at = Column(DateTime, default=datetime.utcnow)

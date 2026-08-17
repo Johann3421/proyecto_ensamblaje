@@ -469,6 +469,7 @@ export default function App() {
           unit={selectedUnitDetail}
           order={matrixData.order}
           stations={matrixData.stations}
+          issues={matrixData.issues || []}
           onClose={() => setSelectedUnitDetail(null)}
           onSuccess={(msg) => {
             notify(msg);
@@ -700,6 +701,69 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
           </table>
         </div>
       </Card>
+
+      {/* Panel de Fallas con Fotos de Evidencia */}
+      {issues.length > 0 && (
+        <Card className="p-4 border-l-4 border-l-rose-600 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              <h3 className="text-sm font-bold text-gray-900">
+                🚨 Fallas Reportadas en Producción ({issues.length})
+              </h3>
+            </div>
+            <span className="text-xs font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+              Evidencia Fotográfica
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {issues.map((iss, idx) => (
+              <div
+                key={idx}
+                className="bg-rose-50/70 border border-rose-200 rounded-xl p-3 space-y-2 hover:shadow-md transition"
+              >
+                <div className="flex items-start justify-between gap-1">
+                  <div>
+                    <span className="text-xs font-black text-rose-900 bg-rose-200 px-1.5 py-0.5 rounded mr-1">
+                      PC #{iss.unit_number.toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-xs font-bold text-gray-900">{iss.issue_title}</span>
+                  </div>
+                  <Badge variant="danger">{iss.severity}</Badge>
+                </div>
+
+                {iss.description && (
+                  <p className="text-[11px] text-gray-700 leading-tight line-clamp-2">{iss.description}</p>
+                )}
+
+                {iss.photo_url && (
+                  <a
+                    href={iss.photo_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block relative rounded-lg overflow-hidden border border-rose-300 group"
+                  >
+                    <img
+                      src={iss.photo_url}
+                      alt="Evidencia fotográfica"
+                      className="w-full h-28 object-cover group-hover:scale-105 transition"
+                    />
+                    <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[9px] px-1.5 py-0.5 rounded font-semibold backdrop-blur-sm">
+                      📸 Ver Foto Completa
+                    </span>
+                  </a>
+                )}
+
+                <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-rose-200">
+                  <span>E{iss.station_number} · <strong>{iss.reported_by}</strong></span>
+                  <span className="font-semibold text-rose-700">{iss.status === 'OPEN' ? '🔴 ABIERTO' : '🟢 RESUELTO'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1488,17 +1552,42 @@ function MediaViewerModal({ item, onClose }) {
 }
 
 // =============================================
-// MODAL REPORTE DE FALLAS
+// MODAL REPORTE DE FALLAS (CON FOTO OBLIGATORIA)
 // =============================================
 function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, onSuccess }) {
   const { unit, step } = data;
   const [issueTitle, setIssueTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("CRITICAL");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      setUploadingPhoto(true);
+      const res = await fetch(`${API_BASE}/upload-media`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Error al subir fotografía");
+      const data = await res.json();
+      setPhotoUrl(data.url);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!photoUrl) {
+      alert("⚠️ Es OBLIGATORIO tomar o adjuntar una fotografía de la falla para generar el reporte.");
+      return;
+    }
     try {
       setSubmitting(true);
       const res = await fetch(`${API_BASE}/operator/report-issue`, {
@@ -1512,10 +1601,14 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
           reported_by: currentUser.name,
           issue_title: issueTitle,
           description,
-          severity
+          severity,
+          photo_url: photoUrl
         })
       });
-      if (!res.ok) throw new Error("Error registrando incidencia");
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Error registrando incidencia");
+      }
       onSuccess();
     } catch (err) {
       alert("Error: " + err.message);
@@ -1525,64 +1618,169 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl">
-        <div className="bg-rose-600 text-white p-4 flex justify-between items-center">
-          <h3 className="text-sm font-bold flex items-center gap-1.5">
-            <AlertTriangle className="w-4 h-4" />
-            <span>Reportar Falla — PC #{unit.unit_number}</span>
-          </h3>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
-            <X className="w-5 h-5" />
-          </button>
+    <>
+      <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+        <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto">
+          <div className="bg-rose-600 text-white p-4 flex justify-between items-center sticky top-0 z-10">
+            <h3 className="text-sm font-bold flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Reportar Falla — PC #{unit.unit_number}</span>
+            </h3>
+            <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <form onSubmit={handleSubmit} className="p-4 space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Título de la Falla</label>
+              <input
+                type="text"
+                required
+                placeholder="Ej: Rayón en tapa frontal / GPU no detectada"
+                value={issueTitle}
+                onChange={(e) => setIssueTitle(e.target.value)}
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target focus:ring-2 focus:ring-rose-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Severidad</label>
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value)}
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5 font-bold touch-target"
+              >
+                <option value="LOW">Baja (Cosmético)</option>
+                <option value="MEDIUM">Media (Ajuste menor)</option>
+                <option value="HIGH">Alta (Reemplazo)</option>
+                <option value="CRITICAL">Crítica (Bloqueo total)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción</label>
+              <textarea
+                rows="2"
+                required
+                placeholder="Detalle exactamente lo observado..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target focus:outline-none"
+              ></textarea>
+            </div>
+
+            {/* SECCIÓN DE FOTOGRAFÍA OBLIGATORIA */}
+            <div className="space-y-2 pt-1 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-rose-600" />
+                  <span>Foto de la Falla</span>
+                  <span className="text-[9px] text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded font-bold border border-rose-200">
+                    OBLIGATORIO *
+                  </span>
+                </label>
+                {photoUrl && (
+                  <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    Foto cargada
+                  </span>
+                )}
+              </div>
+
+              {photoUrl ? (
+                <div className="relative rounded-xl overflow-hidden border-2 border-emerald-500 bg-black/5">
+                  <img
+                    src={photoUrl}
+                    alt="Evidencia fotográfica"
+                    className="w-full h-36 object-cover rounded-lg"
+                  />
+                  <div className="p-2 bg-slate-900/90 text-white flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-emerald-400 font-medium truncate">✓ Evidencia lista</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCameraOpen(true)}
+                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1"
+                      >
+                        <Camera className="w-3 h-3" />
+                        Cambiar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPhotoUrl("")}
+                        className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-rose-50/70 rounded-xl border-2 border-dashed border-rose-300 space-y-2 text-center">
+                  <p className="text-[11px] text-rose-800 leading-tight">
+                    Toma una foto clara del defecto con la cámara para identificar la falla rápidamente.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCameraOpen(true)}
+                      className="py-2.5 px-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition touch-target"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>📸 Tomar Foto</span>
+                    </button>
+                    <label className="py-2.5 px-3 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition touch-target text-center">
+                      {uploadingPhoto ? (
+                        <><Loader2 className="w-4 h-4 animate-spin text-rose-600" /><span>Subiendo...</span></>
+                      ) : (
+                        <><Upload className="w-4 h-4 text-gray-500" /><span>📁 Archivo</span></>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                        disabled={uploadingPhoto}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !photoUrl}
+                className={`flex-1 py-3 text-xs font-bold text-white rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5 ${
+                  !photoUrl
+                    ? "bg-gray-400 cursor-not-allowed opacity-75"
+                    : "bg-rose-600 hover:bg-rose-700 active:scale-95"
+                }`}
+              >
+                {submitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /><span>Registrando...</span></>
+                ) : (
+                  <span>Bloquear PC y Reportar</span>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Título de la Falla</label>
-            <input
-              type="text"
-              required
-              placeholder="Ej: Rayón en tapa frontal / GPU no detectada"
-              value={issueTitle}
-              onChange={(e) => setIssueTitle(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded-xl p-3 touch-target focus:ring-2 focus:ring-rose-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Severidad</label>
-            <select
-              value={severity}
-              onChange={(e) => setSeverity(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded-xl p-3 font-bold touch-target"
-            >
-              <option value="LOW">Baja (Cosmético)</option>
-              <option value="MEDIUM">Media (Ajuste menor)</option>
-              <option value="HIGH">Alta (Reemplazo)</option>
-              <option value="CRITICAL">Crítica (Bloqueo total)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Descripción</label>
-            <textarea
-              rows="3"
-              required
-              placeholder="Detalle exactamente lo observado..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded-xl p-3 touch-target focus:outline-none"
-            ></textarea>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
-              Cancelar
-            </button>
-            <button type="submit" disabled={submitting} className="flex-1 py-3 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow transition touch-target">
-              {submitting ? "Registrando..." : "Bloquear PC"}
-            </button>
-          </div>
-        </form>
       </div>
-    </div>
+
+      {cameraOpen && (
+        <CameraCaptureModal
+          onCapture={(url) => {
+            setPhotoUrl(url);
+            setCameraOpen(false);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -2049,10 +2247,11 @@ function ChecklistStepModal({ item, onClose, onSave }) {
 }
 
 // =============================================
-// MODAL DETALLE PC
+// MODAL DETALLE PC (CON REPORTE DE FALLAS Y FOTO)
 // =============================================
-function UnitDetailModal({ unit, order, stations, onClose, onSuccess }) {
+function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
+  const unitIssues = (issues || []).filter(i => i.unit_number === unit.unit_number);
 
   const handleResetUnit = async () => {
     if (!window.confirm(`¿Seguro que deseas reiniciar la PC #${unit.unit_number}? Su progreso volverá a Estación 1 y se limpiarán sus registros.`)) return;
@@ -2062,6 +2261,20 @@ function UnitDetailModal({ unit, order, stations, onClose, onSuccess }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Error al reiniciar");
       onSuccess(data.message || `PC #${unit.unit_number} reiniciada`);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResumeUnit = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}/resume`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al reanudar PC");
+      onSuccess(data.message || `PC #${unit.unit_number} reincorporada`);
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
@@ -2086,8 +2299,8 @@ function UnitDetailModal({ unit, order, stations, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm overflow-hidden shadow-2xl">
-        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <Cpu className="w-5 h-5" />
             <h3 className="text-sm font-bold">PC #{unit.unit_number} — Ficha de Unidad</h3>
@@ -2110,7 +2323,7 @@ function UnitDetailModal({ unit, order, stations, onClose, onSuccess }) {
               <span className="text-[10px] text-gray-500 font-semibold block">Estado Actual</span>
               <div className="mt-0.5">
                 {unit.overall_status === "PASSED" && <Badge variant="success">COMPLETADA</Badge>}
-                {unit.overall_status === "FAILED" && <Badge variant="danger">CON FALLA</Badge>}
+                {unit.overall_status === "FAILED" && <Badge variant="danger">CON FALLA (BLOQUEADA)</Badge>}
                 {unit.overall_status === "IN_PROGRESS" && <Badge variant="warning">EN PROCESO</Badge>}
                 {unit.overall_status === "PENDING" && <Badge variant="neutral">EN COLA</Badge>}
               </div>
@@ -2123,9 +2336,61 @@ function UnitDetailModal({ unit, order, stations, onClose, onSuccess }) {
             </div>
           </div>
 
+          {/* Reportes de Falla con Evidencia Fotográfica */}
+          {unitIssues.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-gray-200">
+              <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <span>Incidencias / Fallas Reportadas ({unitIssues.length})</span>
+              </p>
+              {unitIssues.map((iss, idx) => (
+                <div key={idx} className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-rose-900 text-xs">{iss.issue_title}</span>
+                    <Badge variant="danger">{iss.severity}</Badge>
+                  </div>
+                  {iss.description && (
+                    <p className="text-[11px] text-rose-800 leading-relaxed">{iss.description}</p>
+                  )}
+                  <div className="text-[10px] text-rose-600 flex items-center justify-between">
+                    <span>Reportado por: <strong>{iss.reported_by}</strong></span>
+                    <span>Estación {iss.station_number}</span>
+                  </div>
+                  {iss.photo_url && (
+                    <div className="pt-1">
+                      <span className="text-[10px] font-bold text-gray-700 block mb-1">📸 Foto de Evidencia:</span>
+                      <a href={iss.photo_url} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-lg border border-rose-300">
+                        <img
+                          src={iss.photo_url}
+                          alt="Foto de la falla"
+                          className="w-full h-36 object-cover group-hover:scale-105 transition duration-200"
+                        />
+                        <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-2 py-0.5 rounded backdrop-blur-sm">
+                          🔍 Clic para ampliar
+                        </span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Acciones de gestión de la PC */}
           <div className="pt-2 border-t border-gray-200 space-y-2">
             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Acciones de Control</p>
+            
+            {unit.overall_status === "FAILED" && (
+              <button
+                disabled={loading}
+                onClick={handleResumeUnit}
+                className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition disabled:opacity-50 touch-target"
+              >
+                <CheckCircle className="w-4 h-4 text-white" />
+                <span>✓ Subsanar Falla y Reanudar PC en Línea</span>
+              </button>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 disabled={loading}
@@ -2133,7 +2398,7 @@ function UnitDetailModal({ unit, order, stations, onClose, onSuccess }) {
                 className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-                <span>Reiniciar PC</span>
+                <span>Reiniciar a E1</span>
               </button>
               <button
                 disabled={loading}

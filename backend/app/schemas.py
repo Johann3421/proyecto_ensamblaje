@@ -154,6 +154,7 @@ class IssueCreate(BaseModel):
     issue_title: str
     description: Optional[str] = ""
     severity: Optional[str] = "CRITICAL"
+    photo_url: Optional[str] = ""
 
 class IssueSchema(BaseModel):
     id: int
@@ -165,6 +166,7 @@ class IssueSchema(BaseModel):
     issue_title: str
     description: Optional[str] = ""
     severity: str
+    photo_url: Optional[str] = ""
     status: str
     created_at: datetime
 

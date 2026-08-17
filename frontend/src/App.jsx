@@ -156,15 +156,24 @@ export default function App() {
     }
   };
 
-  const loadOperatorWorkspace = (unitNumber = null) => {
+  const loadOperatorWorkspace = (unitNumber = null, orderId = null) => {
     if (!currentUser?.id) return;
-    let url = `${API_BASE}/operator/${currentUser.id}/station`;
-    if (unitNumber) {
-      url += `?unit_number=${unitNumber}`;
-    }
-    fetch(url)
+    const params = new URLSearchParams();
+    if (unitNumber) params.append("unit_number", unitNumber);
+    if (orderId) params.append("order_id", orderId);
+    else if (selectedOrder) params.append("order_id", selectedOrder);
+
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    fetch(`${API_BASE}/operator/${currentUser.id}/station${qs}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setOperatorWorkspace(data); })
+      .then(data => {
+        if (data) {
+          setOperatorWorkspace(data);
+          if (data.order?.order_id && data.order.order_id !== selectedOrder) {
+            setSelectedOrder(data.order.order_id);
+          }
+        }
+      })
       .catch(err => console.error("Error workspace operario:", err));
   };
 
@@ -172,9 +181,9 @@ export default function App() {
   useEffect(() => { loadMatrixData(); }, [selectedOrder]);
   useEffect(() => {
     if (activeTab === "operator" || currentUser.role === "OPERATOR") {
-      loadOperatorWorkspace();
+      loadOperatorWorkspace(null, selectedOrder);
     }
-  }, [activeTab, currentUser]);
+  }, [activeTab, currentUser, selectedOrder]);
 
   // User change is no longer needed - auth handles this
   // Kept for backward compatibility with technicians panel
@@ -384,8 +393,12 @@ export default function App() {
               currentUser={currentUser}
               onOpenMedia={(item) => setActiveMediaModal(item)}
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
-              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum)}
-              onRefresh={() => loadOperatorWorkspace()}
+              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder)}
+              onSelectOrder={(ordId) => {
+                setSelectedOrder(ordId);
+                loadOperatorWorkspace(null, ordId);
+              }}
+              onRefresh={() => loadOperatorWorkspace(null, selectedOrder)}
               notify={notify}
             />
           )}
@@ -1130,7 +1143,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
 // =============================================
 // 4. ESPACIO DE TRABAJO DEL OPERARIO (CON SELECCIÓN LIBRE Y DERIVACIÓN)
 // =============================================
-function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onSelectUnit, onRefresh, notify }) {
+function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onSelectUnit, onSelectOrder, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
     return (
       <Card className="p-8 text-center max-w-sm mx-auto">
@@ -1144,7 +1157,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
     );
   }
 
-  const { assignment, order, station_steps = [], transferred_out_steps = [], pending_prior_steps = [], all_stations = [], active_unit, units_in_station = [], completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
+  const { assignment, order, available_orders = [], station_steps = [], transferred_out_steps = [], pending_prior_steps = [], all_stations = [], active_unit, units_in_station = [], completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
   const [completedSteps, setCompletedSteps] = useState(completed_step_numbers || []);
   const [submittingStep, setSubmittingStep] = useState(null);
   const [finishingUnit, setFinishingUnit] = useState(false);
@@ -1236,23 +1249,49 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
 
   return (
     <div className="max-w-xl mx-auto space-y-3.5 fade-in pb-4">
-      {/* Header estación */}
-      <Card className="p-3 border-l-4 border-l-[#0078d4]">
+      {/* Header estación y Selector de Orden */}
+      <Card className="p-3.5 border-l-4 border-l-[#0078d4] space-y-3">
+        {/* Selector de Orden Activa para el Técnico */}
+        {available_orders && available_orders.length > 1 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
+            <label className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+              <ClipboardList className="w-3.5 h-3.5 text-blue-600" />
+              <span>Cambiar Orden de Trabajo:</span>
+            </label>
+            <select
+              value={order.order_id}
+              onChange={(e) => onSelectOrder && onSelectOrder(e.target.value)}
+              className="text-xs font-bold border border-blue-200 bg-blue-50/60 hover:bg-blue-50 text-blue-950 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none touch-target"
+            >
+              {available_orders.map(o => (
+                <option key={o.order_id} value={o.order_id}>
+                  {o.order_id} ({o.model_name}) · {o.is_assigned ? `Tu Estación: E${o.assigned_station}` : 'Estación 1'}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white bg-[#0078d4] px-2 py-0.5 rounded">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-white bg-[#0078d4] px-2 py-0.5 rounded shadow-xs">
                 E{assignment.station_number}
               </span>
               <h2 className="text-sm font-bold text-gray-900 truncate">{assignment.station_name}</h2>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Orden: <span className="font-semibold">{order.order_id}</span> · <span className="font-semibold">{order.model_name}</span>
+            <p className="text-xs text-gray-500 mt-1">
+              Orden: <strong className="text-blue-700 font-mono">{order.order_id}</strong> · Modelo: <strong>{order.model_name}</strong> ({order.total_units} PCs)
             </p>
           </div>
-          <span className="text-xs font-bold text-blue-800 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 flex-shrink-0 whitespace-nowrap">
-            P{assignment.start_step}–{assignment.end_step}
-          </span>
+          <div className="text-right flex-shrink-0">
+            <span className="text-xs font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 block">
+              P{assignment.start_step}–{assignment.end_step}
+            </span>
+            <span className="text-[10px] text-gray-400 block mt-1">
+              Operario: <strong>{assignment.user_name}</strong>
+            </span>
+          </div>
         </div>
       </Card>
 

@@ -680,18 +680,49 @@ def get_operator_workspace(
     unit_number: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(QCStationAssignment).join(QCOrder).filter(
-        QCStationAssignment.user_id == user_id,
-        QCOrder.status == "IN_PROGRESS"
-    )
+    all_orders = db.query(QCOrder).order_by(QCOrder.created_at.desc()).all()
+    available_orders_info = []
+    for ord_item in all_orders:
+        user_asgn = next((a for a in ord_item.stations if a.user_id == user_id), None)
+        available_orders_info.append({
+            "order_id": ord_item.order_id,
+            "model_name": ord_item.model_name,
+            "total_units": ord_item.total_units,
+            "status": ord_item.status,
+            "is_assigned": user_asgn is not None,
+            "assigned_station": user_asgn.station_number if user_asgn else 1,
+            "assigned_station_name": user_asgn.station_name if user_asgn else "Estación 1"
+        })
+
+    # Si se especificó un order_id, buscar la asignación en esa orden específica
+    assignment = None
     if order_id:
-        query = query.filter(QCStationAssignment.order_id == order_id)
-    
-    assignment = query.first()
+        assignment = db.query(QCStationAssignment).filter(
+            QCStationAssignment.order_id == order_id,
+            QCStationAssignment.user_id == user_id
+        ).first()
+        if not assignment:
+            # Si el usuario no está asignado expresamente en esa orden (o es admin), usar la primera estación de esa orden
+            assignment = db.query(QCStationAssignment).filter(
+                QCStationAssignment.order_id == order_id
+            ).first()
+
     if not assignment:
+        # Buscar la primera orden en progreso donde el usuario tenga asignación
+        assignment = db.query(QCStationAssignment).join(QCOrder).filter(
+            QCStationAssignment.user_id == user_id,
+            QCOrder.status == "IN_PROGRESS"
+        ).first()
+
+    if not assignment:
+        # Fallback a cualquier asignación del usuario
+        assignment = db.query(QCStationAssignment).filter(QCStationAssignment.user_id == user_id).first()
+
+    if not assignment:
+        # Fallback general
         assignment = db.query(QCStationAssignment).first()
         if not assignment:
-            return {"active": False, "message": "No hay asignaciones activas para este usuario"}
+            return {"active": False, "message": "No hay órdenes ni asignaciones registradas"}
 
     # Sincronizar con el nombre más reciente del técnico
     u_latest = db.query(QCUser).filter(QCUser.id == assignment.user_id).first()
@@ -802,6 +833,7 @@ def get_operator_workspace(
         "active": True,
         "assignment": assignment,
         "order": order,
+        "available_orders": available_orders_info,
         "station_steps": station_steps,
         "transferred_out_steps": transferred_out_steps,
         "pending_prior_steps": pending_prior_steps,

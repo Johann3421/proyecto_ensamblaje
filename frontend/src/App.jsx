@@ -7,7 +7,7 @@ import {
   Columns, Grid, ShieldCheck, FileText, PlusCircle, CheckSquare,
   Image as ImageIcon, PlayCircle, ArrowRightCircle, Search, Menu,
   ChevronDown, ChevronUp, LayoutDashboard, ClipboardList, Settings,
-  Wrench, Eye, Users, UserPlus, Trash2, RotateCcw, Trash, UserCheck, Sparkles, Camera
+  Wrench, Eye, Users, UserPlus, Trash2, RotateCcw, Trash, UserCheck, Sparkles, Camera, Layers
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -48,7 +48,7 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [models, setModels] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [selectedOrder, setSelectedOrder] = useState("ORD-2026-0892");
+  const [selectedOrder, setSelectedOrder] = useState("");
   const [matrixData, setMatrixData] = useState(null);
   const [notification, setNotification] = useState(null);
   const [operatorWorkspace, setOperatorWorkspace] = useState(null);
@@ -1700,9 +1700,9 @@ function TransferUnitModal({ unit, order, currentStation, allStations, currentUs
 // =============================================
 // 5. AUDITORÍA FORENSE
 // =============================================
-function AuditLogsView({ selectedOrder, orders }) {
+function AuditLogsView({ selectedOrder, orders = [] }) {
   const [logs, setLogs] = useState([]);
-  const [activeOrderId, setActiveOrderId] = useState(selectedOrder || "ORD-2026-0892");
+  const [activeOrderId, setActiveOrderId] = useState(selectedOrder || orders[0]?.order_id || "");
   const [filterUser, setFilterUser] = useState("");
 
   useEffect(() => {

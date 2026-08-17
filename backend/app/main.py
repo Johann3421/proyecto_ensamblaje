@@ -17,7 +17,7 @@ from .schemas import (
     OrderCreateRequest, OrderDetailSchema,
     StepLogCreate, StepLogSchema, StepUncheckRequest,
     IssueCreate, IssueSchema,
-    ReassignEmergencyRequest,
+    ReassignEmergencyRequest, TransferUnitRequest,
     AuthRegister, AuthLogin, TokenResponse
 )
 from .seed_data import seed_database, DEFAULT_USERS

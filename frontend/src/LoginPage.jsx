@@ -354,14 +354,14 @@ export default function LoginPage({ onLogin }) {
             {mode === 'login' && (
               <div className="mt-2 pt-3 border-t border-white/10">
                 <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>Acceso Rápido por Estación:</span>
+                  <span>Cuentas de Personal Técnico:</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {/* Admin */}
                   {(() => {
                     const u = availableUsers.find(x => x.role === 'ADMIN' || x.id === 'ADM-01');
                     const uEmail = u?.email || 'admin@sekaitech.com.pe';
-                    const uName = u?.name || 'Admin QC';
+                    const uName = u?.name || 'Ing. Carlos Mendoza';
                     return (
                       <button
                         type="button"
@@ -374,18 +374,18 @@ export default function LoginPage({ onLogin }) {
                         <span>👑</span>
                         <div className="truncate">
                           <div className="font-bold text-white text-[11px] truncate">{uName}</div>
-                          <div className="text-[9px] text-blue-300 truncate">{uEmail}</div>
+                          <div className="text-[9px] text-blue-300 truncate">Admin · {uEmail}</div>
                         </div>
                       </button>
                     );
                   })()}
 
-                  {/* Estaciones 1 a 5 */}
+                  {/* Operarios 1 a 5 */}
                   {[1, 2, 3, 4, 5].map((stNum) => {
                     const opId = `OP-10${stNum}`;
                     const u = availableUsers.find(x => x.id === opId);
                     const uEmail = u?.email || `estacion${stNum}@sekaitech.com.pe`;
-                    const uName = u?.name || `Estación ${stNum}`;
+                    const uName = u?.name || `Operario ${stNum}`;
                     return (
                       <button
                         key={opId}
@@ -398,8 +398,8 @@ export default function LoginPage({ onLogin }) {
                       >
                         <span>🔧</span>
                         <div className="truncate">
-                          <div className="font-bold text-white text-[11px] truncate">E{stNum}: {uName}</div>
-                          <div className="text-[9px] text-slate-400 truncate">{uEmail}</div>
+                          <div className="font-bold text-white text-[11px] truncate">{uName}</div>
+                          <div className="text-[9px] text-slate-400 truncate">{opId} · {uEmail}</div>
                         </div>
                       </button>
                     );
@@ -409,7 +409,7 @@ export default function LoginPage({ onLogin }) {
                 {(() => {
                   const u = availableUsers.find(x => x.id === 'OP-106');
                   const uEmail = u?.email || 'apoyo@sekaitech.com.pe';
-                  const uName = u?.name || 'Jorge Valdivia (Suplente/Apoyo)';
+                  const uName = u?.name || 'Jorge Valdivia';
                   return (
                     <div className="mt-1.5">
                       <button
@@ -422,7 +422,7 @@ export default function LoginPage({ onLogin }) {
                       >
                         <span>⚡</span>
                         <span className="font-semibold text-[11px] truncate">{uName}</span>
-                        <span className="text-[10px] text-amber-300 opacity-70 truncate">{uEmail}</span>
+                        <span className="text-[10px] text-amber-300 opacity-70 truncate">(Apoyo) · {uEmail}</span>
                       </button>
                     </div>
                   );

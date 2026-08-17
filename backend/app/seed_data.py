@@ -5,7 +5,7 @@ from .auth import hash_password
 DEFAULT_USERS = [
     {
         "id": "ADM-01",
-        "name": "Ing. Carlos Mendoza (Admin QC)",
+        "name": "Ing. Carlos Mendoza",
         "role": "ADMIN",
         "avatar": "CM",
         "email": "admin@sekaitech.com.pe",
@@ -13,7 +13,7 @@ DEFAULT_USERS = [
     },
     {
         "id": "OP-101",
-        "name": "Carlos Mendoza (Estación 1)",
+        "name": "Carlos Mendoza",
         "role": "OPERATOR",
         "avatar": "CM",
         "email": "estacion1@sekaitech.com.pe",
@@ -21,7 +21,7 @@ DEFAULT_USERS = [
     },
     {
         "id": "OP-102",
-        "name": "Ana Quispe (Estación 2)",
+        "name": "Ana Quispe",
         "role": "OPERATOR",
         "avatar": "AQ",
         "email": "estacion2@sekaitech.com.pe",
@@ -29,7 +29,7 @@ DEFAULT_USERS = [
     },
     {
         "id": "OP-103",
-        "name": "Roberto Diaz (Estación 3)",
+        "name": "Roberto Diaz",
         "role": "OPERATOR",
         "avatar": "RD",
         "email": "estacion3@sekaitech.com.pe",
@@ -37,7 +37,7 @@ DEFAULT_USERS = [
     },
     {
         "id": "OP-104",
-        "name": "Elena Ramos (Estación 4)",
+        "name": "Elena Ramos",
         "role": "OPERATOR",
         "avatar": "ER",
         "email": "estacion4@sekaitech.com.pe",
@@ -45,7 +45,7 @@ DEFAULT_USERS = [
     },
     {
         "id": "OP-105",
-        "name": "Marco Solis (Estación 5)",
+        "name": "Marco Solis",
         "role": "OPERATOR",
         "avatar": "MS",
         "email": "estacion5@sekaitech.com.pe",
@@ -53,7 +53,7 @@ DEFAULT_USERS = [
     },
     {
         "id": "OP-106",
-        "name": "Jorge Valdivia (Suplente/Apoyo)",
+        "name": "Jorge Valdivia",
         "role": "OPERATOR",
         "avatar": "JV",
         "email": "apoyo@sekaitech.com.pe",

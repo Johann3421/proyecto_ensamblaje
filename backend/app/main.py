@@ -1,6 +1,7 @@
 import os
 import shutil
 import time
+import re
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
@@ -86,6 +87,30 @@ def auto_migrate_schema():
                     conn.commit()
             except Exception:
                 pass
+
+    # Limpiar sufijos estáticos '(Estación X)' o '(Admin QC)' de la BD para que las estaciones sean 100% dinámicas
+    try:
+        with SessionLocal() as db:
+            users = db.query(QCUser).all()
+            for u in users:
+                clean = re.sub(r'\s*\([Ee]staci[oó]n\s*\d+\)', '', u.name)
+                clean = re.sub(r'\s*\([Aa]dmin\s*QC\)', '', clean)
+                clean = re.sub(r'\s*\([Ss]uplente[^)]*\)', '', clean).strip()
+                if clean and clean != u.name:
+                    u.name = clean
+
+            assignments = db.query(QCStationAssignment).all()
+            for a in assignments:
+                clean = re.sub(r'\s*\([Ee]staci[oó]n\s*\d+\)', '', a.user_name)
+                clean = re.sub(r'\s*\([Aa]dmin\s*QC\)', '', clean)
+                clean = re.sub(r'\s*\([Ss]uplente[^)]*\)', '', clean).strip()
+                if clean and clean != a.user_name:
+                    a.user_name = clean
+
+            db.commit()
+    except Exception as e:
+        print(f"[Migration] Nota al limpiar nombres de usuarios: {e}")
+
     print("[DB Migration] Esquema de base de datos verificado y actualizado.")
 
 # Inicialización de base de datos en startup

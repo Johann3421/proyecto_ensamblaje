@@ -1128,7 +1128,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
 }
 
 // =============================================
-// 4. ESPACIO DE TRABAJO DEL OPERARIO (CON SELECCIÓN LIBRE DE PC)
+// 4. ESPACIO DE TRABAJO DEL OPERARIO (CON SELECCIÓN LIBRE Y DERIVACIÓN)
 // =============================================
 function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onSelectUnit, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
@@ -1144,10 +1144,11 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
     );
   }
 
-  const { assignment, order, station_steps = [], active_unit, units_in_station = [], completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
+  const { assignment, order, station_steps = [], pending_prior_steps = [], all_stations = [], active_unit, units_in_station = [], completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
   const [completedSteps, setCompletedSteps] = useState(completed_step_numbers || []);
   const [submittingStep, setSubmittingStep] = useState(null);
   const [finishingUnit, setFinishingUnit] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
 
   useEffect(() => {
     setCompletedSteps(completed_step_numbers || []);
@@ -1316,13 +1317,26 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                 </div>
                 <p className="text-xs text-blue-200 font-mono">{active_unit.serial_number}</p>
               </div>
-              <button
-                onClick={() => onOpenIssue(active_unit, station_steps[0])}
-                className="flex flex-col items-center gap-1 bg-white/20 hover:bg-white/30 px-3 py-2 rounded-xl transition touch-target"
-              >
-                <AlertTriangle className="w-5 h-5 text-amber-300" />
-                <span className="text-[10px] font-bold text-white">Falla</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setTransferModalOpen(true)}
+                  className="flex flex-col items-center gap-0.5 bg-white/20 hover:bg-white/30 px-2.5 py-1.5 rounded-xl transition touch-target"
+                  title="Derivar PC a otra estación"
+                >
+                  <ArrowRightCircle className="w-4 h-4 text-sky-200" />
+                  <span className="text-[9px] font-bold text-white">Derivar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenIssue(active_unit, station_steps[0])}
+                  className="flex flex-col items-center gap-0.5 bg-white/20 hover:bg-white/30 px-2.5 py-1.5 rounded-xl transition touch-target"
+                  title="Reportar Falla"
+                >
+                  <AlertTriangle className="w-4 h-4 text-amber-300" />
+                  <span className="text-[9px] font-bold text-white">Falla</span>
+                </button>
+              </div>
             </div>
 
             {/* Progreso */}
@@ -1340,7 +1354,58 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             </div>
           </div>
 
-          {/* Lista de pasos — Toda la tarjeta es interactiva (marcar/desmarcar) */}
+          {/* PASOS HEREDADOS DE OTRAS ESTACIONES (SI EXISTEN) */}
+          {pending_prior_steps && pending_prior_steps.length > 0 && (
+            <div className="p-3 bg-amber-50 border-b border-amber-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Pasos Pendientes Heredados ({pending_prior_steps.length})</span>
+                </span>
+                <span className="text-[9px] bg-amber-200 text-amber-900 font-bold px-1.5 py-0.5 rounded">
+                  Derivados
+                </span>
+              </div>
+              <p className="text-[10px] text-amber-800 leading-tight">
+                Esta PC llegó con procesos previos pendientes. Toca para completarlos:
+              </p>
+              <div className="space-y-1.5 pt-1">
+                {pending_prior_steps.map((st) => {
+                  const isDone = completedSteps.includes(st.step_number);
+                  const isSubmitting = submittingStep === st.step_number;
+                  return (
+                    <button
+                      key={st.step_number}
+                      onClick={() => handleToggleStep(st)}
+                      disabled={isSubmitting}
+                      className={`w-full text-left rounded-xl border p-2 transition select-none flex items-center justify-between gap-2 ${
+                        isDone
+                          ? "bg-emerald-50 border-emerald-400"
+                          : "bg-white border-amber-300 hover:border-amber-400 shadow-sm"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-bold text-gray-900 block">
+                          #{st.step_number} {st.operation}
+                        </span>
+                        <span className="text-[10px] text-gray-500 block truncate">
+                          {st.qc_criteria}
+                        </span>
+                      </div>
+                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 ${
+                        isDone ? "bg-emerald-500 text-white" : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {isDone ? <Check className="w-3 h-3" /> : null}
+                        <span>{isDone ? "Completado" : "Marcar"}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Lista de pasos principales de la estación */}
           <div className="p-3 space-y-3">
             {station_steps.map((st) => {
               const isDone = completedSteps.includes(st.step_number);
@@ -1497,6 +1562,137 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
           </div>
         </Card>
       )}
+
+      {/* Modal Derivar Estación */}
+      {transferModalOpen && active_unit && (
+        <TransferUnitModal
+          unit={active_unit}
+          order={order}
+          currentStation={assignment.station_number}
+          allStations={all_stations}
+          currentUser={currentUser}
+          onClose={() => setTransferModalOpen(false)}
+          onSuccess={(msg) => {
+            notify(msg);
+            setTransferModalOpen(false);
+            onRefresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// MODAL DERIVAR / TRANSFERIR PC A OTRA ESTACIÓN
+// =============================================
+function TransferUnitModal({ unit, order, currentStation, allStations, currentUser, onClose, onSuccess }) {
+  const availableStations = (allStations || []).filter(s => s.station_number !== currentStation);
+  const [targetStation, setTargetStation] = useState(availableStations[0]?.station_number || 1);
+  const [reason, setReason] = useState("Carga de trabajo / Finalizar procesos pendientes");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleTransfer = async (e) => {
+    e.preventDefault();
+    try {
+      setSubmitting(true);
+      const res = await fetch(`${API_BASE}/operator/transfer-station`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: order.order_id,
+          unit_number: unit.unit_number,
+          from_station: currentStation,
+          target_station: parseInt(targetStation, 10),
+          transferred_by: currentUser.name,
+          reason
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al derivar unidad");
+      onSuccess(data.message || `PC #${unit.unit_number} derivada a Estación ${targetStation}`);
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl">
+        <div className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white p-4 flex justify-between items-center">
+          <h3 className="text-sm font-bold flex items-center gap-2">
+            <ArrowRightCircle className="w-5 h-5 text-blue-200" />
+            <span>Derivar PC #{unit.unit_number} a otra Estación</span>
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleTransfer} className="p-4 space-y-3.5 text-xs">
+          <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 text-blue-900 space-y-1">
+            <p className="font-semibold text-[11px]">
+              📍 Estación actual: <strong>Estación {currentStation}</strong>
+            </p>
+            <p className="text-[11px] text-blue-700 leading-snug">
+              La PC viajará a la estación de destino para que otro técnico continúe o finalice las asignaciones pendientes.
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-bold text-gray-800 mb-1">
+              Estación de Destino
+            </label>
+            <select
+              value={targetStation}
+              onChange={(e) => setTargetStation(e.target.value)}
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5 font-bold touch-target bg-white focus:ring-2 focus:ring-blue-500"
+            >
+              {availableStations.map(st => (
+                <option key={st.station_number} value={st.station_number}>
+                  Estación {st.station_number}: {st.station_name} ({st.user_name})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-gray-800 mb-1">
+              Motivo / Indicaciones para el técnico de destino
+            </label>
+            <textarea
+              rows="2.5"
+              required
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Ej: Completar pruebas de arranque y cerrar tapa en Estación 5..."
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target focus:outline-none focus:ring-2 focus:ring-blue-500"
+            ></textarea>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 py-3 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5"
+            >
+              {submitting ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /><span>Derivando...</span></>
+              ) : (
+                <span>Derivar PC #{unit.unit_number}</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -2326,6 +2522,7 @@ function ChecklistStepModal({ item, onClose, onSave }) {
 // =============================================
 function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const unitIssues = (issues || []).filter(i => i.unit_number === unit.unit_number);
 
   const handleResetUnit = async () => {
@@ -2373,128 +2570,155 @@ function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSucces
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto">
-        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <Cpu className="w-5 h-5" />
-            <h3 className="text-sm font-bold">PC #{unit.unit_number} — Ficha de Unidad</h3>
+    <>
+      <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+        <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto">
+          <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-5 h-5" />
+              <h3 className="text-sm font-bold">PC #{unit.unit_number} — Ficha de Unidad</h3>
+            </div>
+            <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-4 space-y-3 text-xs">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-              <span className="text-[10px] text-gray-500 font-semibold block">N° Serie</span>
-              <p className="font-mono font-bold text-gray-900 text-[11px] break-all">{unit.serial_number}</p>
-            </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-              <span className="text-[10px] text-gray-500 font-semibold block">Orden</span>
-              <p className="font-bold text-blue-700">{order.order_id}</p>
-            </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-              <span className="text-[10px] text-gray-500 font-semibold block">Estado Actual</span>
-              <div className="mt-0.5">
-                {unit.overall_status === "PASSED" && <Badge variant="success">COMPLETADA</Badge>}
-                {unit.overall_status === "FAILED" && <Badge variant="danger">CON FALLA (BLOQUEADA)</Badge>}
-                {unit.overall_status === "IN_PROGRESS" && <Badge variant="warning">EN PROCESO</Badge>}
-                {unit.overall_status === "PENDING" && <Badge variant="neutral">EN COLA</Badge>}
+          <div className="p-4 space-y-3 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                <span className="text-[10px] text-gray-500 font-semibold block">N° Serie</span>
+                <p className="font-mono font-bold text-gray-900 text-[11px] break-all">{unit.serial_number}</p>
+              </div>
+              <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                <span className="text-[10px] text-gray-500 font-semibold block">Orden</span>
+                <p className="font-bold text-blue-700">{order.order_id}</p>
+              </div>
+              <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                <span className="text-[10px] text-gray-500 font-semibold block">Estado Actual</span>
+                <div className="mt-0.5">
+                  {unit.overall_status === "PASSED" && <Badge variant="success">COMPLETADA</Badge>}
+                  {unit.overall_status === "FAILED" && <Badge variant="danger">CON FALLA (BLOQUEADA)</Badge>}
+                  {unit.overall_status === "IN_PROGRESS" && <Badge variant="warning">EN PROCESO</Badge>}
+                  {unit.overall_status === "PENDING" && <Badge variant="neutral">EN COLA</Badge>}
+                </div>
+              </div>
+              <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                <span className="text-[10px] text-gray-500 font-semibold block">Ubicación</span>
+                <p className="font-bold text-emerald-700">
+                  {unit.current_station > stations.length ? "EMPACADO ✓" : `Estación ${unit.current_station}`}
+                </p>
               </div>
             </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-              <span className="text-[10px] text-gray-500 font-semibold block">Ubicación</span>
-              <p className="font-bold text-emerald-700">
-                {unit.current_station > stations.length ? "EMPACADO ✓" : `Estación ${unit.current_station}`}
-              </p>
-            </div>
-          </div>
 
-          {/* Reportes de Falla con Evidencia Fotográfica */}
-          {unitIssues.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-gray-200">
-              <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                <span>Incidencias / Fallas Reportadas ({unitIssues.length})</span>
-              </p>
-              {unitIssues.map((iss, idx) => (
-                <div key={idx} className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-rose-900 text-xs">{iss.issue_title}</span>
-                    <Badge variant="danger">{iss.severity}</Badge>
-                  </div>
-                  {iss.description && (
-                    <p className="text-[11px] text-rose-800 leading-relaxed">{iss.description}</p>
-                  )}
-                  <div className="text-[10px] text-rose-600 flex items-center justify-between">
-                    <span>Reportado por: <strong>{iss.reported_by}</strong></span>
-                    <span>Estación {iss.station_number}</span>
-                  </div>
-                  {iss.photo_url && (
-                    <div className="pt-1">
-                      <span className="text-[10px] font-bold text-gray-700 block mb-1">📸 Foto de Evidencia:</span>
-                      <a href={iss.photo_url} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-lg border border-rose-300">
-                        <img
-                          src={iss.photo_url}
-                          alt="Foto de la falla"
-                          className="w-full h-36 object-cover group-hover:scale-105 transition duration-200"
-                        />
-                        <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-2 py-0.5 rounded backdrop-blur-sm">
-                          🔍 Clic para ampliar
-                        </span>
-                      </a>
+            {/* Reportes de Falla con Evidencia Fotográfica */}
+            {unitIssues.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-gray-200">
+                <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Incidencias / Fallas Reportadas ({unitIssues.length})</span>
+                </p>
+                {unitIssues.map((iss, idx) => (
+                  <div key={idx} className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-rose-900 text-xs">{iss.issue_title}</span>
+                      <Badge variant="danger">{iss.severity}</Badge>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Acciones de gestión de la PC */}
-          <div className="pt-2 border-t border-gray-200 space-y-2">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Acciones de Control</p>
-            
-            {unit.overall_status === "FAILED" && (
-              <button
-                disabled={loading}
-                onClick={handleResumeUnit}
-                className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition disabled:opacity-50 touch-target"
-              >
-                <CheckCircle className="w-4 h-4 text-white" />
-                <span>✓ Subsanar Falla y Reanudar PC en Línea</span>
-              </button>
+                    {iss.description && (
+                      <p className="text-[11px] text-rose-800 leading-relaxed">{iss.description}</p>
+                    )}
+                    <div className="text-[10px] text-rose-600 flex items-center justify-between">
+                      <span>Reportado por: <strong>{iss.reported_by}</strong></span>
+                      <span>Estación {iss.station_number}</span>
+                    </div>
+                    {iss.photo_url && (
+                      <div className="pt-1">
+                        <span className="text-[10px] font-bold text-gray-700 block mb-1">📸 Foto de Evidencia:</span>
+                        <a href={iss.photo_url} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-lg border border-rose-300">
+                          <img
+                            src={iss.photo_url}
+                            alt="Foto de la falla"
+                            className="w-full h-36 object-cover group-hover:scale-105 transition duration-200"
+                          />
+                          <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-2 py-0.5 rounded backdrop-blur-sm">
+                            🔍 Clic para ampliar
+                          </span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                disabled={loading}
-                onClick={handleResetUnit}
-                className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-                <span>Reiniciar a E1</span>
-              </button>
-              <button
-                disabled={loading}
-                onClick={handleDeleteUnit}
-                className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                <span>Eliminar PC</span>
-              </button>
-            </div>
-          </div>
+            {/* Acciones de gestión de la PC */}
+            <div className="pt-2 border-t border-gray-200 space-y-2">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Acciones de Control</p>
+              
+              {unit.overall_status === "FAILED" && (
+                <button
+                  disabled={loading}
+                  onClick={handleResumeUnit}
+                  className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition disabled:opacity-50 touch-target"
+                >
+                  <CheckCircle className="w-4 h-4 text-white" />
+                  <span>✓ Subsanar Falla y Reanudar PC en Línea</span>
+                </button>
+              )}
 
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-xl text-xs transition touch-target"
-          >
-            Cerrar
-          </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => setTransferModalOpen(true)}
+                className="w-full py-2.5 px-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
+              >
+                <ArrowRightCircle className="w-3.5 h-3.5 text-blue-600" />
+                <span>Derivar / Mover a otra Estación</span>
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  disabled={loading}
+                  onClick={handleResetUnit}
+                  className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Reiniciar a E1</span>
+                </button>
+                <button
+                  disabled={loading}
+                  onClick={handleDeleteUnit}
+                  className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Eliminar PC</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-xl text-xs transition touch-target"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {transferModalOpen && (
+        <TransferUnitModal
+          unit={unit}
+          order={order}
+          currentStation={unit.current_station}
+          allStations={stations}
+          currentUser={{ name: "Supervisor / Admin" }}
+          onClose={() => setTransferModalOpen(false)}
+          onSuccess={(msg) => {
+            setTransferModalOpen(false);
+            onSuccess(msg);
+          }}
+        />
+      )}
+    </>
   );
 }
 

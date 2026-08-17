@@ -180,6 +180,14 @@ class ReassignEmergencyRequest(BaseModel):
     new_user_name: str
     reason: Optional[str] = "Reasignación de emergencia"
 
+class TransferUnitRequest(BaseModel):
+    order_id: str
+    unit_number: int
+    from_station: int
+    target_station: int
+    transferred_by: str
+    reason: Optional[str] = "Derivado a otra estación"
+
 class OrderDetailSchema(BaseModel):
     order_id: str
     model_name: str

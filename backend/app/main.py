@@ -681,14 +681,19 @@ def get_operator_workspace(
         active_unit = units_in_station[0] if units_in_station else None
 
     completed_steps_ids = []
+    pending_prior_steps = []
     if active_unit:
         logs = db.query(QCStepLog).filter(
             QCStepLog.order_id == order.order_id,
             QCStepLog.unit_number == active_unit.unit_number,
-            QCStepLog.station_number == assignment.station_number,
             QCStepLog.status == "PASS"
         ).all()
         completed_steps_ids = [l.step_number for l in logs]
+        # Identificar si hay pasos de estaciones previas que aún falten completar
+        pending_prior_steps = [
+            s for s in all_steps
+            if s.step_number < assignment.start_step and s.step_number not in completed_steps_ids
+        ]
 
     queue_units = [u for u in units_in_station if active_unit and u.unit_number != active_unit.unit_number]
     completed_units = db.query(QCPCUnit).filter(
@@ -696,11 +701,17 @@ def get_operator_workspace(
         QCPCUnit.current_station > assignment.station_number
     ).order_by(QCPCUnit.unit_number.desc()).limit(15).all()
 
+    all_stations = db.query(QCStationAssignment).filter(
+        QCStationAssignment.order_id == order.order_id
+    ).order_by(QCStationAssignment.station_number).all()
+
     return {
         "active": True,
         "assignment": assignment,
         "order": order,
         "station_steps": station_steps,
+        "pending_prior_steps": pending_prior_steps,
+        "all_stations": all_stations,
         "active_unit": active_unit,
         "units_in_station": units_in_station,
         "completed_step_numbers": completed_steps_ids,
@@ -856,6 +867,48 @@ def report_issue(req: IssueCreate, db: Session = Depends(get_db)):
         "issue_id": issue.id,
         "photo_url": req.photo_url,
         "unit_number": req.unit_number
+    }
+
+@api_router.post("/operator/transfer-station")
+def transfer_unit_station(req: TransferUnitRequest, db: Session = Depends(get_db)):
+    """Derivar o transferir una PC de una estación a otra para balanceo de carga o terminación de tareas"""
+    unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == req.order_id,
+        QCPCUnit.unit_number == req.unit_number
+    ).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail=f"PC #{req.unit_number} no encontrada")
+
+    order = db.query(QCOrder).filter(QCOrder.order_id == req.order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    # Registrar en la auditoría forense la derivación de estación
+    transfer_log = QCStepLog(
+        order_id=req.order_id,
+        unit_number=req.unit_number,
+        step_number=0,
+        station_number=req.from_station,
+        user_id=req.transferred_by,
+        user_name=req.transferred_by,
+        status="TRANSFER",
+        notes=f"Derivada a Estación {req.target_station}. Motivo: {req.reason or 'Reasignación de flujo'}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(transfer_log)
+
+    unit.current_station = req.target_station
+    if req.target_station > order.total_stations:
+        unit.overall_status = "PASSED"
+        unit.completed_at = datetime.utcnow()
+    else:
+        if unit.overall_status == "PENDING":
+            unit.overall_status = "IN_PROGRESS"
+
+    db.commit()
+    return {
+        "message": f"PC #{req.unit_number} derivada exitosamente a Estación {req.target_station}",
+        "target_station": req.target_station
     }
 
 @api_router.post("/orders/reassign-emergency")

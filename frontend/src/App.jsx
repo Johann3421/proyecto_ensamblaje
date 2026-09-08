@@ -34,6 +34,130 @@ const Card = ({ children, className = "", ...props }) => (
 );
 
 // =============================================
+// COMPRESOR DE IMÁGENES EN CLIENTE (ZERO SERVER SATURATION)
+// Convierte fotos pesadas (8-15MB) a WebP/JPEG ultra-ligero (60-100KB) en milisegundos
+// =============================================
+async function compressImageToOptimized(source, maxWidth = 1280, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const processImage = (img) => {
+      try {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        let dataUrl = canvas.toDataURL("image/webp", quality);
+        if (!dataUrl || !dataUrl.startsWith("data:image/webp")) {
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+        resolve(dataUrl);
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    if (typeof source === "string") {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => processImage(img);
+      img.onerror = () => reject(new Error("No se pudo procesar la imagen capturada"));
+      img.src = source;
+    } else if (source instanceof File || source instanceof Blob) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => processImage(img);
+        img.onerror = () => reject(new Error("No se pudo cargar el archivo"));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error("Error leyendo el archivo"));
+      reader.readAsDataURL(source);
+    } else {
+      reject(new Error("Formato de imagen no soportado"));
+    }
+  });
+}
+
+// =============================================
+// MODAL LIGHTBOX / VISOR DE FOTO DE EVIDENCIA
+// =============================================
+function PhotoPreviewModal({ photo, onClose }) {
+  if (!photo) return null;
+  const { url, title, subtitle, user_name, timestamp } = photo;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in" onClick={onClose}>
+      <div 
+        className="bg-slate-900 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[92vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-slate-950 px-4 py-3 flex justify-between items-center border-b border-slate-800">
+          <div className="min-w-0 pr-2">
+            <div className="flex items-center gap-2">
+              <Camera className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-white truncate">{title || "Evidencia Fotográfica"}</h3>
+            </div>
+            {subtitle && <p className="text-xs text-slate-400 truncate mt-0.5">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 bg-black p-2 flex items-center justify-center min-h-[260px] overflow-hidden">
+          <img 
+            src={url} 
+            alt="Evidencia fotográfica" 
+            className="max-h-[60vh] sm:max-h-[68vh] w-auto max-w-full object-contain rounded-lg shadow-md" 
+          />
+        </div>
+
+        <div className="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-3 text-slate-300">
+            {user_name && (
+              <span>Verificado por: <strong className="text-emerald-400 font-semibold">{user_name}</strong></span>
+            )}
+            {timestamp && (
+              <span className="text-slate-400 font-mono text-[11px]">{new Date(timestamp).toLocaleString("es-PE")}</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <a 
+              href={url} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              download 
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Descargar</span>
+            </a>
+            <button 
+              onClick={onClose} 
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
 // APP PRINCIPAL
 // =============================================
 export default function App() {
@@ -54,6 +178,7 @@ export default function App() {
   const [operatorWorkspace, setOperatorWorkspace] = useState(null);
   const [activeMediaModal, setActiveMediaModal] = useState(null);
   const [activeIssueModal, setActiveIssueModal] = useState(null);
+  const [activePhotoPreview, setActivePhotoPreview] = useState(null);
   const [emergencyModalOpen, setEmergencyModalOpen] = useState(false);
   const [selectedUnitDetail, setSelectedUnitDetail] = useState(null);
   const [addUnitsModalOpen, setAddUnitsModalOpen] = useState(false);
@@ -385,7 +510,11 @@ export default function App() {
             />
           )}
           {activeTab === "audit" && (
-            <AuditLogsView selectedOrder={selectedOrder} orders={orders} />
+            <AuditLogsView 
+              selectedOrder={selectedOrder} 
+              orders={orders} 
+              onPreviewPhoto={(photo) => setActivePhotoPreview(photo)} 
+            />
           )}
           {activeTab === "operator" && (
             <OperatorWorkspaceView
@@ -393,6 +522,7 @@ export default function App() {
               currentUser={currentUser}
               onOpenMedia={(item) => setActiveMediaModal(item)}
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
+              onPreviewPhoto={(photo) => setActivePhotoPreview(photo)}
               onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder)}
               onSelectOrder={(ordId) => {
                 setSelectedOrder(ordId);
@@ -423,12 +553,14 @@ export default function App() {
 
       {/* MODALES */}
       {activeMediaModal && <MediaViewerModal item={activeMediaModal} onClose={() => setActiveMediaModal(null)} />}
+      {activePhotoPreview && <PhotoPreviewModal photo={activePhotoPreview} onClose={() => setActivePhotoPreview(null)} />}
       {activeIssueModal && (
         <IssueReportModal
           data={activeIssueModal}
           currentUser={currentUser}
           orderId={operatorWorkspace?.order?.order_id}
           stationNumber={operatorWorkspace?.assignment?.station_number}
+          onPreviewPhoto={(photo) => setActivePhotoPreview(photo)}
           onClose={() => setActiveIssueModal(null)}
           onSuccess={() => {
             notify("Incidencia registrada y PC bloqueada para revisión", "danger");
@@ -489,6 +621,7 @@ export default function App() {
           order={matrixData.order}
           stations={matrixData.stations}
           issues={matrixData.issues || []}
+          onPreviewPhoto={(photo) => setActivePhotoPreview(photo)}
           onClose={() => setSelectedUnitDetail(null)}
           onSuccess={(msg) => {
             notify(msg);
@@ -1141,9 +1274,9 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
 }
 
 // =============================================
-// 4. ESPACIO DE TRABAJO DEL OPERARIO (CON SELECCIÓN LIBRE Y DERIVACIÓN)
+// 4. ESPACIO DE TRABAJO DEL OPERARIO (CON SELECCIÓN LIBRE, DERIVACIÓN Y FOTO-VERIFICACIÓN)
 // =============================================
-function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onSelectUnit, onSelectOrder, onRefresh, notify }) {
+function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onPreviewPhoto, onSelectUnit, onSelectOrder, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
     return (
       <Card className="p-8 text-center max-w-sm mx-auto">
@@ -1157,26 +1290,34 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
     );
   }
 
-  const { assignment, order, available_orders = [], station_steps = [], transferred_out_steps = [], pending_prior_steps = [], all_stations = [], active_unit, units_in_station = [], completed_step_numbers = [], queue_units = [], completed_units = [] } = workspace;
+  const { assignment, order, available_orders = [], station_steps = [], transferred_out_steps = [], pending_prior_steps = [], all_stations = [], active_unit, units_in_station = [], completed_step_numbers = [], completed_step_logs = [], queue_units = [], completed_units = [] } = workspace;
   const [completedSteps, setCompletedSteps] = useState(completed_step_numbers || []);
+  const [stepLogsMap, setStepLogsMap] = useState({});
   const [submittingStep, setSubmittingStep] = useState(null);
   const [finishingUnit, setFinishingUnit] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [reassignStepModalData, setReassignStepModalData] = useState(null);
+  const [photoStepModal, setPhotoStepModal] = useState(null);
+  const [requirePhotoVerification, setRequirePhotoVerification] = useState(true);
 
   useEffect(() => {
     setCompletedSteps(completed_step_numbers || []);
-  }, [completed_step_numbers, active_unit?.unit_number]);
+    const map = {};
+    (completed_step_logs || []).forEach(l => {
+      map[l.step_number] = l;
+    });
+    setStepLogsMap(map);
+  }, [completed_step_numbers, completed_step_logs, active_unit?.unit_number]);
 
   const totalStationSteps = station_steps.length;
   const isStationComplete = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
 
   const handleToggleStep = async (step) => {
     const isDone = completedSteps.includes(step.step_number);
-    try {
-      setSubmittingStep(step.step_number);
-      if (isDone) {
-        // Desmarcar paso
+    if (isDone) {
+      // Desmarcar paso
+      try {
+        setSubmittingStep(step.step_number);
         const res = await fetch(`${API_BASE}/operator/uncheck-step`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1192,29 +1333,88 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
         });
         if (!res.ok) throw new Error("Error al desmarcar el paso");
         setCompletedSteps(prev => prev.filter(num => num !== step.step_number));
-        notify(`↩ Paso #${step.step_number} desmarcado`);
-      } else {
-        // Marcar paso conforme
-        const res = await fetch(`${API_BASE}/operator/submit-step`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            order_id: order.order_id,
-            unit_number: active_unit.unit_number,
-            step_number: step.step_number,
-            station_number: assignment.station_number,
-            user_id: currentUser.id,
-            user_name: currentUser.name,
-            status: "PASS",
-            notes: "Aprobado por operario"
-          })
+        setStepLogsMap(prev => {
+          const updated = { ...prev };
+          delete updated[step.step_number];
+          return updated;
         });
-        if (!res.ok) throw new Error("Error registrando el paso");
-        setCompletedSteps(prev => [...prev, step.step_number]);
-        notify(`✓ Paso #${step.step_number} verificado`);
-        if (completedSteps.length + 1 >= totalStationSteps && confetti) {
-          confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
+        notify(`↩ Paso #${step.step_number} desmarcado`);
+      } catch (err) {
+        alert("Error: " + err.message);
+      } finally {
+        setSubmittingStep(null);
+      }
+    } else {
+      // Si la foto está activa, abrir la cámara para verificar con foto
+      if (requirePhotoVerification) {
+        setPhotoStepModal(step);
+      } else {
+        // Marcar paso conforme sin foto
+        try {
+          setSubmittingStep(step.step_number);
+          const res = await fetch(`${API_BASE}/operator/submit-step`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              order_id: order.order_id,
+              unit_number: active_unit.unit_number,
+              step_number: step.step_number,
+              station_number: assignment.station_number,
+              user_id: currentUser.id,
+              user_name: currentUser.name,
+              status: "PASS",
+              notes: "Aprobado por operario"
+            })
+          });
+          if (!res.ok) throw new Error("Error registrando el paso");
+          setCompletedSteps(prev => [...prev, step.step_number]);
+          notify(`✓ Paso #${step.step_number} verificado`);
+          if (completedSteps.length + 1 >= totalStationSteps && confetti) {
+            confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
+          }
+        } catch (err) {
+          alert("Error: " + err.message);
+        } finally {
+          setSubmittingStep(null);
         }
+      }
+    }
+  };
+
+  const handleVerifyStepWithPhoto = async (step, photoUrl) => {
+    try {
+      setSubmittingStep(step.step_number);
+      const res = await fetch(`${API_BASE}/operator/submit-step`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: order.order_id,
+          unit_number: active_unit.unit_number,
+          step_number: step.step_number,
+          station_number: assignment.station_number,
+          user_id: currentUser.id,
+          user_name: currentUser.name,
+          status: "PASS",
+          photo_url: photoUrl,
+          notes: "Verificado con fotografía de evidencia"
+        })
+      });
+      if (!res.ok) throw new Error("Error registrando el paso con foto");
+      
+      setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
+      setStepLogsMap(prev => ({
+        ...prev,
+        [step.step_number]: {
+          step_number: step.step_number,
+          photo_url: photoUrl,
+          user_name: currentUser.name,
+          timestamp: new Date().toISOString()
+        }
+      }));
+      setPhotoStepModal(null);
+      notify(`📸 ✓ Paso #${step.step_number} verificado con foto`);
+      if (completedSteps.length + 1 >= totalStationSteps && confetti) {
+        confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
       }
     } catch (err) {
       alert("Error: " + err.message);
@@ -1332,9 +1532,9 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
       )}
 
       {active_unit ? (
-        <Card className="overflow-hidden border-2 border-blue-400">
+        <Card className="overflow-hidden border-2 border-blue-400 shadow-md">
           {/* Header PC activa */}
-          <div className="bg-gradient-to-r from-[#0078d4] to-[#106ebe] text-white p-3">
+          <div className="bg-gradient-to-r from-[#0078d4] to-[#106ebe] text-white p-3 space-y-2.5">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Trabajando en</span>
@@ -1379,18 +1579,37 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
               </div>
             </div>
 
-            {/* Progreso */}
-            <div className="mt-3">
+            {/* Barra de Progreso */}
+            <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-blue-200">Progreso PC #{active_unit.unit_number}</span>
-                <span className="font-bold">{completedSteps.length}/{totalStationSteps}</span>
+                <span className="text-blue-100">Progreso PC #{active_unit.unit_number}</span>
+                <span className="font-bold text-white">{completedSteps.length}/{totalStationSteps}</span>
               </div>
               <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
                 <div
-                  className="bg-emerald-400 h-full rounded-full transition-all duration-300"
+                  className="bg-emerald-400 h-full rounded-full transition-all duration-300 shadow-sm"
                   style={{ width: `${(completedSteps.length / totalStationSteps) * 100}%` }}
                 ></div>
               </div>
+            </div>
+
+            {/* Switch de Verificación con Foto */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/20">
+              <label className="text-[11px] font-bold text-blue-100 flex items-center gap-1.5 cursor-pointer">
+                <Camera className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Foto de verificación:</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setRequirePhotoVerification(prev => !prev)}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 shadow-sm ${
+                  requirePhotoVerification
+                    ? "bg-emerald-400 text-slate-950 font-black"
+                    : "bg-white/20 text-white hover:bg-white/30"
+                }`}
+              >
+                <span>{requirePhotoVerification ? "📸 OBLIGATORIA (Activa)" : "LIBRE / OPCIONAL"}</span>
+              </button>
             </div>
           </div>
 
@@ -1413,32 +1632,68 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                 {pending_prior_steps.map((st) => {
                   const isDone = completedSteps.includes(st.step_number);
                   const isSubmitting = submittingStep === st.step_number;
+                  const stepLog = stepLogsMap[st.step_number];
+
                   return (
-                    <button
+                    <div
                       key={st.step_number}
-                      onClick={() => handleToggleStep(st)}
-                      disabled={isSubmitting}
-                      className={`w-full text-left rounded-xl border p-2 transition select-none flex items-center justify-between gap-2 ${
+                      className={`rounded-xl border p-2.5 transition select-none flex items-center justify-between gap-2 ${
                         isDone
                           ? "bg-emerald-50 border-emerald-400"
                           : "bg-white border-amber-300 hover:border-amber-400 shadow-sm"
                       }`}
                     >
-                      <div className="flex-1 min-w-0">
+                      <div 
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() => handleToggleStep(st)}
+                      >
                         <span className="text-xs font-bold text-gray-900 block">
                           #{st.step_number} {st.operation}
                         </span>
                         <span className="text-[10px] text-gray-500 block truncate">
                           {st.qc_criteria}
                         </span>
+                        {stepLog?.photo_url && (
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPreviewPhoto && onPreviewPhoto({
+                                url: stepLog.photo_url,
+                                title: `PC #${active_unit.unit_number} · Paso #${st.step_number}`,
+                                subtitle: st.operation,
+                                user_name: stepLog.user_name,
+                                timestamp: stepLog.timestamp
+                              });
+                            }}
+                            className="mt-1.5 inline-flex items-center gap-1.5 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-900 border border-emerald-300 transition"
+                          >
+                            <img src={stepLog.photo_url} alt="Foto" className="w-4 h-4 object-cover rounded border border-emerald-400" />
+                            <span>📸 Ver Foto</span>
+                          </div>
+                        )}
                       </div>
-                      <div className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 ${
-                        isDone ? "bg-emerald-500 text-white" : "bg-amber-100 text-amber-800"
-                      }`}>
-                        {isDone ? <Check className="w-3 h-3" /> : null}
-                        <span>{isDone ? "Completado" : "Marcar"}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setPhotoStepModal(st)}
+                          className="p-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs"
+                          title="Tomar foto para este paso"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStep(st)}
+                          disabled={isSubmitting}
+                          className={`px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 ${
+                            isDone ? "bg-emerald-500 text-white" : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {isDone ? <Check className="w-3 h-3" /> : null}
+                          <span>{isDone ? "Completado" : "Marcar"}</span>
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1477,24 +1732,26 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             {station_steps.map((st) => {
               const isDone = completedSteps.includes(st.step_number);
               const isSubmitting = submittingStep === st.step_number;
+              const stepLog = stepLogsMap[st.step_number];
 
               return (
-                <button
+                <div
                   key={st.step_number}
-                  onClick={() => handleToggleStep(st)}
-                  disabled={isSubmitting}
-                  className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all duration-200 select-none
-                    ${ isDone
-                        ? 'bg-emerald-50 border-emerald-400 hover:border-emerald-500 hover:shadow-md cursor-pointer active:scale-[0.98]'
-                        : isSubmitting
-                          ? 'bg-blue-50 border-blue-300 scale-[0.99] opacity-80'
-                          : 'bg-white border-gray-200 active:scale-[0.97] active:border-blue-500 active:shadow-lg hover:border-blue-300 hover:shadow-md shadow-sm'
-                    }`}
+                  className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all duration-200 select-none ${
+                    isDone
+                      ? 'bg-emerald-50 border-emerald-400 shadow-sm'
+                      : isSubmitting
+                        ? 'bg-blue-50 border-blue-300 scale-[0.99] opacity-80'
+                        : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-md shadow-sm'
+                  }`}
                 >
                   <div className="flex items-stretch">
                     {/* Panel izquierdo — Checkbox visual grande interactivo */}
-                    <div className={`w-14 sm:w-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 py-4 transition-colors
-                      ${ isDone ? 'bg-emerald-500 hover:bg-emerald-600' : isSubmitting ? 'bg-blue-400' : 'bg-gray-100 group-hover:bg-gray-200'}`}
+                    <div 
+                      onClick={() => handleToggleStep(st)}
+                      className={`w-14 sm:w-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 py-4 transition-colors cursor-pointer ${
+                        isDone ? 'bg-emerald-500 hover:bg-emerald-600' : isSubmitting ? 'bg-blue-400' : 'bg-gray-100 hover:bg-gray-200'
+                      }`}
                     >
                       {isSubmitting ? (
                         <Loader2 className="w-7 h-7 text-white animate-spin" />
@@ -1509,7 +1766,9 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                           <div className="w-8 h-8 rounded-full border-2 border-dashed border-gray-400 bg-white flex items-center justify-center">
                             <Check className="w-4 h-4 text-gray-300" />
                           </div>
-                          <span className="text-[9px] font-bold text-gray-500 uppercase">Toca</span>
+                          <span className="text-[9px] font-bold text-gray-500 uppercase">
+                            {requirePhotoVerification ? "Foto" : "Toca"}
+                          </span>
                         </>
                       )}
                     </div>
@@ -1517,11 +1776,16 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                     {/* Contenido del paso */}
                     <div className="flex-1 min-w-0 p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-bold leading-snug mb-1
-                            ${ isDone ? 'text-emerald-800 line-through decoration-emerald-400 decoration-1' : 'text-gray-900'}`}>
-                            <span className={`text-[10px] font-bold mr-1.5 px-1.5 py-0.5 rounded
-                              ${isDone ? 'bg-emerald-200 text-emerald-700' : 'bg-gray-200 text-gray-500'}`}>
+                        <div 
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => handleToggleStep(st)}
+                        >
+                          <p className={`text-sm font-bold leading-snug mb-1 ${
+                            isDone ? 'text-emerald-800' : 'text-gray-900'
+                          }`}>
+                            <span className={`text-[10px] font-bold mr-1.5 px-1.5 py-0.5 rounded ${
+                              isDone ? 'bg-emerald-200 text-emerald-700' : 'bg-gray-200 text-gray-500'
+                            }`}>
                               #{st.step_number}
                             </span>
                             {st.operation}
@@ -1534,33 +1798,83 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                           {st.description && (
                             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">{st.description}</p>
                           )}
-                          <div className={`flex items-start gap-1.5 rounded-lg px-2 py-1.5
-                            ${isDone ? 'bg-emerald-100/70' : 'bg-blue-50 border border-blue-100'}`}>
+                          <div className={`flex items-start gap-1.5 rounded-lg px-2 py-1.5 ${
+                            isDone ? 'bg-emerald-100/70' : 'bg-blue-50 border border-blue-100'
+                          }`}>
                             <span className="text-[10px] flex-shrink-0">🔍</span>
-                            <span className={`text-[10px] font-medium leading-snug
-                              ${isDone ? 'text-emerald-700' : 'text-blue-800'}`}>
+                            <span className={`text-[10px] font-medium leading-snug ${
+                              isDone ? 'text-emerald-700' : 'text-blue-800'
+                            }`}>
                               {st.qc_criteria}
                             </span>
                           </div>
+
+                          {/* Miniatura y Badge de Foto de Evidencia Verificada */}
+                          {stepLog?.photo_url && (
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onPreviewPhoto && onPreviewPhoto({
+                                  url: stepLog.photo_url,
+                                  title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}`,
+                                  subtitle: st.operation,
+                                  user_name: stepLog.user_name || currentUser.name,
+                                  timestamp: stepLog.timestamp
+                                });
+                              }}
+                              className="mt-2.5 inline-flex items-center gap-2 bg-emerald-100/90 hover:bg-emerald-200 border border-emerald-300 px-2.5 py-1.5 rounded-xl cursor-pointer transition group shadow-xs"
+                            >
+                              <img 
+                                src={stepLog.photo_url} 
+                                alt="Foto evidencia" 
+                                className="w-8 h-8 object-cover rounded-lg border border-emerald-400 group-hover:scale-105 transition"
+                              />
+                              <div className="text-left">
+                                <span className="text-[11px] font-bold text-emerald-950 flex items-center gap-1">
+                                  <Camera className="w-3.5 h-3.5 text-emerald-700" />
+                                  <span>Foto de Evidencia Guardada</span>
+                                </span>
+                                <span className="text-[9px] text-emerald-700 block">🔍 Toca para ampliar foto</span>
+                              </div>
+                            </div>
+                          )}
+
                           {isDone ? (
                             <p className="text-[9px] text-emerald-600 mt-2 flex items-center gap-1 font-medium">
-                              <span>↩</span> Toca esta tarjeta para desmarcar si hubo una equivocación
+                              <span>↩</span> Toca la casilla izquierda si deseas desmarcar
                             </p>
                           ) : !isSubmitting && (
                             <p className="text-[9px] text-gray-400 mt-2 flex items-center gap-1">
-                              <Check className="w-2.5 h-2.5" />
-                              Toca toda esta tarjeta para marcar conforme
+                              <Camera className="w-2.5 h-2.5 text-blue-500" />
+                              {requirePhotoVerification ? "Toca para tomar foto de verificación y aprobar" : "Toca para marcar conforme"}
                             </p>
                           )}
                         </div>
 
-                        {/* Botones de acción del paso — aislados del click principal */}
+                        {/* Botones de acción del paso */}
                         <div className="flex flex-col gap-1.5 ml-1 flex-shrink-0">
+                          {/* Botón de Cámara Directo */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPhotoStepModal(st);
+                            }}
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center transition shadow-xs ${
+                              isDone
+                                ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300"
+                                : "bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300"
+                            }`}
+                            title={isDone ? "Volver a tomar / actualizar foto" : "Tomar foto y verificar paso"}
+                          >
+                            <Camera className="w-4 h-4" />
+                          </button>
+
                           {st.media_url && (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); onOpenMedia(st); }}
-                              className="w-8 h-8 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-xl flex items-center justify-center transition"
+                              className="w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl flex items-center justify-center transition"
                               title="Ver guía visual"
                             >
                               <PlayCircle className="w-4 h-4" />
@@ -1583,7 +1897,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                       </div>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -1648,6 +1962,19 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Modal Captura de Foto para Paso */}
+      {photoStepModal && active_unit && (
+        <CameraCaptureModal
+          title={`PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${photoStepModal.step_number}`}
+          subtitle={photoStepModal.operation}
+          prefix={`step_${order.order_id}_pc${active_unit.unit_number}_p${photoStepModal.step_number}`}
+          onCapture={(photoUrl) => {
+            handleVerifyStepWithPhoto(photoStepModal, photoUrl);
+          }}
+          onClose={() => setPhotoStepModal(null)}
+        />
       )}
 
       {/* Modal Derivar Estación Completa */}
@@ -1957,7 +2284,7 @@ function TransferUnitModal({ unit, order, currentStation, allStations, currentUs
 // =============================================
 // 5. AUDITORÍA FORENSE
 // =============================================
-function AuditLogsView({ selectedOrder, orders = [] }) {
+function AuditLogsView({ selectedOrder, orders = [], onPreviewPhoto }) {
   const [logs, setLogs] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(selectedOrder || orders[0]?.order_id || "");
   const [filterUser, setFilterUser] = useState("");
@@ -2016,6 +2343,26 @@ function AuditLogsView({ selectedOrder, orders = [] }) {
                 <p className="text-xs font-semibold text-gray-800 truncate">{l.user_name}</p>
                 <p className="text-[10px] text-gray-400 font-mono">{new Date(l.timestamp).toLocaleString("es-PE")}</p>
                 {l.notes && <p className="text-[10px] text-gray-500 italic">{l.notes}</p>}
+
+                {l.photo_url && (
+                  <div className="pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onPreviewPhoto && onPreviewPhoto({
+                        url: l.photo_url,
+                        title: `PC #${l.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}`,
+                        subtitle: `Estación ${l.station_number}`,
+                        user_name: l.user_name,
+                        timestamp: l.timestamp
+                      })}
+                      className="inline-flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg text-[10px] font-bold text-emerald-800 transition group"
+                    >
+                      <img src={l.photo_url} alt="Evidencia" className="w-6 h-6 object-cover rounded border border-emerald-300 group-hover:scale-105 transition" />
+                      <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>📸 Ver Foto de Evidencia</span>
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex-shrink-0">
                 {l.status === "PASS" && <Badge variant="success">PASS</Badge>}
@@ -2095,11 +2442,14 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const fd = new FormData();
-    fd.append("file", file);
     try {
       setUploadingPhoto(true);
-      const res = await fetch(`${API_BASE}/upload-media`, { method: "POST", body: fd });
+      const compressedDataUrl = await compressImageToOptimized(file, 1280, 0.75);
+      const res = await fetch(`${API_BASE}/camera/capture-base64`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: compressedDataUrl, prefix: `issue_pc${unit.unit_number}` })
+      });
       if (!res.ok) throw new Error("Error al subir fotografía");
       const data = await res.json();
       setPhotoUrl(data.url);
@@ -2301,6 +2651,9 @@ function IssueReportModal({ data, currentUser, orderId, stationNumber, onClose, 
 
       {cameraOpen && (
         <CameraCaptureModal
+          title={`Foto de Falla · PC #${unit.unit_number.toString().padStart(2, '0')}`}
+          subtitle="Captura clara del defecto o daño"
+          prefix={`issue_pc${unit.unit_number}`}
           onCapture={(url) => {
             setPhotoUrl(url);
             setCameraOpen(false);
@@ -2413,15 +2766,17 @@ function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess
 }
 
 // =============================================
-// MODAL CAPTURA DE CÁMARA EN TIEMPO REAL
+// MODAL CAPTURA DE CÁMARA EN TIEMPO REAL (CON COMPRESIÓN WEB/CLIENTE)
 // =============================================
-function CameraCaptureModal({ onCapture, onClose }) {
+function CameraCaptureModal({ title = "Tomar Foto con Cámara", subtitle = null, prefix = "step", onCapture, onClose }) {
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [facingMode, setFacingMode] = useState("environment");
   const [capturedImage, setCapturedImage] = useState(null);
+  const [imageSizeKb, setImageSizeKb] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
 
   const startCamera = async (mode) => {
     try {
@@ -2459,16 +2814,46 @@ function CameraCaptureModal({ onCapture, onClose }) {
     setFacingMode(prev => (prev === "environment" ? "user" : "environment"));
   };
 
-  const handleTakeSnapshot = () => {
+  const handleTakeSnapshot = async () => {
     if (!videoRef.current) return;
-    const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-    setCapturedImage(dataUrl);
+    try {
+      setCompressing(true);
+      const video = videoRef.current;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const rawDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+
+      // Comprimir inmediatamente en el navegador a WebP/JPEG optimizado
+      const optimizedDataUrl = await compressImageToOptimized(rawDataUrl, 1280, 0.75);
+      const approxKb = Math.round((optimizedDataUrl.length * 0.75) / 1024);
+      setImageSizeKb(approxKb);
+      setCapturedImage(optimizedDataUrl);
+    } catch (err) {
+      console.error("Error al capturar y comprimir:", err);
+      alert("Error procesando foto: " + err.message);
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const handleFilePicked = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      setCompressing(true);
+      const optimizedDataUrl = await compressImageToOptimized(file, 1280, 0.75);
+      const approxKb = Math.round((optimizedDataUrl.length * 0.75) / 1024);
+      setImageSizeKb(approxKb);
+      setCapturedImage(optimizedDataUrl);
+      setCameraError(null);
+    } catch (err) {
+      alert("Error procesando imagen: " + err.message);
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const handleConfirmAndUpload = async () => {
@@ -2478,7 +2863,7 @@ function CameraCaptureModal({ onCapture, onClose }) {
       const res = await fetch(`${API_BASE}/camera/capture-base64`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: capturedImage })
+        body: JSON.stringify({ image: capturedImage, prefix })
       });
       if (!res.ok) throw new Error("Error al procesar fotografía en backend");
       const data = await res.json();
@@ -2495,15 +2880,19 @@ function CameraCaptureModal({ onCapture, onClose }) {
 
   const handleRetake = () => {
     setCapturedImage(null);
+    setImageSizeKb(null);
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in">
       <div className="bg-[#1e293b] text-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-700">
         <div className="bg-slate-900 px-4 py-3 flex justify-between items-center border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-blue-400" />
-            <h3 className="text-sm font-bold">Tomar Foto con Cámara</h3>
+          <div className="min-w-0 pr-2">
+            <div className="flex items-center gap-2">
+              <Camera className="w-5 h-5 text-blue-400" />
+              <h3 className="text-sm font-bold truncate">{title}</h3>
+            </div>
+            {subtitle && <p className="text-[11px] text-slate-400 truncate mt-0.5">{subtitle}</p>}
           </div>
           <button
             onClick={() => {
@@ -2523,22 +2912,13 @@ function CameraCaptureModal({ onCapture, onClose }) {
               <p className="text-xs text-slate-300">{cameraError}</p>
               <label className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold cursor-pointer transition shadow">
                 <Camera className="w-4 h-4" />
-                Abrir Cámara del Dispositivo
+                <span>Abrir Cámara del Dispositivo</span>
                 <input
                   type="file"
                   accept="image/*"
                   capture="environment"
                   className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                      setCapturedImage(event.target.result);
-                      setCameraError(null);
-                    };
-                    reader.readAsDataURL(file);
-                  }}
+                  onChange={handleFilePicked}
                 />
               </label>
             </div>
@@ -2555,16 +2935,29 @@ function CameraCaptureModal({ onCapture, onClose }) {
                   />
                   <div className="absolute inset-4 border-2 border-dashed border-white/40 rounded-xl pointer-events-none flex items-center justify-center">
                     <div className="text-[11px] text-white bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm border border-white/20">
-                      Enfoca el case, componente o sticker
+                      Enfoca el componente o paso verificado
                     </div>
                   </div>
+                  {compressing && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center gap-2">
+                      <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                      <span className="text-xs text-white font-semibold">Optimizando y comprimiendo foto...</span>
+                    </div>
+                  )}
                 </>
               ) : (
-                <img
-                  src={capturedImage}
-                  alt="Captura de cámara"
-                  className="w-full h-full object-contain"
-                />
+                <div className="relative w-full h-full">
+                  <img
+                    src={capturedImage}
+                    alt="Captura de cámara"
+                    className="w-full h-full object-contain"
+                  />
+                  {imageSizeKb && (
+                    <div className="absolute bottom-2 right-2 bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 text-[10px] px-2 py-0.5 rounded-md backdrop-blur-sm font-mono">
+                      ⚡ {imageSizeKb} KB (Ultra-ligero)
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -2582,14 +2975,24 @@ function CameraCaptureModal({ onCapture, onClose }) {
                   <RotateCcw className="w-4 h-4" />
                   <span className="hidden sm:inline">Girar</span>
                 </button>
+                <label className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium border border-slate-700 transition flex items-center gap-1.5 cursor-pointer" title="Cargar desde galería">
+                  <Upload className="w-4 h-4" />
+                  <span className="hidden sm:inline">Galería</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFilePicked}
+                  />
+                </label>
                 <button
                   type="button"
                   onClick={handleTakeSnapshot}
-                  disabled={!!cameraError}
+                  disabled={!!cameraError || compressing}
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/40"
                 >
                   <Camera className="w-4 h-4" />
-                  Capturar Foto
+                  <span>{compressing ? "Comprimiendo..." : "Capturar Foto"}</span>
                 </button>
               </>
             ) : (
@@ -2601,7 +3004,7 @@ function CameraCaptureModal({ onCapture, onClose }) {
                   className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  Tomar Otra
+                  <span>Tomar Otra</span>
                 </button>
                 <button
                   type="button"
@@ -2612,12 +3015,12 @@ function CameraCaptureModal({ onCapture, onClose }) {
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Subiendo a Servidor...
+                      <span>Guardando evidencia...</span>
                     </>
                   ) : (
                     <>
                       <Check className="w-4 h-4" />
-                      Usar y Subir Foto
+                      <span>Confirmar y Verificar</span>
                     </>
                   )}
                 </button>
@@ -2775,12 +3178,28 @@ function ChecklistStepModal({ item, onClose, onSave }) {
 }
 
 // =============================================
-// MODAL DETALLE PC (CON REPORTE DE FALLAS Y FOTO)
+// MODAL DETALLE PC (CON REPORTE DE FALLAS Y EVIDENCIA FOTOGRÁFICA DE PASOS)
 // =============================================
-function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSuccess }) {
+function UnitDetailModal({ unit, order, stations, issues = [], onPreviewPhoto, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [unitLogs, setUnitLogs] = useState([]);
   const unitIssues = (issues || []).filter(i => i.unit_number === unit.unit_number);
+
+  useEffect(() => {
+    if (order?.order_id) {
+      fetch(`${API_BASE}/orders/${order.order_id}/logs`)
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          if (Array.isArray(data)) {
+            setUnitLogs(data.filter(l => l.unit_number === unit.unit_number && l.status === "PASS"));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [order?.order_id, unit.unit_number]);
+
+  const unitPhotos = unitLogs.filter(l => l.photo_url);
 
   const handleResetUnit = async () => {
     if (!window.confirm(`¿Seguro que deseas reiniciar la PC #${unit.unit_number}? Su progreso volverá a Estación 1 y se limpiarán sus registros.`)) return;
@@ -2833,7 +3252,7 @@ function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSucces
           <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
             <div className="flex items-center gap-2">
               <Cpu className="w-5 h-5" />
-              <h3 className="text-sm font-bold">PC #{unit.unit_number} — Ficha de Unidad</h3>
+              <h3 className="text-sm font-bold">PC #{unit.unit_number.toString().padStart(2, '0')} — Ficha de Unidad</h3>
             </div>
             <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target flex items-center justify-center">
               <X className="w-5 h-5" />
@@ -2866,6 +3285,47 @@ function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSucces
               </div>
             </div>
 
+            {/* Evidencia Fotográfica de Pasos Verificados */}
+            {unitPhotos.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Fotos de Verificación ({unitPhotos.length})</span>
+                  </p>
+                  <span className="text-[9px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-200">
+                    Evidencia OK
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {unitPhotos.map((l, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => onPreviewPhoto && onPreviewPhoto({
+                        url: l.photo_url,
+                        title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}`,
+                        subtitle: `Estación ${l.station_number}`,
+                        user_name: l.user_name,
+                        timestamp: l.timestamp
+                      })}
+                      className="group relative rounded-xl overflow-hidden border border-emerald-200 bg-slate-900 cursor-pointer shadow-xs aspect-square"
+                    >
+                      <img
+                        src={l.photo_url}
+                        alt={`Paso ${l.step_number}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 text-white">
+                        <span className="text-[10px] font-bold block leading-none">Paso #{l.step_number}</span>
+                        <span className="text-[8px] text-slate-300 block truncate mt-0.5">{l.user_name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Reportes de Falla con Evidencia Fotográfica */}
             {unitIssues.length > 0 && (
               <div className="space-y-2 pt-2 border-t border-gray-200">
@@ -2889,7 +3349,15 @@ function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSucces
                     {iss.photo_url && (
                       <div className="pt-1">
                         <span className="text-[10px] font-bold text-gray-700 block mb-1">📸 Foto de Evidencia:</span>
-                        <a href={iss.photo_url} target="_blank" rel="noopener noreferrer" className="block relative group overflow-hidden rounded-lg border border-rose-300">
+                        <div 
+                          onClick={() => onPreviewPhoto && onPreviewPhoto({
+                            url: iss.photo_url,
+                            title: `Falla PC #${unit.unit_number} · ${iss.issue_title}`,
+                            subtitle: `Reportado por ${iss.reported_by}`,
+                            user_name: iss.reported_by
+                          })}
+                          className="block relative group overflow-hidden rounded-lg border border-rose-300 cursor-pointer"
+                        >
                           <img
                             src={iss.photo_url}
                             alt="Foto de la falla"
@@ -2898,7 +3366,7 @@ function UnitDetailModal({ unit, order, stations, issues = [], onClose, onSucces
                           <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-2 py-0.5 rounded backdrop-blur-sm">
                             🔍 Clic para ampliar
                           </span>
-                        </a>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -94,6 +94,7 @@ class QCStepLog(Base):
     user_id = Column(String(50), nullable=False)
     user_name = Column(String(100), nullable=False)
     status = Column(String(20), nullable=False) # PASS, FAIL, REASSIGNED
+    photo_url = Column(String(500), nullable=True) # Evidencia fotográfica del paso verificado
     notes = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
 

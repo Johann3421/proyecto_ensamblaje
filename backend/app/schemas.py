@@ -105,6 +105,7 @@ class StepLogCreate(BaseModel):
     user_id: str
     user_name: str
     status: str # PASS, FAIL
+    photo_url: Optional[str] = None
     notes: Optional[str] = ""
 
 class StepUncheckRequest(BaseModel):
@@ -125,6 +126,7 @@ class StepLogSchema(BaseModel):
     user_id: str
     user_name: str
     status: str
+    photo_url: Optional[str] = None
     notes: Optional[str] = ""
     timestamp: datetime
 

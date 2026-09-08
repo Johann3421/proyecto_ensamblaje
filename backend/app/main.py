@@ -62,6 +62,7 @@ def auto_migrate_schema():
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS avatar VARCHAR(255);",
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
         "ALTER TABLE qc_issues ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
+        "ALTER TABLE qc_step_logs ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         """CREATE TABLE IF NOT EXISTS qc_step_station_overrides (
             id SERIAL PRIMARY KEY,
             order_id VARCHAR(50) NOT NULL,
@@ -802,6 +803,7 @@ def get_operator_workspace(
             })
 
     completed_steps_ids = []
+    completed_step_logs = []
     pending_prior_steps = []
     if active_unit:
         logs = db.query(QCStepLog).filter(
@@ -810,6 +812,15 @@ def get_operator_workspace(
             QCStepLog.status == "PASS"
         ).all()
         completed_steps_ids = [l.step_number for l in logs]
+        completed_step_logs = [
+            {
+                "step_number": l.step_number,
+                "photo_url": l.photo_url,
+                "user_name": l.user_name,
+                "timestamp": l.timestamp.isoformat() if l.timestamp else None
+            }
+            for l in logs
+        ]
         # Identificar si hay pasos de estaciones previas que aún falten completar
         current_station_step_nums = {s["step_number"] for s in station_steps}
         pending_prior_steps = [
@@ -841,6 +852,7 @@ def get_operator_workspace(
         "active_unit": active_unit,
         "units_in_station": units_in_station,
         "completed_step_numbers": completed_steps_ids,
+        "completed_step_logs": completed_step_logs,
         "queue_units": queue_units,
         "completed_units": completed_units
     }
@@ -855,6 +867,7 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
         user_id=req.user_id,
         user_name=req.user_name,
         status=req.status,
+        photo_url=req.photo_url,
         notes=req.notes,
         timestamp=datetime.utcnow()
     )
@@ -1133,18 +1146,20 @@ async def upload_media(file: UploadFile = File(...)):
 
 @api_router.post("/camera/capture-base64")
 async def capture_camera_photo(data: dict):
-    """Guarda una fotografía capturada en tiempo real por la cámara mediante Python backend"""
+    """Guarda una fotografía capturada en tiempo real comprimida en WebP/JPEG"""
     import base64
     image_data = data.get("image")
     if not image_data:
         raise HTTPException(status_code=400, detail="No se recibió imagen de la cámara")
     
+    ext = "webp" if "image/webp" in image_data else "jpg"
     if "," in image_data:
         image_data = image_data.split(",")[1]
         
     try:
         img_bytes = base64.b64decode(image_data)
-        filename = f"cam_{int(datetime.utcnow().timestamp())}.jpg"
+        prefix = data.get("prefix", "step")
+        filename = f"{prefix}_{int(datetime.utcnow().timestamp())}_{int(time.time() * 1000) % 1000}.{ext}"
         filepath = os.path.join(UPLOAD_DIR, filename)
         with open(filepath, "wb") as f:
             f.write(img_bytes)

@@ -1137,6 +1137,10 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingItem, setEditingItem] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
 
   const loadSteps = () => {
     fetch(`${API_BASE}/models/${selectedModel}/checklist`)
@@ -1147,9 +1151,34 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
 
   useEffect(() => { loadSteps(); }, [selectedModel]);
 
+  const handleClearAllSteps = async () => {
+    try {
+      setIsClearing(true);
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/checklist`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Error al eliminar los pasos del checklist");
+      const data = await res.json();
+      notify(data.message || `Se eliminaron todos los pasos de ${selectedModel}`);
+      setDeleteConfirmOpen(false);
+      loadSteps();
+      if (onRefreshModels) onRefreshModels();
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  const handleDownloadTemplate = (format = "excel") => {
+    const endpoint = format === "csv" ? "template-csv" : "template-excel";
+    window.open(`${API_BASE}/models/${selectedModel}/${endpoint}`, "_blank");
+  };
+
   const filteredSteps = steps.filter(s =>
     (s.operation || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.qc_criteria || "").toLowerCase().includes(searchTerm.toLowerCase())
+    (s.qc_criteria || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.description || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -1157,60 +1186,155 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
       {/* Toolbar */}
       <Card className="p-3">
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-blue-800 touch-target"
-            >
-              {models.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
-            </select>
-            <Badge variant="info">{steps.length} Pasos</Badge>
-          </div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-500">Modelo:</label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-blue-800 touch-target focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {models.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+              </select>
+              <Badge variant={steps.length > 0 ? "info" : "neutral"}>
+                {steps.length} {steps.length === 1 ? "Paso" : "Pasos"}
+              </Badge>
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setEditingItem({ model_name: selectedModel, step_number: steps.length + 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
-              className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition touch-target"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nuevo Paso</span>
-            </button>
-            <button
-              onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank")}
-              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition touch-target"
-            >
-              <Download className="w-4 h-4" />
-              <span>Excel</span>
-            </button>
-            <label className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer transition touch-target">
-              <Upload className="w-4 h-4" />
-              <span>Importar</span>
-              <input type="file" accept=".xlsx,.xls" onChange={async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const fd = new FormData();
-                fd.append("file", file);
-                const res = await fetch(`${API_BASE}/models/${selectedModel}/import-excel`, { method: "POST", body: fd });
-                if (res.ok) { notify("Importación exitosa"); loadSteps(); }
-              }} className="hidden" />
-            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setEditingItem({ model_name: selectedModel, step_number: steps.length + 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
+                className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nuevo Paso</span>
+              </button>
+
+              {/* Botón de Descargar Plantilla Oficial */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
+                  className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+                  title="Descargar plantilla oficial para importar pasos"
+                >
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  <span>Plantilla</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
+                </button>
+                {templateMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-20 fade-in">
+                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Formato de Plantilla
+                    </div>
+                    <button
+                      onClick={() => { handleDownloadTemplate('excel'); setTemplateMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 transition"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Excel Oficial (.xlsx)</span>
+                    </button>
+                    <button
+                      onClick={() => { handleDownloadTemplate('csv'); setTemplateMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 transition"
+                    >
+                      <Download className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Archivo CSV (.csv)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Botón Importar Pasos */}
+              <button
+                onClick={() => setImportModalOpen(true)}
+                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+                title="Importar pasos desde plantilla Excel o CSV"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Importar</span>
+              </button>
+
+              {/* Botón Exportar Pasos Actuales */}
+              <button
+                onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank")}
+                disabled={steps.length === 0}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Exportar pasos actuales a Excel"
+              >
+                <Download className="w-4 h-4 text-gray-600" />
+                <span>Exportar</span>
+              </button>
+
+              {/* Botón Borrar Todos los Pasos */}
+              <button
+                disabled={steps.length === 0}
+                onClick={() => setDeleteConfirmOpen(true)}
+                className={`text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target ${
+                  steps.length === 0
+                    ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                    : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300"
+                }`}
+                title="Eliminar todos los pasos de este checklist"
+              >
+                <Trash2 className="w-4 h-4 text-rose-600" />
+                <span>Borrar Todo</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2">
             <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <input
               type="text"
-              placeholder="Buscar paso..."
+              placeholder="Buscar paso por nombre, criterio o descripción..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full text-xs bg-transparent focus:outline-none"
             />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm("")} className="text-gray-400 hover:text-gray-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </Card>
 
-      {/* Lista de pasos como acordeón en mobile */}
+      {/* Estado vacío amigable cuando no hay pasos */}
+      {steps.length === 0 && (
+        <Card className="p-8 text-center max-w-lg mx-auto my-6 border-dashed border-2 border-gray-200">
+          <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3">
+            <ClipboardList className="w-7 h-7" />
+          </div>
+          <h4 className="text-sm font-bold text-gray-900">Checklist Vacío para {selectedModel}</h4>
+          <p className="text-xs text-gray-500 mt-1 mb-5 max-w-sm mx-auto leading-relaxed">
+            Este modelo no tiene pasos registrados. Puedes descargar la plantilla oficial para rellenarla con tu equipo o crear los pasos uno por uno.
+          </p>
+          <div className="flex justify-center gap-2 flex-wrap">
+            <button
+              onClick={() => handleDownloadTemplate('excel')}
+              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition touch-target"
+            >
+              <Download className="w-4 h-4" /> Descargar Plantilla Excel
+            </button>
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 shadow transition touch-target"
+            >
+              <Upload className="w-4 h-4" /> Importar Plantilla
+            </button>
+            <button
+              onClick={() => setEditingItem({ model_name: selectedModel, step_number: 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
+              className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 shadow transition touch-target"
+            >
+              <Plus className="w-4 h-4" /> Crear Primer Paso
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Lista de pasos como acordeón */}
       <div className="space-y-2">
         {filteredSteps.map((st) => (
           <Card key={st.step_number} className="overflow-hidden">
@@ -1266,9 +1390,320 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
             notify("Paso guardado correctamente");
             setEditingItem(null);
             loadSteps();
+            if (onRefreshModels) onRefreshModels();
           }}
         />
       )}
+
+      {/* Modal de Importación de Pasos con Plantilla */}
+      {importModalOpen && (
+        <ImportChecklistModal
+          selectedModel={selectedModel}
+          onClose={() => setImportModalOpen(false)}
+          onSuccess={() => {
+            loadSteps();
+            if (onRefreshModels) onRefreshModels();
+          }}
+          notify={notify}
+        />
+      )}
+
+      {/* Modal de Confirmación de Borrado Total de Pasos */}
+      {deleteConfirmOpen && (
+        <ConfirmDeleteAllStepsModal
+          selectedModel={selectedModel}
+          stepsCount={steps.length}
+          loading={isClearing}
+          onClose={() => setDeleteConfirmOpen(false)}
+          onConfirm={handleClearAllSteps}
+        />
+      )}
+    </div>
+  );
+}
+
+// =============================================
+// MODAL PARA IMPORTAR PASOS DESDE PLANTILLA
+// =============================================
+function ImportChecklistModal({ selectedModel, onClose, onSuccess, notify }) {
+  const [file, setFile] = useState(null);
+  const [importMode, setImportMode] = useState("replace");
+  const [importing, setImporting] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+
+  const handleDownload = (format) => {
+    const endpoint = format === "csv" ? "template-csv" : "template-excel";
+    window.open(`${API_BASE}/models/${selectedModel}/${endpoint}`, "_blank");
+  };
+
+  const handleFileChange = (selectedFile) => {
+    if (!selectedFile) return;
+    const name = selectedFile.name.toLowerCase();
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
+      alert("Por favor selecciona un archivo válido de Excel (.xlsx, .xls) o CSV (.csv)");
+      return;
+    }
+    setFile(selectedFile);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!file) {
+      alert("Selecciona un archivo antes de importar");
+      return;
+    }
+
+    try {
+      setImporting(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("mode", importMode);
+
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/import-excel`, {
+        method: "POST",
+        body: fd
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Error al importar los pasos");
+      }
+
+      const result = await res.json();
+      notify(result.message || "Pasos importados exitosamente");
+      onSuccess();
+      onClose();
+    } catch (err) {
+      alert("Error en importación: " + err.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-gray-200 max-h-[92vh] overflow-y-auto">
+        {/* Header */}
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
+          <div className="flex items-center gap-2">
+            <Upload className="w-5 h-5" />
+            <h3 className="text-sm font-bold">Importar Pasos – {selectedModel}</h3>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Paso 1: Descargar Plantilla Oficial */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <FileText className="w-4 h-4 text-blue-700" />
+              <span className="text-xs font-bold text-blue-900">Paso 1: Descargar Plantilla Oficial</span>
+            </div>
+            <p className="text-[11px] text-blue-700 mb-2.5 leading-relaxed">
+              Descarga la plantilla con el formato exacto requerido por el sistema (incluye columnas de Operación, Criterio QC y ejemplos prácticos).
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleDownload('excel')}
+                className="text-xs bg-white hover:bg-blue-100 text-blue-800 border border-blue-300 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Plantilla Excel (.xlsx)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownload('csv')}
+                className="text-xs bg-white hover:bg-blue-100 text-blue-800 border border-blue-300 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              >
+                <Download className="w-3.5 h-3.5 text-blue-600" />
+                <span>Plantilla CSV (.csv)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Paso 2: Modo de importación */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-gray-700">Paso 2: Modo de Carga</label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className={`border rounded-xl p-3 cursor-pointer flex flex-col gap-1 transition ${
+                importMode === "replace"
+                  ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-500"
+                  : "border-gray-200 hover:bg-gray-50"
+              }`}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="replace"
+                    checked={importMode === "replace"}
+                    onChange={() => setImportMode("replace")}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs font-bold text-gray-900">Reemplazar Todo</span>
+                </div>
+                <span className="text-[10px] text-gray-500 pl-5">
+                  Elimina los pasos anteriores de {selectedModel} y carga los del archivo.
+                </span>
+              </label>
+
+              <label className={`border rounded-xl p-3 cursor-pointer flex flex-col gap-1 transition ${
+                importMode === "append"
+                  ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-500"
+                  : "border-gray-200 hover:bg-gray-50"
+              }`}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    value="append"
+                    checked={importMode === "append"}
+                    onChange={() => setImportMode("append")}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs font-bold text-gray-900">Anexar al Final</span>
+                </div>
+                <span className="text-[10px] text-gray-500 pl-5">
+                  Conserva los pasos que ya existen y suma los nuevos al final.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Paso 3: Selector de Archivo */}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-gray-700">Paso 3: Selecciona o Arrastra el Archivo</label>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                  handleFileChange(e.dataTransfer.files[0]);
+                }
+              }}
+              className={`border-2 border-dashed rounded-xl p-5 text-center transition ${
+                dragActive
+                  ? "border-blue-500 bg-blue-50"
+                  : file
+                  ? "border-emerald-400 bg-emerald-50/40"
+                  : "border-gray-300 hover:border-gray-400 bg-gray-50/50"
+              }`}
+            >
+              {file ? (
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <Check className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs font-bold text-gray-900 truncate max-w-xs">{file.name}</p>
+                  <span className="text-[10px] text-gray-500 font-semibold">
+                    {(file.size / 1024).toFixed(1)} KB · Archivo listo para importar
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFile(null)}
+                    className="text-[11px] text-rose-600 hover:underline mt-1"
+                  >
+                    Cambiar archivo
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-gray-700">
+                    Arrastra tu archivo aquí o haz clic para buscarlo
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Formatos compatibles: .xlsx, .xls, .csv
+                  </p>
+                  <label className="mt-3 inline-block bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer shadow-sm transition touch-target">
+                    <span>Examinar Archivo</span>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={(e) => handleFileChange(e.target.files[0])}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Botones de acción */}
+          <div className="grid grid-cols-2 gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={importing}
+              className="py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl transition touch-target"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={!file || importing}
+              className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow transition touch-target disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              <span>{importing ? "Importando Pasos..." : "Comenzar Importación"}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// MODAL CONFIRMACIÓN BORRAR TODOS LOS PASOS
+// =============================================
+function ConfirmDeleteAllStepsModal({ selectedModel, stepsCount, onClose, onConfirm, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-200">
+        <div className="p-6 text-center">
+          <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Trash2 className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-bold text-gray-900 mb-1">
+            ¿Eliminar todos los pasos?
+          </h3>
+          <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+            Estás a punto de eliminar permanentemente los <strong className="text-rose-600 font-bold">{stepsCount} pasos</strong> del checklist configurados para el modelo <strong className="text-blue-700 font-bold">{selectedModel}</strong>.
+            <br />
+            Esta acción vaciará la lista de pasos para este modelo.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-left text-xs text-amber-900 mb-5 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <span className="leading-snug">
+              <strong>Recuerda:</strong> Podrás cargar nuevos pasos en cualquier momento usando la plantilla oficial de importación.
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl touch-target transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={loading}
+              className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 touch-target shadow transition disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>{loading ? "Eliminando..." : "Sí, Eliminar Todos"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

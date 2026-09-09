@@ -4,7 +4,7 @@ import time
 import re
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -22,7 +22,10 @@ from .schemas import (
     AuthRegister, AuthLogin, TokenResponse
 )
 from .seed_data import seed_database, DEFAULT_USERS
-from .excel_handler import generate_checklist_excel, parse_checklist_excel
+from .excel_handler import (
+    generate_checklist_excel, parse_checklist_excel,
+    generate_checklist_template, generate_checklist_csv_template, parse_checklist_file
+)
 from .auth import hash_password, verify_password, create_access_token, require_auth
 
 app = FastAPI(
@@ -377,6 +380,16 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
     db.refresh(new_item)
     return new_item
 
+@api_router.delete("/models/{model_name}/checklist")
+def clear_model_checklist(model_name: str, db: Session = Depends(get_db)):
+    """Elimina todos los pasos del checklist de un modelo específico"""
+    deleted_count = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
+    db.commit()
+    return {
+        "message": f"Se eliminaron todos los pasos ({deleted_count}) del checklist para el modelo {model_name}",
+        "deleted_count": deleted_count
+    }
+
 @api_router.delete("/models/{model_name}/checklist/{step_id}")
 def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(get_db)):
     item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == model_name).first()
@@ -407,19 +420,54 @@ def export_model_excel(model_name: str, db: Session = Depends(get_db)):
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
+@api_router.get("/models/{model_name}/template-excel")
+def download_checklist_template_excel(model_name: str):
+    """Descarga la plantilla oficial en Excel (.xlsx) con estilos y filas de ejemplo"""
+    excel_bytes = generate_checklist_template(model_name)
+    filename = f"Plantilla_Checklist_QC_KENYA_{model_name}.xlsx"
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@api_router.get("/models/{model_name}/template-csv")
+def download_checklist_template_csv(model_name: str):
+    """Descarga la plantilla oficial en formato CSV para edición rápida"""
+    csv_str = generate_checklist_csv_template()
+    filename = f"Plantilla_Checklist_QC_KENYA_{model_name}.csv"
+    return Response(
+        content=csv_str.encode("utf-8-sig"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 @api_router.post("/models/{model_name}/import-excel")
-async def import_model_excel(model_name: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_model_excel(
+    model_name: str,
+    file: UploadFile = File(...),
+    mode: str = Form("replace"),
+    db: Session = Depends(get_db)
+):
+    """Importa pasos desde archivo Excel (.xlsx/.xls) o CSV (.csv). Admite 'replace' (reemplazar) o 'append' (anexar)."""
     content = await file.read()
-    parsed_items = parse_checklist_excel(content)
+    parsed_items = parse_checklist_file(content, filename=file.filename or "")
     
     if not parsed_items:
-        raise HTTPException(status_code=400, detail="No se encontraron filas válidas en el archivo Excel")
+        raise HTTPException(status_code=400, detail="No se encontraron filas válidas en el archivo. Asegúrate de usar la plantilla oficial.")
     
-    db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
-    for it in parsed_items:
+    if mode == "replace":
+        db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
+        base_step = 0
+    else:
+        last_item = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number.desc()).first()
+        base_step = last_item.step_number if last_item else 0
+
+    for idx, it in enumerate(parsed_items):
+        step_num = (base_step + idx + 1) if mode == "append" else it["step_number"]
         db.add(QCChecklistItem(
             model_name=model_name,
-            step_number=it["step_number"],
+            step_number=step_num,
             operation=it["operation"],
             description=it["description"],
             qc_criteria=it["qc_criteria"],
@@ -427,7 +475,12 @@ async def import_model_excel(model_name: str, file: UploadFile = File(...), db: 
             media_type=it.get("media_type", "image")
         ))
     db.commit()
-    return {"message": f"Se importaron {len(parsed_items)} pasos correctamente para el modelo {model_name}"}
+    mode_text = "Reemplazo completo" if mode == "replace" else "Anexado al final"
+    return {
+        "message": f"Se importaron {len(parsed_items)} pasos correctamente para el modelo {model_name} ({mode_text})",
+        "count": len(parsed_items),
+        "mode": mode
+    }
 
 @api_router.get("/orders")
 def list_orders(db: Session = Depends(get_db)):

@@ -1137,10 +1137,9 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingItem, setEditingItem] = useState(null);
   const [expandedStep, setExpandedStep] = useState(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
-  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
 
   const loadSteps = () => {
     fetch(`${API_BASE}/models/${selectedModel}/checklist`)
@@ -1151,28 +1150,39 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
 
   useEffect(() => { loadSteps(); }, [selectedModel]);
 
-  const handleClearAllSteps = async () => {
+  const handleDeleteAllSteps = async () => {
     try {
-      setIsClearing(true);
+      setIsDeletingAll(true);
       const res = await fetch(`${API_BASE}/models/${selectedModel}/checklist`, {
         method: "DELETE"
       });
-      if (!res.ok) throw new Error("Error al eliminar los pasos del checklist");
       const data = await res.json();
-      notify(data.message || `Se eliminaron todos los pasos de ${selectedModel}`);
-      setDeleteConfirmOpen(false);
+      if (!res.ok) throw new Error(data.detail || "Error al eliminar pasos");
+      notify(data.message || `Se eliminaron todos los pasos del modelo ${selectedModel}`);
+      setConfirmDeleteAll(false);
       loadSteps();
-      if (onRefreshModels) onRefreshModels();
+      onRefreshModels?.();
     } catch (err) {
-      alert("Error: " + err.message);
+      notify("Error: " + err.message);
     } finally {
-      setIsClearing(false);
+      setIsDeletingAll(false);
     }
   };
 
-  const handleDownloadTemplate = (format = "excel") => {
-    const endpoint = format === "csv" ? "template-csv" : "template-excel";
-    window.open(`${API_BASE}/models/${selectedModel}/${endpoint}`, "_blank");
+  const handleDeleteSingleStep = async (stepId, stepNum) => {
+    if (!stepId) return;
+    if (!window.confirm(`¿Eliminar el paso #${stepNum}?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/checklist/${stepId}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Error al eliminar el paso");
+      notify(`Paso #${stepNum} eliminado`);
+      loadSteps();
+      onRefreshModels?.();
+    } catch (err) {
+      notify("Error: " + err.message);
+    }
   };
 
   const filteredSteps = steps.filter(s =>
@@ -1187,200 +1197,193 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
       <Card className="p-3">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-gray-500">Modelo:</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-gray-500">Modelo:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-blue-800 touch-target focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-blue-800 touch-target focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 {models.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
               </select>
-              <Badge variant={steps.length > 0 ? "info" : "neutral"}>
-                {steps.length} {steps.length === 1 ? "Paso" : "Pasos"}
-              </Badge>
+              <Badge variant="info">{steps.length} Pasos</Badge>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => setEditingItem({ model_name: selectedModel, step_number: steps.length + 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
-                className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nuevo Paso</span>
-              </button>
+            {/* Botón Borrar Todos los Pasos */}
+            <button
+              onClick={() => setConfirmDeleteAll(true)}
+              disabled={steps.length === 0}
+              className={`text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 transition touch-target ${
+                steps.length === 0
+                  ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                  : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 shadow-sm active:scale-95"
+              }`}
+              title="Borrar permanentemente todos los pasos del modelo actual"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span>Borrar Todos los Pasos</span>
+            </button>
+          </div>
 
-              {/* Botón de Descargar Plantilla Oficial */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
-                  className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
-                  title="Descargar plantilla oficial para importar pasos"
-                >
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                  <span>Plantilla</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
-                </button>
-                {templateMenuOpen && (
-                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-20 fade-in">
-                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      Formato de Plantilla
-                    </div>
-                    <button
-                      onClick={() => { handleDownloadTemplate('excel'); setTemplateMenuOpen(false); }}
-                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 transition"
-                    >
-                      <Download className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Excel Oficial (.xlsx)</span>
-                    </button>
-                    <button
-                      onClick={() => { handleDownloadTemplate('csv'); setTemplateMenuOpen(false); }}
-                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 flex items-center gap-2 transition"
-                    >
-                      <Download className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Archivo CSV (.csv)</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setEditingItem({ model_name: selectedModel, step_number: steps.length + 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
+              className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition touch-target"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuevo Paso</span>
+            </button>
 
-              {/* Botón Importar Pasos */}
-              <button
-                onClick={() => setImportModalOpen(true)}
-                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
-                title="Importar pasos desde plantilla Excel o CSV"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Importar</span>
-              </button>
+            {/* Botón Descargar Plantilla Excel */}
+            <button
+              onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}`, "_blank")}
+              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              title="Descargar plantilla Excel oficial con ejemplos e instrucciones para importar"
+            >
+              <Download className="w-4 h-4 text-indigo-600" />
+              <span>Plantilla para Importar</span>
+            </button>
 
-              {/* Botón Exportar Pasos Actuales */}
-              <button
-                onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank")}
-                disabled={steps.length === 0}
-                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Exportar pasos actuales a Excel"
-              >
-                <Download className="w-4 h-4 text-gray-600" />
-                <span>Exportar</span>
-              </button>
+            {/* Botón Importar Pasos */}
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              title="Subir archivo Excel o CSV usando la plantilla para cargar pasos"
+            >
+              <Upload className="w-4 h-4 text-emerald-600" />
+              <span>Importar Pasos</span>
+            </button>
 
-              {/* Botón Borrar Todos los Pasos */}
-              <button
-                disabled={steps.length === 0}
-                onClick={() => setDeleteConfirmOpen(true)}
-                className={`text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target ${
-                  steps.length === 0
-                    ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
-                    : "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300"
-                }`}
-                title="Eliminar todos los pasos de este checklist"
-              >
-                <Trash2 className="w-4 h-4 text-rose-600" />
-                <span>Borrar Todo</span>
-              </button>
-            </div>
+            {/* Exportar Excel */}
+            <button
+              onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank")}
+              disabled={steps.length === 0}
+              className={`text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target ${
+                steps.length === 0
+                  ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                  : "bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300"
+              }`}
+              title="Exportar pasos actuales a Excel"
+            >
+              <FileText className="w-4 h-4 text-emerald-600" />
+              <span>Exportar Excel</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2">
             <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <input
               type="text"
-              placeholder="Buscar paso por nombre, criterio o descripción..."
+              placeholder="Buscar paso por operación, criterio o descripción..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full text-xs bg-transparent focus:outline-none"
             />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm("")} className="text-gray-400 hover:text-gray-600">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
         </div>
       </Card>
 
-      {/* Estado vacío amigable cuando no hay pasos */}
-      {steps.length === 0 && (
-        <Card className="p-8 text-center max-w-lg mx-auto my-6 border-dashed border-2 border-gray-200">
+      {/* Lista de pasos o Estado Vacío */}
+      {steps.length === 0 ? (
+        <Card className="p-8 text-center border-dashed border-2">
           <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3">
             <ClipboardList className="w-7 h-7" />
           </div>
-          <h4 className="text-sm font-bold text-gray-900">Checklist Vacío para {selectedModel}</h4>
-          <p className="text-xs text-gray-500 mt-1 mb-5 max-w-sm mx-auto leading-relaxed">
-            Este modelo no tiene pasos registrados. Puedes descargar la plantilla oficial para rellenarla con tu equipo o crear los pasos uno por uno.
+          <h3 className="text-sm font-bold text-gray-900">Checklist vacío para {selectedModel}</h3>
+          <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto leading-relaxed">
+            Este modelo actualmente no tiene pasos registrados. Puedes descargar la <strong>Plantilla Oficial</strong> para crearlos en Excel y subirlos en un clic, o agregarlos manualmente uno por uno.
           </p>
-          <div className="flex justify-center gap-2 flex-wrap">
+          <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
             <button
-              onClick={() => handleDownloadTemplate('excel')}
-              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition touch-target"
+              onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}`, "_blank")}
+              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition touch-target"
             >
-              <Download className="w-4 h-4" /> Descargar Plantilla Excel
+              <Download className="w-4 h-4" />
+              <span>Descargar Plantilla Excel</span>
             </button>
             <button
               onClick={() => setImportModalOpen(true)}
-              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 shadow transition touch-target"
+              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow transition touch-target"
             >
-              <Upload className="w-4 h-4" /> Importar Plantilla
+              <Upload className="w-4 h-4" />
+              <span>Importar Archivo</span>
             </button>
             <button
               onClick={() => setEditingItem({ model_name: selectedModel, step_number: 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
-              className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 shadow transition touch-target"
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow transition touch-target"
             >
-              <Plus className="w-4 h-4" /> Crear Primer Paso
+              <Plus className="w-4 h-4" />
+              <span>Nuevo Paso Manual</span>
             </button>
           </div>
         </Card>
+      ) : filteredSteps.length === 0 ? (
+        <Card className="p-6 text-center text-xs text-gray-500">
+          No se encontraron pasos que coincidan con "{searchTerm}"
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filteredSteps.map((st) => (
+            <Card key={st.step_number} className="overflow-hidden">
+              <button
+                onClick={() => setExpandedStep(expandedStep === st.step_number ? null : st.step_number)}
+                className="w-full flex items-center gap-3 p-3 text-left touch-target"
+              >
+                <span className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
+                  {st.step_number}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
+                  {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate">{st.qc_criteria}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {st.media_url && <ImageIcon className="w-3.5 h-3.5 text-blue-500" />}
+                  {expandedStep === st.step_number ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                </div>
+              </button>
+
+              {expandedStep === st.step_number && (
+                <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-2 fade-in">
+                  {st.description && <p className="text-xs text-gray-700">{st.description}</p>}
+                  <div className="bg-blue-50 p-2 rounded-lg text-xs text-blue-800">
+                    <span className="font-semibold">Criterio QC: </span>{st.qc_criteria}
+                  </div>
+                  {st.media_url && (
+                    <img src={st.media_url} alt={st.operation} className="w-full max-h-40 object-cover rounded-lg" />
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => setEditingItem(st)}
+                      className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Editar Paso</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSingleStep(st.id, st.step_number)}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
+                      title="Eliminar este paso"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Eliminar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
       )}
 
-      {/* Lista de pasos como acordeón */}
-      <div className="space-y-2">
-        {filteredSteps.map((st) => (
-          <Card key={st.step_number} className="overflow-hidden">
-            <button
-              onClick={() => setExpandedStep(expandedStep === st.step_number ? null : st.step_number)}
-              className="w-full flex items-center gap-3 p-3 text-left touch-target"
-            >
-              <span className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
-                {st.step_number}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
-                {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate">{st.qc_criteria}</p>}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {st.media_url && <ImageIcon className="w-3.5 h-3.5 text-blue-500" />}
-                {expandedStep === st.step_number ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-              </div>
-            </button>
-
-            {expandedStep === st.step_number && (
-              <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-2 fade-in">
-                {st.description && <p className="text-xs text-gray-700">{st.description}</p>}
-                <div className="bg-blue-50 p-2 rounded-lg text-xs text-blue-800">
-                  <span className="font-semibold">Criterio QC: </span>{st.qc_criteria}
-                </div>
-                {st.media_url && (
-                  <img src={st.media_url} alt={st.operation} className="w-full max-h-40 object-cover rounded-lg" />
-                )}
-                <button
-                  onClick={() => setEditingItem(st)}
-                  className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  <span>Editar Paso</span>
-                </button>
-              </div>
-            )}
-          </Card>
-        ))}
-      </div>
-
+      {/* Modal de Edición de Paso */}
       {editingItem && (
         <ChecklistStepModal
           item={editingItem}
           onClose={() => setEditingItem(null)}
+          onDelete={(id) => {
+            handleDeleteSingleStep(id, editingItem.step_number);
+            setEditingItem(null);
+          }}
           onSave={async (saved) => {
             await fetch(`${API_BASE}/models/${selectedModel}/checklist`, {
               method: "POST",
@@ -1390,320 +1393,74 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
             notify("Paso guardado correctamente");
             setEditingItem(null);
             loadSteps();
-            if (onRefreshModels) onRefreshModels();
+            onRefreshModels?.();
           }}
         />
       )}
 
-      {/* Modal de Importación de Pasos con Plantilla */}
+      {/* Modal Importar Pasos con Plantilla */}
       {importModalOpen && (
         <ImportChecklistModal
-          selectedModel={selectedModel}
+          modelName={selectedModel}
           onClose={() => setImportModalOpen(false)}
           onSuccess={() => {
             loadSteps();
-            if (onRefreshModels) onRefreshModels();
+            onRefreshModels?.();
           }}
           notify={notify}
         />
       )}
 
-      {/* Modal de Confirmación de Borrado Total de Pasos */}
-      {deleteConfirmOpen && (
-        <ConfirmDeleteAllStepsModal
-          selectedModel={selectedModel}
-          stepsCount={steps.length}
-          loading={isClearing}
-          onClose={() => setDeleteConfirmOpen(false)}
-          onConfirm={handleClearAllSteps}
-        />
+      {/* Modal Confirmación: Borrar Todos los Pasos */}
+      {confirmDeleteAll && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-gray-100 p-5 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">¿Eliminar todos los pasos?</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Modelo: <span className="font-bold text-blue-700">{selectedModel}</span> · <span className="font-semibold text-gray-700">{steps.length} pasos</span>
+              </p>
+            </div>
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-left flex items-start gap-2 text-rose-800">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
+              <p className="text-[11px] leading-tight">
+                Esta acción vaciará el checklist completo de este modelo. Puedes respaldar los pasos exportándolos a Excel antes de continuar.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteAll(false)}
+                disabled={isDeletingAll}
+                className="flex-1 py-2.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAllSteps}
+                disabled={isDeletingAll}
+                className="flex-1 py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5"
+              >
+                {isDeletingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Borrando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Sí, borrar todos</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </div>
-  );
-}
-
-// =============================================
-// MODAL PARA IMPORTAR PASOS DESDE PLANTILLA
-// =============================================
-function ImportChecklistModal({ selectedModel, onClose, onSuccess, notify }) {
-  const [file, setFile] = useState(null);
-  const [importMode, setImportMode] = useState("replace");
-  const [importing, setImporting] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-
-  const handleDownload = (format) => {
-    const endpoint = format === "csv" ? "template-csv" : "template-excel";
-    window.open(`${API_BASE}/models/${selectedModel}/${endpoint}`, "_blank");
-  };
-
-  const handleFileChange = (selectedFile) => {
-    if (!selectedFile) return;
-    const name = selectedFile.name.toLowerCase();
-    if (!name.endsWith(".xlsx") && !name.endsWith(".xls") && !name.endsWith(".csv")) {
-      alert("Por favor selecciona un archivo válido de Excel (.xlsx, .xls) o CSV (.csv)");
-      return;
-    }
-    setFile(selectedFile);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!file) {
-      alert("Selecciona un archivo antes de importar");
-      return;
-    }
-
-    try {
-      setImporting(true);
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("mode", importMode);
-
-      const res = await fetch(`${API_BASE}/models/${selectedModel}/import-excel`, {
-        method: "POST",
-        body: fd
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Error al importar los pasos");
-      }
-
-      const result = await res.json();
-      notify(result.message || "Pasos importados exitosamente");
-      onSuccess();
-      onClose();
-    } catch (err) {
-      alert("Error en importación: " + err.message);
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-gray-200 max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            <h3 className="text-sm font-bold">Importar Pasos – {selectedModel}</h3>
-          </div>
-          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded touch-target transition">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Paso 1: Descargar Plantilla Oficial */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5">
-            <div className="flex items-center gap-2 mb-1.5">
-              <FileText className="w-4 h-4 text-blue-700" />
-              <span className="text-xs font-bold text-blue-900">Paso 1: Descargar Plantilla Oficial</span>
-            </div>
-            <p className="text-[11px] text-blue-700 mb-2.5 leading-relaxed">
-              Descarga la plantilla con el formato exacto requerido por el sistema (incluye columnas de Operación, Criterio QC y ejemplos prácticos).
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => handleDownload('excel')}
-                className="text-xs bg-white hover:bg-blue-100 text-blue-800 border border-blue-300 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Plantilla Excel (.xlsx)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDownload('csv')}
-                className="text-xs bg-white hover:bg-blue-100 text-blue-800 border border-blue-300 font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
-              >
-                <Download className="w-3.5 h-3.5 text-blue-600" />
-                <span>Plantilla CSV (.csv)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Paso 2: Modo de importación */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-gray-700">Paso 2: Modo de Carga</label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className={`border rounded-xl p-3 cursor-pointer flex flex-col gap-1 transition ${
-                importMode === "replace"
-                  ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-500"
-                  : "border-gray-200 hover:bg-gray-50"
-              }`}>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="importMode"
-                    value="replace"
-                    checked={importMode === "replace"}
-                    onChange={() => setImportMode("replace")}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-xs font-bold text-gray-900">Reemplazar Todo</span>
-                </div>
-                <span className="text-[10px] text-gray-500 pl-5">
-                  Elimina los pasos anteriores de {selectedModel} y carga los del archivo.
-                </span>
-              </label>
-
-              <label className={`border rounded-xl p-3 cursor-pointer flex flex-col gap-1 transition ${
-                importMode === "append"
-                  ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-500"
-                  : "border-gray-200 hover:bg-gray-50"
-              }`}>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="importMode"
-                    value="append"
-                    checked={importMode === "append"}
-                    onChange={() => setImportMode("append")}
-                    className="text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-xs font-bold text-gray-900">Anexar al Final</span>
-                </div>
-                <span className="text-[10px] text-gray-500 pl-5">
-                  Conserva los pasos que ya existen y suma los nuevos al final.
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Paso 3: Selector de Archivo */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-gray-700">Paso 3: Selecciona o Arrastra el Archivo</label>
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                  handleFileChange(e.dataTransfer.files[0]);
-                }
-              }}
-              className={`border-2 border-dashed rounded-xl p-5 text-center transition ${
-                dragActive
-                  ? "border-blue-500 bg-blue-50"
-                  : file
-                  ? "border-emerald-400 bg-emerald-50/40"
-                  : "border-gray-300 hover:border-gray-400 bg-gray-50/50"
-              }`}
-            >
-              {file ? (
-                <div className="flex flex-col items-center gap-1.5">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                    <Check className="w-5 h-5" />
-                  </div>
-                  <p className="text-xs font-bold text-gray-900 truncate max-w-xs">{file.name}</p>
-                  <span className="text-[10px] text-gray-500 font-semibold">
-                    {(file.size / 1024).toFixed(1)} KB · Archivo listo para importar
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setFile(null)}
-                    className="text-[11px] text-rose-600 hover:underline mt-1"
-                  >
-                    Cambiar archivo
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-xs font-semibold text-gray-700">
-                    Arrastra tu archivo aquí o haz clic para buscarlo
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    Formatos compatibles: .xlsx, .xls, .csv
-                  </p>
-                  <label className="mt-3 inline-block bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-pointer shadow-sm transition touch-target">
-                    <span>Examinar Archivo</span>
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={(e) => handleFileChange(e.target.files[0])}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Botones de acción */}
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={importing}
-              className="py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl transition touch-target"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={!file || importing}
-              className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow transition touch-target disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              <span>{importing ? "Importando Pasos..." : "Comenzar Importación"}</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// =============================================
-// MODAL CONFIRMACIÓN BORRAR TODOS LOS PASOS
-// =============================================
-function ConfirmDeleteAllStepsModal({ selectedModel, stepsCount, onClose, onConfirm, loading }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-200">
-        <div className="p-6 text-center">
-          <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Trash2 className="w-7 h-7" />
-          </div>
-          <h3 className="text-base font-bold text-gray-900 mb-1">
-            ¿Eliminar todos los pasos?
-          </h3>
-          <p className="text-xs text-gray-600 mb-4 leading-relaxed">
-            Estás a punto de eliminar permanentemente los <strong className="text-rose-600 font-bold">{stepsCount} pasos</strong> del checklist configurados para el modelo <strong className="text-blue-700 font-bold">{selectedModel}</strong>.
-            <br />
-            Esta acción vaciará la lista de pasos para este modelo.
-          </p>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-left text-xs text-amber-900 mb-5 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-            <span className="leading-snug">
-              <strong>Recuerda:</strong> Podrás cargar nuevos pasos en cualquier momento usando la plantilla oficial de importación.
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl touch-target transition"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={onConfirm}
-              disabled={loading}
-              className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 touch-target shadow transition disabled:opacity-50"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              <span>{loading ? "Eliminando..." : "Sí, Eliminar Todos"}</span>
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -3469,9 +3226,215 @@ function CameraCaptureModal({ title = "Tomar Foto con Cámara", subtitle = null,
 }
 
 // =============================================
+// MODAL IMPORTAR CHECKLIST CON PLANTILLA OFICIAL
+// =============================================
+function ImportChecklistModal({ modelName, onClose, onSuccess, notify }) {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".csv")) {
+        setSelectedFile(file);
+        setErrorMessage("");
+      } else {
+        setErrorMessage("Por favor selecciona un archivo Excel (.xlsx, .xls) o CSV (.csv)");
+      }
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+      setErrorMessage("");
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    setIsUploading(true);
+    setErrorMessage("");
+    try {
+      const fd = new FormData();
+      fd.append("file", selectedFile);
+      const res = await fetch(`${API_BASE}/models/${modelName}/import-excel`, {
+        method: "POST",
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Error al importar el archivo");
+      }
+      notify(data.message || `Se importaron pasos correctamente para ${modelName}`);
+      onSuccess();
+      onClose();
+    } catch (err) {
+      setErrorMessage(err.message || "Error al procesar el archivo");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
+              <Upload className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold">Importar Checklist de Pasos</h3>
+              <p className="text-[11px] text-blue-100">Modelo: <span className="font-semibold text-white">{modelName}</span></p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-lg touch-target flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Contenido con pasos guiados */}
+        <div className="p-4 space-y-4 overflow-y-auto">
+          {/* PASO 1: Descargar Plantilla */}
+          <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50/60 rounded-xl border border-blue-200/80">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <span className="inline-block text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full">
+                  PASO 1 · PLANTILLA
+                </span>
+                <h4 className="text-xs font-bold text-gray-900">Descarga la Plantilla Oficial Excel</h4>
+                <p className="text-[11px] text-gray-600 leading-relaxed">
+                  Contiene el formato oficial pre-configurado con 5 ejemplos prácticos de ensamble y las columnas exactas requeridas: <code className="text-[10px] bg-white px-1 py-0.5 rounded border text-blue-800">Paso_Nro</code>, <code className="text-[10px] bg-white px-1 py-0.5 rounded border text-blue-800">Operacion</code>, <code className="text-[10px] bg-white px-1 py-0.5 rounded border text-blue-800">Criterio_Control_Calidad</code>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${modelName}`, "_blank")}
+                className="flex-shrink-0 text-xs bg-white hover:bg-blue-50 text-[#0078d4] border border-blue-300 font-bold px-3 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition touch-target"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Descargar</span>
+              </button>
+            </div>
+          </div>
+
+          {/* PASO 2: Subir archivo */}
+          <div className="space-y-2">
+            <span className="inline-block text-[10px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
+              PASO 2 · SUBIDA
+            </span>
+            <h4 className="text-xs font-bold text-gray-900">Sube tu archivo completado (.xlsx, .xls o .csv)</h4>
+
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition cursor-pointer ${
+                dragOver
+                  ? "border-blue-500 bg-blue-50/50"
+                  : selectedFile
+                  ? "border-emerald-400 bg-emerald-50/30"
+                  : "border-gray-300 hover:border-gray-400 bg-gray-50/50"
+              }`}
+              onClick={() => document.getElementById("checklist-file-input").click()}
+            >
+              <input
+                id="checklist-file-input"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              {selectedFile ? (
+                <div className="space-y-1.5">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                    <CheckCircle className="w-6 h-6" />
+                  </div>
+                  <p className="text-xs font-bold text-gray-900">{selectedFile.name}</p>
+                  <p className="text-[10px] text-gray-500">{(selectedFile.size / 1024).toFixed(1)} KB · Listo para procesar</p>
+                  <p className="text-[10px] text-blue-600 underline">Clic para seleccionar otro archivo</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs font-semibold text-gray-800">
+                    Arrastra aquí tu archivo Excel o CSV
+                  </p>
+                  <p className="text-[11px] text-gray-500">o haz clic para buscar en tu dispositivo</p>
+                  <p className="text-[10px] text-gray-400">Archivos soportados: .xlsx, .xls, .csv</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Advertencia / Nota */}
+          <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl flex items-start gap-2 text-amber-800">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+            <p className="text-[11px] leading-tight">
+              <strong>Nota:</strong> Los pasos contenidos en el archivo reemplazarán los pasos actuales del modelo <strong>{modelName}</strong>.
+            </p>
+          </div>
+
+          {/* Mensaje de Error */}
+          {errorMessage && (
+            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-700">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-rose-600" />
+              <p className="text-xs">{errorMessage}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isUploading}
+            className="flex-1 py-2.5 text-xs font-semibold text-gray-600 bg-white border border-gray-300 hover:bg-gray-100 rounded-xl transition touch-target"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={!selectedFile || isUploading}
+            className={`flex-1 py-2.5 text-xs font-bold rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5 ${
+              !selectedFile || isUploading
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            }`}
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Importando pasos...</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Confirmar e Importar</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
 // MODAL EDICIÓN PASO CHECKLIST
 // =============================================
-function ChecklistStepModal({ item, onClose, onSave }) {
+function ChecklistStepModal({ item, onClose, onSave, onDelete }) {
   const [formData, setFormData] = useState({ ...item });
   const [uploading, setUploading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -3590,6 +3553,17 @@ function ChecklistStepModal({ item, onClose, onSave }) {
               <button type="button" onClick={onClose} className="flex-1 py-3 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target">
                 Cancelar
               </button>
+              {formData.id && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(formData.id)}
+                  className="px-4 py-3 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition touch-target flex items-center justify-center gap-1"
+                  title="Eliminar este paso"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Eliminar</span>
+                </button>
+              )}
               <button type="submit" className="flex-1 py-3 text-xs font-bold bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-xl shadow transition touch-target">
                 Guardar Paso
               </button>

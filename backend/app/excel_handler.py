@@ -1,4 +1,5 @@
 import io
+import csv
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from typing import List, Dict
@@ -74,46 +75,51 @@ def generate_checklist_excel(model_name: str, items: List[Dict]) -> bytes:
     output.seek(0)
     return output.getvalue()
 
-def generate_checklist_template(model_name: str = "PROWORK") -> bytes:
-    """Genera la plantilla oficial en Excel (.xlsx) para importar pasos en QC KENYA"""
+def generate_checklist_template(model_name: str = "") -> bytes:
+    """Genera la plantilla oficial Excel (.xlsx) para importar pasos con ejemplos claros e instrucciones"""
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Plantilla_Pasos_QC"
-
-    # Fila 1: Título estilizado
+    ws.title = "Plantilla_Checklist"
+    
+    # 1. Título principal
     ws.merge_cells("A1:E1")
     title_cell = ws["A1"]
-    title_cell.value = f"PLANTILLA OFICIAL DE IMPORTACIÓN DE PASOS – QC KENYA ({model_name.upper()})"
+    suffix = f" – MODELO {model_name.upper()}" if model_name else ""
+    title_cell.value = f"PLANTILLA OFICIAL DE IMPORTACIÓN – CHECKLIST QC KENYA{suffix}"
     title_cell.font = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
     title_cell.fill = PatternFill(start_color="0078D4", end_color="0078D4", fill_type="solid")
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 32
+    ws.row_dimensions[1].height = 36
 
-    # Fila 2: Instrucción guía
+    # 2. Fila de instrucciones
     ws.merge_cells("A2:E2")
-    info_cell = ws["A2"]
-    info_cell.value = "Guía: Ingrese 1 paso por fila. Puede editar o reemplazar los ejemplos de las filas 4 a 6. Guarde y suba este archivo al sistema."
-    info_cell.font = Font(name="Segoe UI", size=9, italic=True, color="404040")
-    info_cell.fill = PatternFill(start_color="FFF4CE", end_color="FFF4CE", fill_type="solid")
-    info_cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    ws.row_dimensions[2].height = 22
+    inst_cell = ws["A2"]
+    inst_cell.value = (
+        "💡 INSTRUCCIONES: 1. Complete una fila por cada paso. Las columnas 'Operacion' y 'Criterio_Control_Calidad' son obligatorias. "
+        "2. 'Paso_Nro' es correlativo (1, 2, 3...). 3. 'Multimedia_URL_O_Nombre' es opcional. "
+        "4. Al terminar, guarde el archivo y súbalo en 'Checklists' -> 'Importar'."
+    )
+    inst_cell.font = Font(name="Segoe UI", size=9, italic=True, color="004E8C")
+    inst_cell.fill = PatternFill(start_color="EBF3FC", end_color="EBF3FC", fill_type="solid")
+    inst_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.row_dimensions[2].height = 38
 
-    # Fila 3: Encabezados oficiales
+    # 3. Encabezados de columna
     headers = [
         ("A3", "Paso_Nro", 12),
         ("B3", "Operacion", 35),
-        ("C3", "Descripcion_Detallada", 45),
-        ("D3", "Criterio_Control_Calidad", 45),
-        ("E3", "Multimedia_URL_O_Nombre", 30),
+        ("C3", "Descripcion_Detallada", 50),
+        ("D3", "Criterio_Control_Calidad", 50),
+        ("E3", "Multimedia_URL_O_Nombre", 35),
     ]
 
-    header_fill = PatternFill(start_color="EDEBE9", end_color="EDEBE9", fill_type="solid")
-    header_font = Font(name="Segoe UI", size=10, bold=True, color="201F1E")
+    header_fill = PatternFill(start_color="102A43", end_color="102A43", fill_type="solid") # Navy dark
+    header_font = Font(name="Segoe UI", size=10, bold=True, color="FFFFFF")
     thin_border = Border(
-        left=Side(style="thin", color="D2D0CE"),
-        right=Side(style="thin", color="D2D0CE"),
-        top=Side(style="thin", color="D2D0CE"),
-        bottom=Side(style="thin", color="D2D0CE")
+        left=Side(style="thin", color="D1D5DB"),
+        right=Side(style="thin", color="D1D5DB"),
+        top=Side(style="thin", color="D1D5DB"),
+        bottom=Side(style="thin", color="D1D5DB")
     )
 
     for cell_ref, text, col_width in headers:
@@ -123,192 +129,175 @@ def generate_checklist_template(model_name: str = "PROWORK") -> bytes:
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center" if "Nro" in text else "left", vertical="center")
         cell.border = thin_border
-        ws.column_dimensions[cell_ref[0]].width = col_width
+        col_letter = cell_ref[0]
+        ws.column_dimensions[col_letter].width = col_width
 
-    ws.row_dimensions[3].height = 26
+    ws.row_dimensions[3].height = 28
 
-    # Filas de ejemplo ilustrativas
+    # 4. Filas de ejemplo instructivas
     sample_rows = [
-        (1, "Instalación de Procesador CPU", "Abrir el socket de la placa madre y colocar el procesador alineando la guía triangular sin forzar.", "Socket bloqueado con palanca sin juego, pines intactos y alineación perfecta.", ""),
-        (2, "Aplicación de Pasta Térmica y Cooler", "Aplicar pasta térmica en el centro del CPU y asegurar el cooler con apriete cruzado uniforme.", "Disipador firme y conector CPU_FAN conectado a la placa.", ""),
-        (3, "Montaje de Memoria RAM", "Insertar los módulos de memoria RAM en slots principales (A2/B2) hasta escuchar el click.", "Ambos seguros laterales trabados con sonido click característico.", "")
+        (
+            1,
+            "Inspección física inicial de chasis y puertos",
+            "Verificar integridad del gabinete, frontis, tornillería y conectores USB/Audio frontales.",
+            "Sin rayaduras, abolladuras ni partes sueltas. Conectores frontales firmes y alineados.",
+            ""
+        ),
+        (
+            2,
+            "Instalación de Placa Madre, CPU y Pasta Térmica",
+            "Montar procesador en socket verificando la muesca de orientación. Aplicar pasta térmica y anclar disipador.",
+            "Socket trabado correctamente, pasta distribuida uniformemente, disipador asegurado firmemente.",
+            ""
+        ),
+        (
+            3,
+            "Montaje de Memoria RAM y Unidad M.2 NVMe",
+            "Insertar módulos en bancos principales (Dual Channel si aplica) y fijar disco M.2 con disipador térmico.",
+            "Módulos RAM asegurados con clic en ambos lados. M.2 atornillado con perno espaciador.",
+            ""
+        ),
+        (
+            4,
+            "Fijación de Fuente de Poder y Gestión de Cableado",
+            "Asegurar fuente de poder. Conectar ATX 24 pines, CPU 8 pines y ordenar cableado con precintos.",
+            "Conectores encajados al 100% con seguro trabado. Cables peinados sin interferir ventiladores.",
+            ""
+        ),
+        (
+            5,
+            "Encendido de Prueba, Verificación de BIOS y Parámetros",
+            "Conectar a monitor y teclado de prueba. Entrar a BIOS y validar detección de CPU, RAM y SSD.",
+            "Arranque exitoso al primer intento. BIOS reconoce total de componentes con voltajes y temperaturas normales.",
+            ""
+        )
     ]
 
-    example_fill = PatternFill(start_color="FBFBFB", end_color="FBFBFB", fill_type="solid")
-    curr_row = 4
-    for r_data in sample_rows:
-        ws[f"A{curr_row}"] = r_data[0]
-        ws[f"B{curr_row}"] = r_data[1]
-        ws[f"C{curr_row}"] = r_data[2]
-        ws[f"D{curr_row}"] = r_data[3]
-        ws[f"E{curr_row}"] = r_data[4]
+    row_num = 4
+    for item in sample_rows:
+        ws[f"A{row_num}"] = item[0]
+        ws[f"B{row_num}"] = item[1]
+        ws[f"C{row_num}"] = item[2]
+        ws[f"D{row_num}"] = item[3]
+        ws[f"E{row_num}"] = item[4]
 
         for col in ["A", "B", "C", "D", "E"]:
-            c = ws[f"{col}{curr_row}"]
-            c.font = Font(name="Segoe UI", size=9)
-            c.fill = example_fill
-            c.border = thin_border
-            c.alignment = Alignment(horizontal="center" if col == "A" else "left", vertical="center", wrap_text=True)
-        ws.row_dimensions[curr_row].height = 28
-        curr_row += 1
-
-    # Filas vacías adicionales pre-estilizadas
-    for empty_idx in range(curr_row, curr_row + 12):
-        ws[f"A{empty_idx}"] = empty_idx - 3
-        for col in ["A", "B", "C", "D", "E"]:
-            c = ws[f"{col}{empty_idx}"]
+            c = ws[f"{col}{row_num}"]
             c.font = Font(name="Segoe UI", size=9)
             c.border = thin_border
-            c.alignment = Alignment(horizontal="center" if col == "A" else "left", vertical="center", wrap_text=True)
-        ws.row_dimensions[empty_idx].height = 24
+            c.alignment = Alignment(
+                horizontal="center" if col == "A" else "left",
+                vertical="center",
+                wrap_text=True
+            )
+        ws.row_dimensions[row_num].height = 36
+        row_num += 1
 
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
     return output.getvalue()
 
-def generate_checklist_csv_template() -> str:
-    """Genera plantilla en formato CSV con ejemplos"""
-    import csv
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Paso_Nro", "Operacion", "Descripcion_Detallada", "Criterio_Control_Calidad", "Multimedia_URL_O_Nombre"])
-    writer.writerow([1, "Instalación de Procesador CPU", "Abrir el socket de la placa madre y colocar el procesador alineando la guía triangular.", "Socket bloqueado con palanca sin pines doblados", ""])
-    writer.writerow([2, "Aplicación de Pasta Térmica y Cooler", "Aplicar pasta térmica en el centro y montar disipador con presión cruzada.", "Disipador firmemente anclado, cable CPU_FAN conectado a placa", ""])
-    writer.writerow([3, "Montaje de Memoria RAM", "Insertar módulos de RAM en slots recomendados (A2/B2) hasta escuchar click.", "Ambos seguros laterales trabados con click", ""])
-    return output.getvalue()
+def _is_header_or_instruction_row(op_val: str, step_val: str, crit_val: str) -> bool:
+    """Detecta si una fila corresponde a un título, banner de instrucciones o encabezado de columna"""
+    combined = f"{str(op_val or '')} {str(step_val or '')} {str(crit_val or '')}".lower().strip()
+    if not combined:
+        return True
+    
+    keywords = [
+        "plantilla", "checklist", "instruccion", "instrucción",
+        "paso_nro", "operacion", "operación", "descripcion_detallada",
+        "criterio_control", "criterio_calidad", "multimedia_url"
+    ]
+    return any(k in combined for k in keywords)
 
-def parse_checklist_file(file_bytes: bytes, filename: str = "") -> List[Dict]:
-    """Parsea un archivo subido (Excel .xlsx o CSV) y extrae la lista normalizada de pasos"""
-    import csv
-    filename_lower = filename.lower()
-    is_csv = filename_lower.endswith(".csv") or not (filename_lower.endswith(".xlsx") or filename_lower.endswith(".xls"))
-
-    # Intento de lectura como CSV si aplica
-    if is_csv:
-        try:
-            for enc in ["utf-8-sig", "utf-8", "latin-1"]:
-                try:
-                    text = file_bytes.decode(enc)
-                    break
-                except UnicodeDecodeError:
-                    continue
-            else:
-                text = file_bytes.decode("utf-8", errors="ignore")
-
-            first_line = text.split("\n")[0] if text else ""
-            delim = ";" if ";" in first_line and first_line.count(";") >= first_line.count(",") else ","
-            if "\t" in first_line and first_line.count("\t") > first_line.count(delim):
-                delim = "\t"
-
-            reader = csv.reader(io.StringIO(text), delimiter=delim)
-            rows = [r for r in reader if any(field.strip() for field in r)]
-            if rows:
-                header_idx = -1
-                for idx, r in enumerate(rows[:5]):
-                    row_str = " ".join(r).lower()
-                    if "operacion" in row_str or "criterio" in row_str or "paso" in row_str:
-                        header_idx = idx
-                        break
-
-                data_rows = rows[header_idx + 1:] if header_idx != -1 else rows
-                items = []
-                for r in data_rows:
-                    if not r:
-                        continue
-                    col_p = r[0].strip() if len(r) > 0 else ""
-                    col_op = r[1].strip() if len(r) > 1 else ""
-                    col_desc = r[2].strip() if len(r) > 2 else ""
-                    col_crit = r[3].strip() if len(r) > 3 else ""
-                    col_media = r[4].strip() if len(r) > 4 else ""
-
-                    if not col_op and not col_crit:
-                        continue
-                    if "operacion" in col_op.lower() and "criterio" in col_crit.lower():
-                        continue
-
-                    try:
-                        step_num = int(col_p) if col_p.isdigit() else len(items) + 1
-                    except Exception:
-                        step_num = len(items) + 1
-
-                    items.append({
-                        "step_number": step_num,
-                        "operation": col_op,
-                        "description": col_desc,
-                        "qc_criteria": col_crit,
-                        "media_url": col_media,
-                        "media_type": "gif" if "gif" in col_media.lower() else "image"
-                    })
-                if items:
-                    return items
-        except Exception:
-            pass
-
-    # Intento como Excel (.xlsx) con openpyxl
+def parse_checklist_excel(file_bytes: bytes) -> List[Dict]:
+    """Parsea un archivo Excel (.xlsx, .xls) o CSV subido y extrae la lista de pasos limpiando títulos y cabeceras"""
+    items = []
+    
+    # 1. Intentar cargar como archivo Excel
     try:
         wb = openpyxl.load_workbook(filename=io.BytesIO(file_bytes), data_only=True)
         ws = wb.active
+        
+        for r in range(1, ws.max_row + 1):
+            step_num_val = ws.cell(row=r, column=1).value
+            operation_val = ws.cell(row=r, column=2).value
+            desc_val = ws.cell(row=r, column=3).value
+            criteria_val = ws.cell(row=r, column=4).value
+            media_val = ws.cell(row=r, column=5).value
 
-        items = []
-        header_row = -1
-        col_map = {"step": 1, "op": 2, "desc": 3, "crit": 4, "media": 5}
-
-        for r in range(1, min(ws.max_row + 1, 8)):
-            row_vals = [str(ws.cell(row=r, column=c).value or "").lower().strip() for c in range(1, 10)]
-            row_str = " ".join(row_vals)
-            if "operacion" in row_str or "criterio" in row_str:
-                header_row = r
-                for c in range(1, 10):
-                    val = str(ws.cell(row=r, column=c).value or "").lower()
-                    if "media" in val or "imagen" in val or "foto" in val or "url" in val or "gif" in val:
-                        col_map["media"] = c
-                    elif "operacion" in val or "tarea" in val or "proceso" in val or "accion" in val:
-                        col_map["op"] = c
-                    elif "paso" in val or "nro" in val or "num" in val:
-                        col_map["step"] = c
-                    elif "descrip" in val or "detalle" in val:
-                        col_map["desc"] = c
-                    elif "criterio" in val or "control" in val or "calidad" in val:
-                        col_map["crit"] = c
-                    elif "nombre" in val and "media" not in val:
-                        col_map["op"] = c
-                break
-
-        start_row = (header_row + 1) if header_row != -1 else 3
-        for r in range(start_row, ws.max_row + 1):
-            step_val = ws.cell(row=r, column=col_map["step"]).value
-            op_val = ws.cell(row=r, column=col_map["op"]).value
-            desc_val = ws.cell(row=r, column=col_map["desc"]).value
-            crit_val = ws.cell(row=r, column=col_map["crit"]).value
-            media_val = ws.cell(row=r, column=col_map["media"]).value
-
-            if not op_val and not step_val and not crit_val:
-                continue
-            op_str = str(op_val or "").strip()
-            crit_str = str(crit_val or "").strip()
-            if not op_str and not crit_str:
+            # Si es fila de encabezados, instrucciones o está vacía, omitir
+            if _is_header_or_instruction_row(operation_val, step_num_val, criteria_val):
                 continue
 
+            op_str = str(operation_val or "").strip()
+            crit_str = str(criteria_val or "").strip()
+            desc_str = str(desc_val or "").strip()
+
+            if not op_str and not desc_str:
+                continue
+
+            # Extraer número de paso
             try:
-                step_num = int(step_val) if step_val is not None and str(step_val).isdigit() else len(items) + 1
-            except Exception:
+                step_num = int(step_num_val) if step_num_val is not None else len(items) + 1
+            except (ValueError, TypeError):
                 step_num = len(items) + 1
 
             items.append({
                 "step_number": step_num,
-                "operation": op_str,
-                "description": str(desc_val or "").strip(),
-                "qc_criteria": crit_str,
+                "operation": op_str or desc_str[:50],
+                "description": desc_str,
+                "qc_criteria": crit_str or "Verificación correcta según especificación técnica",
                 "media_url": str(media_val or "").strip(),
                 "media_type": "gif" if "gif" in str(media_val or "").lower() else "image"
             })
+            
+    except Exception:
+        # 2. Fallback: Intentar como CSV (con delimitador coma o punto y coma)
+        try:
+            text_content = file_bytes.decode("utf-8-sig", errors="replace")
+            # Detectar delimitador
+            delimiter = ";" if text_content.count(";") > text_content.count(",") else ","
+            reader = csv.reader(io.StringIO(text_content), delimiter=delimiter)
+            
+            for row in reader:
+                if not row or len(row) < 2:
+                    continue
+                step_num_val = row[0] if len(row) > 0 else ""
+                operation_val = row[1] if len(row) > 1 else ""
+                desc_val = row[2] if len(row) > 2 else ""
+                criteria_val = row[3] if len(row) > 3 else ""
+                media_val = row[4] if len(row) > 4 else ""
 
-        return items
-    except Exception as exc:
-        raise ValueError(f"Error procesando archivo Excel o CSV: {str(exc)}")
+                if _is_header_or_instruction_row(operation_val, step_num_val, criteria_val):
+                    continue
 
-def parse_checklist_excel(file_bytes: bytes) -> List[Dict]:
-    """Alias compatible con versiones previas"""
-    return parse_checklist_file(file_bytes)
+                op_str = str(operation_val or "").strip()
+                desc_str = str(desc_val or "").strip()
+                crit_str = str(criteria_val or "").strip()
 
+                if not op_str and not desc_str:
+                    continue
+
+                try:
+                    step_num = int(step_num_val) if step_num_val and step_num_val.strip().isdigit() else len(items) + 1
+                except (ValueError, TypeError):
+                    step_num = len(items) + 1
+
+                items.append({
+                    "step_number": step_num,
+                    "operation": op_str or desc_str[:50],
+                    "description": desc_str,
+                    "qc_criteria": crit_str or "Verificación correcta según especificación técnica",
+                    "media_url": str(media_val or "").strip(),
+                    "media_type": "gif" if "gif" in str(media_val or "").lower() else "image"
+                })
+        except Exception as csv_err:
+            print(f"Error parseando archivo checklist: {csv_err}")
+
+    # Re-secuenciar pasos correlativamente para garantizar orden perfecto (1, 2, 3...)
+    for idx, item in enumerate(items, start=1):
+        item["step_number"] = idx
+
+    return items

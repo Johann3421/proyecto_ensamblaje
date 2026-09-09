@@ -63,6 +63,9 @@ def auto_migrate_schema():
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
         "ALTER TABLE qc_issues ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         "ALTER TABLE qc_step_logs ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
+        "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS is_cleaning_station BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS station_type VARCHAR(50) DEFAULT 'ASSEMBLY';",
+        "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS step_numbers TEXT;",
         """CREATE TABLE IF NOT EXISTS qc_step_station_overrides (
             id SERIAL PRIMARY KEY,
             order_id VARCHAR(50) NOT NULL,
@@ -507,8 +510,19 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="El modelo seleccionado no tiene pasos configurados en su checklist")
 
     num_stations = len(req.stations)
-    if num_stations == 0:
-        raise HTTPException(status_code=400, detail="Debe asignar al menos 1 estación de trabajo")
+    if num_stations < 2:
+        raise HTTPException(status_code=400, detail="Debe asignar al menos 2 estaciones de trabajo para cumplir con las estaciones de limpieza obligatorias")
+
+    # Regla estricta: Mínimo 2 estaciones obligatorias de limpieza
+    cleaning_stations = [
+        st for st in req.stations
+        if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower()
+    ]
+    if len(cleaning_stations) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Regla de Calidad Obligatoria: La línea de producción debe incluir al menos 2 estaciones designadas para Limpieza (Intermedia y Final). Se detectaron {len(cleaning_stations)} de 2 requeridas."
+        )
 
     order = QCOrder(
         order_id=req.order_id,
@@ -522,25 +536,73 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
     db.add(order)
     db.commit()
 
-    base_step_count = total_steps // num_stations
-    remainder = total_steps % num_stations
+    is_manual = req.assignment_mode == "MANUAL" or any(st.step_numbers or (st.start_step and st.end_step) for st in req.stations)
+    if is_manual:
+        # Asignación manual personalizada de pasos por estación
+        for s_idx, st in enumerate(req.stations, start=1):
+            step_nums_str = None
+            s_start = st.start_step or 1
+            s_end = st.end_step or 1
 
-    current_start = 1
-    for s_idx, st in enumerate(req.stations, start=1):
-        extra = 1 if s_idx <= remainder else 0
-        steps_for_station = base_step_count + extra
-        current_end = current_start + steps_for_station - 1
+            if st.step_numbers:
+                if isinstance(st.step_numbers, list):
+                    clean_nums = sorted(list(set(int(x) for x in st.step_numbers if str(x).isdigit())))
+                    step_nums_str = ",".join(str(x) for x in clean_nums)
+                    if clean_nums:
+                        s_start = min(clean_nums)
+                        s_end = max(clean_nums)
+                else:
+                    step_nums_str = str(st.step_numbers).strip()
+                    nums = [int(x.strip()) for x in step_nums_str.split(",") if x.strip().isdigit()]
+                    if nums:
+                        s_start = min(nums)
+                        s_end = max(nums)
+            elif st.start_step and st.end_step:
+                step_nums_str = ",".join(str(n) for n in range(st.start_step, st.end_step + 1))
 
-        db.add(QCStationAssignment(
-            order_id=req.order_id,
-            station_number=s_idx,
-            station_name=st.station_name or f"Estación {s_idx}",
-            user_id=st.user_id,
-            user_name=st.user_name,
-            start_step=current_start,
-            end_step=current_end
-        ))
-        current_start = current_end + 1
+            is_clean = bool(st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower())
+            s_type = st.station_type or ("CLEANING" if is_clean else "ASSEMBLY")
+
+            db.add(QCStationAssignment(
+                order_id=req.order_id,
+                station_number=s_idx,
+                station_name=st.station_name or f"Estación {s_idx}",
+                user_id=st.user_id,
+                user_name=st.user_name,
+                start_step=s_start,
+                end_step=s_end,
+                step_numbers=step_nums_str,
+                is_cleaning_station=is_clean,
+                station_type=s_type
+            ))
+    else:
+        # Asignación automática equitativa
+        base_step_count = total_steps // num_stations
+        remainder = total_steps % num_stations
+
+        current_start = 1
+        for s_idx, st in enumerate(req.stations, start=1):
+            extra = 1 if s_idx <= remainder else 0
+            steps_for_station = base_step_count + extra
+            current_end = current_start + steps_for_station - 1
+
+            is_clean = bool(st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower())
+            s_type = st.station_type or ("CLEANING" if is_clean else "ASSEMBLY")
+            step_nums_str = ",".join(str(n) for n in range(current_start, current_end + 1))
+
+            db.add(QCStationAssignment(
+                order_id=req.order_id,
+                station_number=s_idx,
+                station_name=st.station_name or f"Estación {s_idx}",
+                user_id=st.user_id,
+                user_name=st.user_name,
+                start_step=current_start,
+                end_step=current_end,
+                step_numbers=step_nums_str,
+                is_cleaning_station=is_clean,
+                station_type=s_type
+            ))
+            current_start = current_end + 1
     db.commit()
 
     for u_num in range(1, req.total_units + 1):
@@ -555,6 +617,46 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Orden y pipeline creados exitosamente", "order_id": req.order_id}
+
+@api_router.put("/orders/{order_id}/stations")
+def update_order_stations(order_id: str, stations_data: List[StationAssignmentCreate], db: Session = Depends(get_db)):
+    """Actualiza la configuración de estaciones, técnicos y asignación manual de pasos para una orden existente"""
+    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    
+    # Validar mínimo 2 estaciones de limpieza
+    cleaning_count = sum(1 for st in stations_data if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower())
+    if cleaning_count < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Regla de Calidad Obligatoria: La línea debe incluir al menos 2 estaciones designadas para Limpieza. Actualmente: {cleaning_count}."
+        )
+
+    for st_in in stations_data:
+        asgn = db.query(QCStationAssignment).filter(
+            QCStationAssignment.order_id == order_id,
+            QCStationAssignment.station_number == st_in.station_number
+        ).first()
+        if asgn:
+            asgn.user_id = st_in.user_id
+            asgn.user_name = st_in.user_name
+            if st_in.station_name:
+                asgn.station_name = st_in.station_name
+            if st_in.start_step is not None:
+                asgn.start_step = st_in.start_step
+            if st_in.end_step is not None:
+                asgn.end_step = st_in.end_step
+            if st_in.step_numbers is not None:
+                if isinstance(st_in.step_numbers, list):
+                    asgn.step_numbers = ",".join(str(x) for x in sorted(st_in.step_numbers))
+                else:
+                    asgn.step_numbers = str(st_in.step_numbers)
+            asgn.is_cleaning_station = bool(st_in.is_cleaning_station or st_in.station_type == "CLEANING" or "limpieza" in (st_in.station_name or "").lower())
+            asgn.station_type = st_in.station_type or ("CLEANING" if asgn.is_cleaning_station else "ASSEMBLY")
+    
+    db.commit()
+    return {"message": "Configuración de estaciones actualizada correctamente"}
 
 @api_router.get("/orders/{order_id}")
 def get_order_detail(order_id: str, db: Session = Depends(get_db)):
@@ -716,6 +818,7 @@ def get_operator_workspace(
     user_id: str,
     order_id: Optional[str] = None,
     unit_number: Optional[int] = None,
+    station_number: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     all_orders = db.query(QCOrder).order_by(QCOrder.created_at.desc()).all()
@@ -732,18 +835,30 @@ def get_operator_workspace(
             "assigned_station_name": user_asgn.station_name if user_asgn else "Estación 1"
         })
 
-    # Si se especificó un order_id, buscar la asignación en esa orden específica
+    # Si se especificó station_number explícitamente (ej: por Supervisor o Admin para inspeccionar la estación)
     assignment = None
-    if order_id:
+    if order_id and station_number:
+        assignment = db.query(QCStationAssignment).filter(
+            QCStationAssignment.order_id == order_id,
+            QCStationAssignment.station_number == station_number
+        ).first()
+
+    # Si se especificó un order_id, buscar la asignación del usuario en esa orden específica
+    if not assignment and order_id:
         assignment = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == order_id,
             QCStationAssignment.user_id == user_id
         ).first()
         if not assignment:
-            # Si el usuario no está asignado expresamente en esa orden (o es admin), usar la primera estación de esa orden
+            # Si el usuario no está asignado expresamente en esa orden (o es admin/supervisor), usar la primera estación de esa orden
             assignment = db.query(QCStationAssignment).filter(
                 QCStationAssignment.order_id == order_id
             ).first()
+
+    if not assignment and station_number:
+        assignment = db.query(QCStationAssignment).filter(
+            QCStationAssignment.station_number == station_number
+        ).first()
 
     if not assignment:
         # Buscar la primera orden en progreso donde el usuario tenga asignación
@@ -793,6 +908,21 @@ def get_operator_workspace(
     out_step_map = {o.step_number: o for o in active_overrides if o.from_station == assignment.station_number}
     in_step_map = {o.step_number: o for o in active_overrides if o.target_station == assignment.station_number}
 
+    # Determinar qué pasos pertenecen originalmente a esta estación (manual o por rango)
+    assigned_step_numbers = set()
+    if assignment.step_numbers:
+        try:
+            assigned_step_numbers = {
+                int(x.strip()) for x in assignment.step_numbers.split(",") if x.strip().isdigit()
+            }
+        except Exception:
+            assigned_step_numbers = set()
+
+    is_station_own_step = lambda num: (
+        num in assigned_step_numbers if assigned_step_numbers
+        else (assignment.start_step <= num <= assignment.end_step)
+    )
+
     # Calcular la lista de pasos que esta estación debe ejecutar
     station_steps = []
     for s in all_steps:
@@ -812,7 +942,7 @@ def get_operator_workspace(
                 "delegated_from_station": o.from_station,
                 "delegated_reason": o.reason
             })
-        elif assignment.start_step <= s.step_number <= assignment.end_step and s.step_number not in out_step_map:
+        elif is_station_own_step(s.step_number) and s.step_number not in out_step_map:
             # Paso original propio de la estación
             station_steps.append({
                 "id": s.id,
@@ -860,9 +990,10 @@ def get_operator_workspace(
         ]
         # Identificar si hay pasos de estaciones previas que aún falten completar
         current_station_step_nums = {s["step_number"] for s in station_steps}
+        min_own_step = min(assigned_step_numbers) if assigned_step_numbers else assignment.start_step
         pending_prior_steps = [
             s for s in all_steps
-            if s.step_number < assignment.start_step 
+            if s.step_number < min_own_step 
             and s.step_number not in completed_steps_ids 
             and s.step_number not in current_station_step_nums
         ]

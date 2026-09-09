@@ -259,7 +259,7 @@ export default function LoginPage({ onLogin }) {
                   <option value="">— Selecciona tu identificador —</option>
                   {unregisteredUsers.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.role === 'ADMIN' ? '👑 ' : '🔧 '}{u.name} ({u.id})
+                      {u.role === 'ADMIN' ? '👑 ' : u.role === 'SUPERVISOR' ? '🛡️ ' : '🔧 '}{u.name} ({u.id})
                     </option>
                   ))}
                 </select>
@@ -375,6 +375,29 @@ export default function LoginPage({ onLogin }) {
                         <div className="truncate">
                           <div className="font-bold text-white text-[11px] truncate">{uName}</div>
                           <div className="text-[9px] text-blue-300 truncate">Admin · {uEmail}</div>
+                        </div>
+                      </button>
+                    );
+                  })()}
+
+                  {/* Supervisor */}
+                  {(() => {
+                    const u = availableUsers.find(x => x.role === 'SUPERVISOR' || x.id === 'SUP-01');
+                    const uEmail = u?.email || 'supervisor@sekaitech.com.pe';
+                    const uName = u?.name || 'Jhoan Supervisor';
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmail(uEmail);
+                          setPassword('supervisor123');
+                        }}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-900/30 hover:bg-amber-800/50 border border-amber-500/30 text-left text-xs text-amber-200 transition"
+                      >
+                        <span>🛡️</span>
+                        <div className="truncate">
+                          <div className="font-bold text-white text-[11px] truncate">{uName}</div>
+                          <div className="text-[9px] text-amber-300 truncate">Supervisor · {uEmail}</div>
                         </div>
                       </button>
                     );

@@ -12,6 +12,14 @@ DEFAULT_USERS = [
         "password": "admin123"
     },
     {
+        "id": "SUP-01",
+        "name": "Jhoan Supervisor",
+        "role": "SUPERVISOR",
+        "avatar": "JS",
+        "email": "supervisor@sekaitech.com.pe",
+        "password": "supervisor123"
+    },
+    {
         "id": "OP-101",
         "name": "Carlos Mendoza",
         "role": "OPERATOR",
@@ -214,15 +222,15 @@ def seed_database(db: Session):
         db.commit()
 
         station_operators = [
-            ("OP-101", "Carlos Mendoza", "Chasis, Montaje y Placas"),
-            ("OP-102", "Ana Quispe", "Protecciones, Discos y GPU"),
-            ("OP-103", "Roberto Diaz", "BIOS, SO Windows y Pruebas"),
-            ("OP-104", "Elena Ramos", "Personalización, Software y Serie"),
-            ("OP-105", "Marco Solis", "Stickers, Limpieza y Embalaje"),
+            ("OP-101", "Carlos Mendoza", "Chasis, Montaje y Placas", False, "ASSEMBLY"),
+            ("OP-102", "Ana Quispe", "Protecciones, Discos y GPU", False, "ASSEMBLY"),
+            ("OP-103", "Roberto Diaz", "Limpieza Intermedia, Chasis y Pruebas", True, "CLEANING"),
+            ("OP-104", "Elena Ramos", "Personalización, Software y Serie", False, "TESTING"),
+            ("OP-105", "Marco Solis", "Stickers, Limpieza Final y Embalaje", True, "CLEANING"),
         ]
 
         current_start = 1
-        for s_idx, (op_id, op_name, s_name) in enumerate(station_operators, start=1):
+        for s_idx, (op_id, op_name, s_name, is_clean, s_type) in enumerate(station_operators, start=1):
             extra = 1 if s_idx <= remainder else 0
             steps_for_station = base_step_count + extra
             current_end = current_start + steps_for_station - 1
@@ -234,7 +242,9 @@ def seed_database(db: Session):
                 user_id=op_id,
                 user_name=op_name,
                 start_step=current_start,
-                end_step=current_end
+                end_step=current_end,
+                is_cleaning_station=is_clean,
+                station_type=s_type
             ))
             current_start = current_end + 1
         db.commit()

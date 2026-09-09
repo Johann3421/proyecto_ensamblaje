@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime
 
 
@@ -32,19 +32,23 @@ class QCUserSchema(BaseModel):
         from_attributes = True
 
 class QCUserCreate(BaseModel):
-    id: Optional[str] = None
+    id: str
     name: str
+    email: Optional[str] = None
+    password: Optional[str] = None
     role: str = "OPERATOR"
     avatar: Optional[str] = None
 
 class QCUserUpdate(BaseModel):
     name: Optional[str] = None
+    email: Optional[str] = None
     role: Optional[str] = None
     avatar: Optional[str] = None
     is_active: Optional[bool] = None
 
 class AddUnitsRequest(BaseModel):
     count: int = 1
+    quantity: Optional[int] = 1
     custom_prefix: Optional[str] = None
 
 class ChecklistItemSchema(BaseModel):
@@ -75,6 +79,11 @@ class StationAssignmentCreate(BaseModel):
     user_id: str
     user_name: str
     station_name: Optional[str] = ""
+    start_step: Optional[int] = None
+    end_step: Optional[int] = None
+    step_numbers: Optional[Union[List[int], str]] = None
+    is_cleaning_station: Optional[bool] = False
+    station_type: Optional[str] = "ASSEMBLY" # ASSEMBLY, CLEANING, TESTING, PACKAGING
 
 class StationAssignmentSchema(BaseModel):
     id: Optional[int] = None
@@ -85,6 +94,9 @@ class StationAssignmentSchema(BaseModel):
     user_name: str
     start_step: int
     end_step: int
+    step_numbers: Optional[str] = None
+    is_cleaning_station: Optional[bool] = False
+    station_type: Optional[str] = "ASSEMBLY"
 
     class Config:
         from_attributes = True
@@ -96,6 +108,7 @@ class OrderCreateRequest(BaseModel):
     total_units: int
     stations: List[StationAssignmentCreate]
     created_by: Optional[str] = "Administrador"
+    assignment_mode: Optional[str] = "AUTO" # "AUTO" o "MANUAL"
 
 class StepLogCreate(BaseModel):
     order_id: str

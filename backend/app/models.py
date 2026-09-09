@@ -10,7 +10,7 @@ class QCUser(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(150), unique=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
-    role = Column(String(20), default="OPERATOR") # "ADMIN" o "OPERATOR"
+    role = Column(String(20), default="OPERATOR") # "ADMIN", "SUPERVISOR", o "OPERATOR"
     avatar = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
 
@@ -65,6 +65,9 @@ class QCStationAssignment(Base):
     user_name = Column(String(100), nullable=False)
     start_step = Column(Integer, nullable=False) # ej: 1
     end_step = Column(Integer, nullable=False)   # ej: 11
+    step_numbers = Column(Text, nullable=True)   # Lista de números de pasos manuales ej: "1,2,5,8"
+    is_cleaning_station = Column(Boolean, default=False) # True si es estación de limpieza obligatoria
+    station_type = Column(String(50), default="ASSEMBLY") # ASSEMBLY, CLEANING, TESTING, PACKAGING
 
     order = relationship("QCOrder", back_populates="stations")
 

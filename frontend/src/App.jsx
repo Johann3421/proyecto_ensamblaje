@@ -19,6 +19,7 @@ const Badge = ({ children, variant = "neutral", className = "" }) => {
     warning: "bg-amber-50 text-amber-700 border-amber-200",
     danger: "bg-rose-50 text-rose-700 border-rose-200",
     info: "bg-blue-50 text-blue-700 border-blue-200",
+    purple: "bg-purple-50 text-purple-700 border-purple-200",
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${styles[variant] || styles.neutral} ${className}`}>
@@ -184,6 +185,7 @@ export default function App() {
   const [addUnitsModalOpen, setAddUnitsModalOpen] = useState(false);
   const [resetOrderModalOpen, setResetOrderModalOpen] = useState(false);
   const [deleteOrderModalOpen, setDeleteOrderModalOpen] = useState(false);
+  const [operatorStationFilter, setOperatorStationFilter] = useState(null);
 
   // ——— Auth: Check saved token on mount ———
   useEffect(() => {
@@ -281,12 +283,15 @@ export default function App() {
     }
   };
 
-  const loadOperatorWorkspace = (unitNumber = null, orderId = null) => {
+  const loadOperatorWorkspace = (unitNumber = null, orderId = null, stationNumber = null) => {
     if (!currentUser?.id) return;
     const params = new URLSearchParams();
     if (unitNumber) params.append("unit_number", unitNumber);
     if (orderId) params.append("order_id", orderId);
     else if (selectedOrder) params.append("order_id", selectedOrder);
+
+    const targetStation = stationNumber !== null ? stationNumber : operatorStationFilter;
+    if (targetStation) params.append("station_number", targetStation);
 
     const qs = params.toString() ? `?${params.toString()}` : "";
     fetch(`${API_BASE}/operator/${currentUser.id}/station${qs}`)
@@ -334,11 +339,22 @@ export default function App() {
     { id: "audit", label: "Auditoría", shortLabel: "Auditor", icon: ShieldCheck },
   ];
 
+  const SUPERVISOR_TABS = [
+    { id: "matrix", label: "Pipeline", shortLabel: "Pipeline", icon: Grid },
+    { id: "operator", label: "Inspección Estación", shortLabel: "Inspección", icon: CheckSquare },
+    { id: "checklists", label: "Checklists", shortLabel: "Checks", icon: FileText },
+    { id: "audit", label: "Auditoría", shortLabel: "Auditor", icon: ShieldCheck },
+  ];
+
   const OPERATOR_TABS = [
     { id: "operator", label: "Mi Estación", shortLabel: "Trabajo", icon: CheckSquare },
   ];
 
-  const tabs = currentUser.role === "ADMIN" ? ADMIN_TABS : OPERATOR_TABS;
+  const tabs = currentUser.role === "ADMIN"
+    ? ADMIN_TABS
+    : currentUser.role === "SUPERVISOR"
+      ? SUPERVISOR_TABS
+      : OPERATOR_TABS;
 
   // ——— Auth Loading Screen ———
   if (authLoading) {
@@ -397,11 +413,16 @@ export default function App() {
             {/* User info badge */}
             <div className="flex items-center gap-1.5 bg-blue-900/40 px-2 py-1 rounded-lg border border-blue-400/30 text-xs">
               <span className="hidden sm:inline text-blue-200">
-                {currentUser.role === 'ADMIN' ? '👑' : '🔧'}
+                {currentUser.role === 'ADMIN' ? '👑' : currentUser.role === 'SUPERVISOR' ? '🛡️' : '🔧'}
               </span>
               <span className="text-white font-medium text-xs max-w-[120px] sm:max-w-none truncate">
                 {currentUser.name}
               </span>
+              {currentUser.role === 'SUPERVISOR' && (
+                <span className="text-[10px] bg-amber-400/30 text-amber-200 px-1.5 py-0.5 rounded font-bold border border-amber-400/40 ml-0.5">
+                  Supervisor
+                </span>
+              )}
             </div>
 
             {/* Avatar */}
@@ -523,12 +544,16 @@ export default function App() {
               onOpenMedia={(item) => setActiveMediaModal(item)}
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
               onPreviewPhoto={(photo) => setActivePhotoPreview(photo)}
-              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder)}
+              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, operatorStationFilter)}
               onSelectOrder={(ordId) => {
                 setSelectedOrder(ordId);
-                loadOperatorWorkspace(null, ordId);
+                loadOperatorWorkspace(null, ordId, operatorStationFilter);
               }}
-              onRefresh={() => loadOperatorWorkspace(null, selectedOrder)}
+              onSelectStation={(stNum) => {
+                setOperatorStationFilter(stNum);
+                loadOperatorWorkspace(null, selectedOrder, stNum);
+              }}
+              onRefresh={() => loadOperatorWorkspace(null, selectedOrder, operatorStationFilter)}
               notify={notify}
             />
           )}
@@ -621,6 +646,7 @@ export default function App() {
           order={matrixData.order}
           stations={matrixData.stations}
           issues={matrixData.issues || []}
+          currentUser={currentUser}
           onPreviewPhoto={(photo) => setActivePhotoPreview(photo)}
           onClose={() => setSelectedUnitDetail(null)}
           onSuccess={(msg) => {
@@ -921,7 +947,7 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
 }
 
 // =============================================
-// 2. CREADOR DE ORDEN
+// 2. CREADOR DE ORDEN (CON ASIGNACIÓN MANUAL Y 2 ESTACIONES OBLIGATORIAS DE LIMPIEZA)
 // =============================================
 function CreateOrderView({ models, users, onSuccess }) {
   const [modelName, setModelName] = useState(models[0]?.name || "PROWORK");
@@ -929,6 +955,7 @@ function CreateOrderView({ models, users, onSuccess }) {
   const [partNumber, setPartNumber] = useState("90MB0YZ0-M0EAY0");
   const [totalUnits, setTotalUnits] = useState(50);
   const [stationCount, setStationCount] = useState(5);
+  const [assignmentMode, setAssignmentMode] = useState("AUTO"); // "AUTO" | "MANUAL"
   const [selectedOperators, setSelectedOperators] = useState([]);
   const [modelSteps, setModelSteps] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -939,26 +966,6 @@ function CreateOrderView({ models, users, onSuccess }) {
       .then(data => { if (Array.isArray(data)) setModelSteps(data); })
       .catch(() => {});
   }, [modelName]);
-
-  useEffect(() => {
-    const defaultNames = [
-      "Chasis, Montaje y Placas",
-      "Protecciones, Discos y GPU",
-      "BIOS, SO Windows y Pruebas",
-      "Personalización, Software y Serie",
-      "Stickers, Limpieza y Embalaje"
-    ];
-    const initial = Array.from({ length: stationCount }, (_, i) => {
-      const op = users[i % users.length] || { id: `OP-${101 + i}`, name: `Operario ${i + 1}` };
-      return {
-        station_number: i + 1,
-        user_id: op.id,
-        user_name: op.name,
-        station_name: defaultNames[i] || `Estación ${i + 1}`
-      };
-    });
-    setSelectedOperators(initial);
-  }, [stationCount, users]);
 
   const partitionPreview = useMemo(() => {
     const totalSteps = modelSteps.length || 52;
@@ -975,10 +982,123 @@ function CreateOrderView({ models, users, onSuccess }) {
     });
   }, [modelSteps, stationCount]);
 
+  useEffect(() => {
+    const defaultNames = [
+      "Chasis, Montaje y Placas",
+      "Protecciones, Discos y GPU",
+      "Limpieza Intermedia y BIOS",
+      "Personalización, Software y Serie",
+      "Stickers, Limpieza Final y Embalaje"
+    ];
+    const initial = Array.from({ length: stationCount }, (_, i) => {
+      const op = users[i % users.length] || { id: `OP-${101 + i}`, name: `Operario ${i + 1}` };
+      // Pre-configurar al menos 2 estaciones de limpieza obligatorias por defecto
+      const isCleaning = stationCount >= 2 && (i === stationCount - 1 || i === Math.floor(stationCount / 2));
+      const p = partitionPreview[i] || { startStep: 1, endStep: 1 };
+      return {
+        station_number: i + 1,
+        user_id: op.id,
+        user_name: op.name,
+        station_name: defaultNames[i] || `Estación ${i + 1}`,
+        is_cleaning_station: isCleaning,
+        station_type: isCleaning ? "CLEANING" : "ASSEMBLY",
+        start_step: p.startStep,
+        end_step: p.endStep
+      };
+    });
+    setSelectedOperators(initial);
+  }, [stationCount, users]);
+
+  // Si estamos en modo AUTO, mantener los rangos actualizados con partitionPreview
+  useEffect(() => {
+    if (assignmentMode === "AUTO" && partitionPreview.length > 0) {
+      setSelectedOperators(prev => prev.map((st, idx) => {
+        const p = partitionPreview[idx];
+        if (!p) return st;
+        return {
+          ...st,
+          start_step: p.startStep,
+          end_step: p.endStep
+        };
+      }));
+    }
+  }, [partitionPreview, assignmentMode]);
+
+  // Conteo de estaciones obligatorias de limpieza
+  const cleaningCount = useMemo(() => {
+    return (selectedOperators || []).filter(s => s.is_cleaning_station).length;
+  }, [selectedOperators]);
+  const hasEnoughCleaning = cleaningCount >= 2;
+
+  // Validación de cobertura de pasos en modo MANUAL
+  const manualCoverage = useMemo(() => {
+    const totalSteps = modelSteps.length || 52;
+    const covered = new Set();
+    const overlaps = new Set();
+
+    selectedOperators.forEach(st => {
+      const s = parseInt(st.start_step, 10);
+      const e = parseInt(st.end_step, 10);
+      if (!isNaN(s) && !isNaN(e) && s <= e) {
+        for (let i = s; i <= e; i++) {
+          if (covered.has(i)) overlaps.add(i);
+          covered.add(i);
+        }
+      }
+    });
+
+    const missing = [];
+    for (let i = 1; i <= totalSteps; i++) {
+      if (!covered.has(i)) missing.push(i);
+    }
+
+    const isValid = missing.length === 0 && overlaps.size === 0 && covered.size === totalSteps;
+    return {
+      coveredCount: covered.size,
+      totalSteps,
+      missing,
+      overlaps: Array.from(overlaps),
+      isValid
+    };
+  }, [selectedOperators, modelSteps]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (cleaningCount < 2) {
+      alert("⚠️ Regla de Calidad Obligatoria: La línea de producción debe incluir al menos 2 estaciones designadas para Limpieza.");
+      return;
+    }
+
+    if (assignmentMode === "MANUAL") {
+      for (let i = 0; i < selectedOperators.length; i++) {
+        const st = selectedOperators[i];
+        const s = parseInt(st.start_step, 10);
+        const end = parseInt(st.end_step, 10);
+        if (isNaN(s) || isNaN(end) || s < 1 || end < s) {
+          alert(`La Estación ${st.station_number} tiene un rango de pasos inválido (${s}–${end}).`);
+          return;
+        }
+      }
+    }
+
     try {
       setSubmitting(true);
+      const payloadStations = selectedOperators.map((st, idx) => {
+        const p = partitionPreview[idx] || {};
+        const sStart = assignmentMode === "MANUAL" ? parseInt(st.start_step, 10) : p.startStep;
+        const sEnd = assignmentMode === "MANUAL" ? parseInt(st.end_step, 10) : p.endStep;
+        return {
+          station_number: st.station_number,
+          user_id: st.user_id,
+          user_name: st.user_name,
+          station_name: st.station_name,
+          is_cleaning_station: !!st.is_cleaning_station,
+          station_type: st.station_type || (st.is_cleaning_station ? "CLEANING" : "ASSEMBLY"),
+          start_step: sStart,
+          end_step: sEnd
+        };
+      });
+
       const res = await fetch(`${API_BASE}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -987,11 +1107,12 @@ function CreateOrderView({ models, users, onSuccess }) {
           model_name: modelName,
           part_number: partNumber,
           total_units: parseInt(totalUnits, 10),
-          stations: selectedOperators,
-          created_by: "Admin QC"
+          assignment_mode: assignmentMode,
+          stations: payloadStations,
+          created_by: "Admin / Supervisor QC"
         })
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || "Error"); }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || "Error al crear orden"); }
       onSuccess(orderId);
     } catch (err) {
       alert(err.message);
@@ -1040,28 +1161,133 @@ function CreateOrderView({ models, users, onSuccess }) {
             </div>
           </div>
 
-          {/* Estaciones */}
+          {/* Configuración de Estaciones */}
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">Estaciones</h3>
-              <select
-                value={stationCount}
-                onChange={(e) => setStationCount(parseInt(e.target.value, 10))}
-                className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white font-bold text-blue-600 touch-target"
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
-                  <option key={n} value={n}>{n} estaciones</option>
-                ))}
-              </select>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">Estaciones de Trabajo</h3>
+                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                  {modelSteps.length || 52} pasos totales
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500 font-semibold">Cantidad:</label>
+                <select
+                  value={stationCount}
+                  onChange={(e) => setStationCount(parseInt(e.target.value, 10))}
+                  className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white font-bold text-blue-600 touch-target"
+                >
+                  {[2, 3, 4, 5, 6, 7, 8].map(n => (
+                    <option key={n} value={n}>{n} estaciones</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="space-y-2">
+            {/* Selector de Modo: Automático vs Manual */}
+            <div className="bg-white p-2.5 rounded-xl border border-gray-200 flex items-center justify-between gap-2">
+              <div>
+                <span className="text-xs font-bold text-gray-800 block">Modo de Asignación de Pasos:</span>
+                <span className="text-[10px] text-gray-500">Distribución balanceada o asignación personalizada</span>
+              </div>
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setAssignmentMode("AUTO")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1 ${
+                    assignmentMode === "AUTO" ? "bg-[#0078d4] text-white shadow-xs" : "text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  <span>⚖️ Automático</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Inicializar rangos manuales a partir de la partición actual
+                    setSelectedOperators(prev => prev.map((st, idx) => {
+                      const p = partitionPreview[idx];
+                      return {
+                        ...st,
+                        start_step: p ? p.startStep : st.start_step || 1,
+                        end_step: p ? p.endStep : st.end_step || 1
+                      };
+                    }));
+                    setAssignmentMode("MANUAL");
+                  }}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1 ${
+                    assignmentMode === "MANUAL" ? "bg-[#0078d4] text-white shadow-xs" : "text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  <span>✏️ Manual</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Regla Obligatoria: Mínimo 2 Estaciones de Limpieza */}
+            {hasEnoughCleaning ? (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-900 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <span>
+                    <strong>Regla de Calidad OK:</strong> {cleaningCount} estaciones designadas para Limpieza obligatoria.
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-md">
+                  {cleaningCount} / 2 Requeridas
+                </span>
+              </div>
+            ) : (
+              <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span>
+                    <strong>Regla Obligatoria:</strong> Se requieren al menos <strong>2 estaciones de limpieza</strong>. Pulsa el botón <strong>"🧼 Limpieza"</strong> en las estaciones deseadas.
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md flex-shrink-0">
+                  {cleaningCount} / 2
+                </span>
+              </div>
+            )}
+
+            {/* Indicador de Cobertura en Modo Manual */}
+            {assignmentMode === "MANUAL" && (
+              <div className={`p-2.5 rounded-xl border text-xs ${
+                manualCoverage.isValid ? "bg-blue-50 border-blue-200 text-blue-900" : "bg-rose-50 border-rose-200 text-rose-900"
+              }`}>
+                <div className="flex items-center justify-between font-bold">
+                  <span>Cobertura de Pasos ({manualCoverage.coveredCount} / {manualCoverage.totalSteps}):</span>
+                  <span>{manualCoverage.isValid ? "✓ Asignación Completa" : "⚠️ Verifique rangos"}</span>
+                </div>
+                {manualCoverage.missing.length > 0 && (
+                  <p className="text-[10px] mt-1 text-rose-700">
+                    Pasos faltantes sin asignar ({manualCoverage.missing.length}): {manualCoverage.missing.slice(0, 15).join(", ")}{manualCoverage.missing.length > 15 ? '...' : ''}
+                  </p>
+                )}
+                {manualCoverage.overlaps.length > 0 && (
+                  <p className="text-[10px] mt-0.5 text-rose-700 font-semibold">
+                    Pasos duplicados en múltiples estaciones: {manualCoverage.overlaps.join(", ")}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Tarjetas de Estaciones */}
+            <div className="space-y-2.5">
               {selectedOperators.map((st, idx) => {
                 const partition = partitionPreview[idx] || {};
+                const currentStart = assignmentMode === "MANUAL" ? (st.start_step || 1) : partition.startStep;
+                const currentEnd = assignmentMode === "MANUAL" ? (st.end_step || 1) : partition.endStep;
+                const stepCount = Math.max(0, currentEnd - currentStart + 1);
+
                 return (
-                  <div key={idx} className="bg-white p-3 rounded-xl border border-gray-200 space-y-2">
+                  <div key={idx} className={`p-3 rounded-xl border transition ${
+                    st.is_cleaning_station ? "bg-emerald-50/40 border-emerald-300" : "bg-white border-gray-200"
+                  } space-y-2.5`}>
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
+                      <div className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 ${
+                        st.is_cleaning_station ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
+                      }`}>
                         {st.station_number}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1074,40 +1300,122 @@ function CreateOrderView({ models, users, onSuccess }) {
                             setSelectedOperators(copy);
                           }}
                           placeholder="Nombre de estación"
-                          className="w-full text-xs border border-gray-300 rounded-lg p-2 touch-target"
+                          className="w-full text-xs border border-gray-300 rounded-lg p-2 touch-target bg-white font-medium"
                         />
                       </div>
-                      {partition.stepCount && (
-                        <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 flex-shrink-0">
-                          {partition.stepCount}p
-                        </span>
+
+                      {/* Botón Toggle Limpieza */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const copy = [...selectedOperators];
+                          const nextCleaning = !copy[idx].is_cleaning_station;
+                          copy[idx].is_cleaning_station = nextCleaning;
+                          copy[idx].station_type = nextCleaning ? "CLEANING" : "ASSEMBLY";
+                          setSelectedOperators(copy);
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1 flex-shrink-0 ${
+                          st.is_cleaning_station
+                            ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                            : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-emerald-50 hover:text-emerald-700"
+                        }`}
+                        title="Marcar como estación obligatoria de limpieza"
+                      >
+                        <span>🧼</span>
+                        <span>{st.is_cleaning_station ? "Limpieza OK" : "+ Limpieza"}</span>
+                      </button>
+
+                      {/* Badge pasos */}
+                      <span className="text-[10px] font-bold text-blue-800 bg-blue-50 px-2 py-1.5 rounded-lg border border-blue-200 flex-shrink-0">
+                        {stepCount}p (P{currentStart}–{currentEnd})
+                      </span>
+                    </div>
+
+                    {/* Selector de Operario Asignado */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-gray-500 font-bold block mb-1">Técnico / Operario:</label>
+                        <select
+                          value={st.user_id}
+                          onChange={(e) => {
+                            const copy = [...selectedOperators];
+                            const u = users.find(u => u.id === e.target.value);
+                            copy[idx].user_id = e.target.value;
+                            copy[idx].user_name = u ? u.name : e.target.value;
+                            setSelectedOperators(copy);
+                          }}
+                          className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
+                        >
+                          {users.map(u => (
+                            <option key={u.id} value={u.id}>
+                              {u.role === 'SUPERVISOR' ? '🛡️ ' : ''}{u.name} ({u.id})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Asignación Manual de Rangos o Info Automática */}
+                      {assignmentMode === "MANUAL" ? (
+                        <div>
+                          <label className="text-[10px] text-gray-500 font-bold block mb-1">Rango Manual de Pasos:</label>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-gray-500 font-bold">De:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max={modelSteps.length || 100}
+                              value={st.start_step || 1}
+                              onChange={(e) => {
+                                const copy = [...selectedOperators];
+                                copy[idx].start_step = parseInt(e.target.value, 10) || 1;
+                                setSelectedOperators(copy);
+                              }}
+                              className="w-16 text-center py-1 px-1.5 font-bold text-blue-700 border border-gray-300 rounded-lg bg-white text-xs"
+                            />
+                            <span className="text-[10px] text-gray-500 font-bold">A:</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max={modelSteps.length || 100}
+                              value={st.end_step || 1}
+                              onChange={(e) => {
+                                const copy = [...selectedOperators];
+                                copy[idx].end_step = parseInt(e.target.value, 10) || 1;
+                                setSelectedOperators(copy);
+                              }}
+                              className="w-16 text-center py-1 px-1.5 font-bold text-blue-700 border border-gray-300 rounded-lg bg-white text-xs"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-[10px] text-gray-500 font-bold block mb-1">Distribución Equitativa:</label>
+                          <div className="text-xs bg-gray-100 px-2.5 py-1.5 rounded-lg text-gray-700 font-medium border border-gray-200">
+                            Pasos #{currentStart} al #{currentEnd} ({stepCount} pasos)
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <select
-                      value={st.user_id}
-                      onChange={(e) => {
-                        const copy = [...selectedOperators];
-                        const u = users.find(u => u.id === e.target.value);
-                        copy[idx].user_id = e.target.value;
-                        copy[idx].user_name = u ? u.name : e.target.value;
-                        setSelectedOperators(copy);
-                      }}
-                      className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white touch-target"
-                    >
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
                   </div>
                 );
               })}
             </div>
 
-            {/* Barra distribución */}
+            {/* Barra visual de distribución */}
             <div className="flex h-5 rounded-lg overflow-hidden border border-blue-200 shadow-inner">
-              {partitionPreview.map((p, i) => {
+              {selectedOperators.map((st, i) => {
                 const colors = ["bg-blue-600", "bg-emerald-600", "bg-amber-600", "bg-purple-600", "bg-cyan-600", "bg-rose-600", "bg-indigo-600", "bg-teal-600"];
+                const total = modelSteps.length || 52;
+                const count = Math.max(1, (st.end_step || 1) - (st.start_step || 1) + 1);
+                const widthPct = Math.round((count / total) * 100);
                 return (
-                  <div key={i} style={{ width: `${p.percentage}%` }} className={`${colors[i % colors.length]} text-white text-[9px] font-bold flex items-center justify-center`}>
-                    E{p.station}
+                  <div
+                    key={i}
+                    style={{ width: `${widthPct}%` }}
+                    className={`${st.is_cleaning_station ? "bg-emerald-600" : colors[i % colors.length]} text-white text-[9px] font-bold flex items-center justify-center truncate px-0.5`}
+                    title={`E${st.station_number}: P${st.start_step}–${st.end_step} ${st.is_cleaning_station ? '(Limpieza)' : ''}`}
+                  >
+                    E{st.station_number}{st.is_cleaning_station ? '🧼' : ''}
                   </div>
                 );
               })}
@@ -1116,11 +1424,21 @@ function CreateOrderView({ models, users, onSuccess }) {
 
           <button
             type="submit"
-            disabled={submitting}
-            className="w-full py-3.5 bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target"
+            disabled={submitting || !hasEnoughCleaning || (assignmentMode === "MANUAL" && !manualCoverage.isValid)}
+            className="w-full py-3.5 bg-[#0078d4] hover:bg-[#106ebe] disabled:bg-gray-400 text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target disabled:cursor-not-allowed"
           >
-            {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-white" />}
-            <span>{submitting ? "Creando..." : "Iniciar Línea de Producción"}</span>
+            {submitting ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : !hasEnoughCleaning ? (
+              <span>⚠️ Mínimo 2 estaciones de limpieza requeridas</span>
+            ) : (assignmentMode === "MANUAL" && !manualCoverage.isValid) ? (
+              <span>⚠️ Corrija los rangos de pasos para continuar</span>
+            ) : (
+              <>
+                <Play className="w-5 h-5 fill-white" />
+                <span>Iniciar Línea de Producción</span>
+              </>
+            )}
           </button>
         </form>
       </Card>
@@ -1468,7 +1786,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
 // =============================================
 // 4. ESPACIO DE TRABAJO DEL OPERARIO (CON SELECCIÓN LIBRE, DERIVACIÓN Y FOTO-VERIFICACIÓN)
 // =============================================
-function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onPreviewPhoto, onSelectUnit, onSelectOrder, onRefresh, notify }) {
+function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onPreviewPhoto, onSelectUnit, onSelectOrder, onSelectStation, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
     return (
       <Card className="p-8 text-center max-w-sm mx-auto">
@@ -1616,6 +1934,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   };
 
   const handleFinishStation = async () => {
+    if (!active_unit) return;
     try {
       setFinishingUnit(true);
       const res = await fetch(`${API_BASE}/operator/finish-station`, {
@@ -1641,6 +1960,39 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
 
   return (
     <div className="max-w-xl mx-auto space-y-3.5 fade-in pb-4">
+      {/* Selector de Inspección para Supervisor y Admin */}
+      {(currentUser.role === 'ADMIN' || currentUser.role === 'SUPERVISOR') && all_stations && all_stations.length > 0 && (
+        <Card className="p-2.5 bg-gradient-to-r from-amber-50/90 to-orange-50/90 border border-amber-300 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🛡️</span>
+              <div>
+                <span className="text-xs font-bold text-amber-950 block leading-tight">
+                  Modo Auditoría e Inspección ({currentUser.role === 'SUPERVISOR' ? 'Supervisor de Calidad' : 'Administrador'})
+                </span>
+                <span className="text-[10px] text-amber-800">
+                  Estás auditando los puestos de trabajo en tiempo real
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-amber-900 hidden sm:inline">Puesto:</span>
+              <select
+                value={assignment.station_number}
+                onChange={(e) => onSelectStation && onSelectStation(parseInt(e.target.value, 10))}
+                className="text-xs font-bold border border-amber-400 bg-white text-gray-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-amber-500 shadow-xs touch-target"
+              >
+                {all_stations.map(st => (
+                  <option key={st.station_number} value={st.station_number}>
+                    E{st.station_number}: {st.station_name} ({st.user_name}) {st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Header estación y Selector de Orden */}
       <Card className="p-3.5 border-l-4 border-l-[#0078d4] space-y-3">
         {/* Selector de Orden Activa para el Técnico */}
@@ -1667,10 +2019,17 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold text-white bg-[#0078d4] px-2 py-0.5 rounded shadow-xs">
+              <span className={`text-xs font-bold text-white px-2 py-0.5 rounded shadow-xs ${
+                assignment.is_cleaning_station ? 'bg-emerald-600' : 'bg-[#0078d4]'
+              }`}>
                 E{assignment.station_number}
               </span>
               <h2 className="text-sm font-bold text-gray-900 truncate">{assignment.station_name}</h2>
+              {assignment.is_cleaning_station && (
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                  🧼 Estación de Limpieza Obligatoria
+                </span>
+              )}
             </div>
             <p className="text-xs text-gray-500 mt-1">
               Orden: <strong className="text-blue-700 font-mono">{order.order_id}</strong> · Modelo: <strong>{order.model_name}</strong> ({order.total_units} PCs)
@@ -1678,7 +2037,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
           </div>
           <div className="text-right flex-shrink-0">
             <span className="text-xs font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 block">
-              P{assignment.start_step}–{assignment.end_step}
+              {assignment.step_numbers ? `P${assignment.step_numbers}` : `P${assignment.start_step}–${assignment.end_step}`}
             </span>
             <span className="text-[10px] text-gray-400 block mt-1">
               Operario: <strong>{assignment.user_name}</strong>
@@ -3589,7 +3948,7 @@ function ChecklistStepModal({ item, onClose, onSave, onDelete }) {
 // =============================================
 // MODAL DETALLE PC (CON REPORTE DE FALLAS Y EVIDENCIA FOTOGRÁFICA DE PASOS)
 // =============================================
-function UnitDetailModal({ unit, order, stations, issues = [], onPreviewPhoto, onClose, onSuccess }) {
+function UnitDetailModal({ unit, order, stations, issues = [], currentUser, onPreviewPhoto, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [unitLogs, setUnitLogs] = useState([]);
@@ -3640,6 +3999,10 @@ function UnitDetailModal({ unit, order, stations, issues = [], onPreviewPhoto, o
   };
 
   const handleDeleteUnit = async () => {
+    if (currentUser?.role !== "ADMIN") {
+      alert("La eliminación definitiva de unidades está reservada exclusivamente para el Administrador del Sistema.");
+      return;
+    }
     if (!window.confirm(`¿ELIMINAR definitivamente la PC #${unit.unit_number} de la orden? Esta acción reducirá el total de unidades del lote.`)) return;
     try {
       setLoading(true);
@@ -3652,6 +4015,10 @@ function UnitDetailModal({ unit, order, stations, issues = [], onPreviewPhoto, o
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSupervisorApproval = async () => {
+    alert(`✓ Visto Bueno de Calidad registrado por el Supervisor ${currentUser?.name || ''} para la PC #${unit.unit_number}.`);
   };
 
   return (
@@ -3808,7 +4175,18 @@ function UnitDetailModal({ unit, order, stations, issues = [], onPreviewPhoto, o
                 <span>Derivar / Mover a otra Estación</span>
               </button>
 
-              <div className="grid grid-cols-2 gap-2">
+              {currentUser?.role === "SUPERVISOR" && (
+                <button
+                  type="button"
+                  onClick={handleSupervisorApproval}
+                  className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition touch-target"
+                >
+                  <ShieldCheck className="w-4 h-4 text-white" />
+                  <span>🛡️ Visto Bueno de Calidad (Supervisor)</span>
+                </button>
+              )}
+
+              <div className={`grid ${currentUser?.role === "ADMIN" ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
                 <button
                   disabled={loading}
                   onClick={handleResetUnit}
@@ -3817,14 +4195,16 @@ function UnitDetailModal({ unit, order, stations, issues = [], onPreviewPhoto, o
                   <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
                   <span>Reiniciar a E1</span>
                 </button>
-                <button
-                  disabled={loading}
-                  onClick={handleDeleteUnit}
-                  className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Eliminar PC</span>
-                </button>
+                {currentUser?.role === "ADMIN" && (
+                  <button
+                    disabled={loading}
+                    onClick={handleDeleteUnit}
+                    className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Eliminar PC</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -3844,7 +4224,7 @@ function UnitDetailModal({ unit, order, stations, issues = [], onPreviewPhoto, o
           order={order}
           currentStation={unit.current_station}
           allStations={stations}
-          currentUser={{ name: "Supervisor / Admin" }}
+          currentUser={currentUser || { name: "Supervisor / Admin" }}
           onClose={() => setTransferModalOpen(false)}
           onSuccess={(msg) => {
             setTransferModalOpen(false);
@@ -4195,6 +4575,7 @@ function TechniciansManagementView({ users, onRefreshUsers, notify }) {
           {[
             { id: "ALL", label: "Todos" },
             { id: "OPERATOR", label: "Operarios" },
+            { id: "SUPERVISOR", label: "Supervisores" },
             { id: "ADMIN", label: "Admins" }
           ].map(t => (
             <button
@@ -4214,12 +4595,17 @@ function TechniciansManagementView({ users, onRefreshUsers, notify }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filteredUsers.map(user => {
           const isAdmin = user.role === "ADMIN";
+          const isSupervisor = user.role === "SUPERVISOR";
           return (
             <Card key={user.id} className="p-3.5 hover:border-blue-300 transition shadow-sm space-y-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full font-bold text-xs flex items-center justify-center border shadow-sm ${
-                    isAdmin ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                    isAdmin
+                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                      : isSupervisor
+                        ? "bg-purple-50 text-purple-700 border-purple-200"
+                        : "bg-blue-50 text-blue-700 border-blue-200"
                   }`}>
                     {user.avatar || user.name.slice(0, 2).toUpperCase()}
                   </div>
@@ -4228,8 +4614,8 @@ function TechniciansManagementView({ users, onRefreshUsers, notify }) {
                     <p className="font-mono text-[10px] text-gray-500 font-medium">{user.id}</p>
                   </div>
                 </div>
-                <Badge variant={isAdmin ? "warning" : "info"}>
-                  {isAdmin ? "ADMIN" : "OPERARIO"}
+                <Badge variant={isAdmin ? "warning" : isSupervisor ? "purple" : "info"}>
+                  {isAdmin ? "👑 ADMIN" : isSupervisor ? "🛡️ SUPERVISOR" : "🔧 OPERARIO"}
                 </Badge>
               </div>
 
@@ -4330,6 +4716,7 @@ function TechnicianFormModal({ data, loading, onClose, onSave }) {
                 className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2.5 bg-white touch-target focus:border-blue-600 focus:outline-none"
               >
                 <option value="OPERATOR">Operario de Estación</option>
+                <option value="SUPERVISOR">Supervisor de Planta / Calidad</option>
                 <option value="ADMIN">Administrador QC</option>
               </select>
             </div>

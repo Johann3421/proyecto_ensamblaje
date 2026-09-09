@@ -15,7 +15,7 @@ from .database import engine, Base, SessionLocal, get_db
 from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog, QCIssue, QCStepStationOverride
 from .schemas import (
     QCUserSchema, QCUserCreate, QCUserUpdate, AddUnitsRequest, ModelSchema, ChecklistItemSchema,
-    OrderCreateRequest, OrderDetailSchema,
+    OrderCreateRequest, OrderDetailSchema, StationAssignmentCreate, StationAssignmentSchema,
     StepLogCreate, StepLogSchema, StepUncheckRequest,
     IssueCreate, IssueSchema,
     ReassignEmergencyRequest, TransferUnitRequest, StepReassignRequest,

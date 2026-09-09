@@ -74,6 +74,7 @@ def startup_event():
         "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS secondary_user_name VARCHAR(100);",
         "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_id VARCHAR(50);",
         "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_name VARCHAR(100);",
+        "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_steps TEXT;",
         "ALTER TABLE qc_supervisor_audits ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         "ALTER TABLE qc_checklist_items ADD COLUMN IF NOT EXISTS is_cleaning BOOLEAN DEFAULT FALSE;",
         """UPDATE qc_checklist_items
@@ -795,6 +796,7 @@ def list_orders(db: Session = Depends(get_db)):
             "status": o.status,
             "supervisor_id": o.supervisor_id,
             "supervisor_name": o.supervisor_name,
+            "supervisor_steps": o.supervisor_steps,
             "created_at": o.created_at,
             "created_by": o.created_by,
             "stats": {
@@ -839,6 +841,13 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         if sup_user:
             sup_name = sup_user.name
 
+    sup_steps_str = None
+    if req.supervisor_steps is not None:
+        if isinstance(req.supervisor_steps, list):
+            sup_steps_str = ",".join(str(x) for x in sorted(set(req.supervisor_steps)))
+        elif isinstance(req.supervisor_steps, str):
+            sup_steps_str = req.supervisor_steps.strip() or None
+
     order = QCOrder(
         order_id=req.order_id,
         model_name=req.model_name,
@@ -848,6 +857,7 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         status="IN_PROGRESS",
         supervisor_id=req.supervisor_id,
         supervisor_name=sup_name,
+        supervisor_steps=sup_steps_str,
         created_by=req.created_by
     )
     db.add(order)
@@ -1002,13 +1012,21 @@ def update_order(order_id: str, req: OrderUpdateRequest, db: Session = Depends(g
         order.status = req.status
 
     if req.supervisor_id is not None:
-        order.supervisor_id = req.supervisor_id
+        order.supervisor_id = req.supervisor_id or None
         if req.supervisor_name:
             order.supervisor_name = req.supervisor_name
-        else:
+        elif req.supervisor_id:
             sup_u = db.query(QCUser).filter(QCUser.id == req.supervisor_id).first()
             if sup_u:
                 order.supervisor_name = sup_u.name
+        else:
+            order.supervisor_name = None
+
+    if req.supervisor_steps is not None:
+        if isinstance(req.supervisor_steps, list):
+            order.supervisor_steps = ",".join(str(x) for x in sorted(set(req.supervisor_steps)))
+        elif isinstance(req.supervisor_steps, str):
+            order.supervisor_steps = req.supervisor_steps.strip() or None
 
     # Ajuste de unidades si se modificó total_units
     if req.total_units is not None and req.total_units > 0 and req.total_units != order.total_units:
@@ -1178,6 +1196,7 @@ def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
             "status": order.status,
             "supervisor_id": order.supervisor_id,
             "supervisor_name": order.supervisor_name,
+            "supervisor_steps": order.supervisor_steps,
         },
         "stations": stations,
         "units": units,

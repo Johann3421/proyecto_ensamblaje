@@ -51,6 +51,7 @@ class QCOrder(Base):
     status = Column(String(20), default="IN_PROGRESS") # IN_PROGRESS, COMPLETED, PAUSED
     supervisor_id = Column(String(50), nullable=True) # ej: "SUP-01"
     supervisor_name = Column(String(100), nullable=True) # ej: "Jhoan Supervisor"
+    supervisor_steps = Column(Text, nullable=True) # Lista de pasos a supervisar ej: "12,13,14,43,52"
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String(100), default="Administrador")
 

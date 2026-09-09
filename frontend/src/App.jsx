@@ -1409,6 +1409,250 @@ function StepPickerModal({
 }
 
 // =============================================
+// MODAL SELECTOR VISUAL DE PASOS PARA EL SUPERVISOR QC
+// Permite seleccionar exactamente qué pasos supervisará y auditará
+// =============================================
+function SupervisorStepPickerModal({
+  isOpen,
+  onClose,
+  supervisorName,
+  modelSteps,
+  supervisedSteps = [],
+  onToggleStep,
+  onAddStepRange,
+  onSelectAll,
+  onSelectCleaningOnly,
+  onClearAll
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+
+  if (!isOpen) return null;
+
+  const currentStepNumbers = new Set(supervisedSteps || []);
+  const totalSteps = (modelSteps || []).length;
+
+  const filteredSteps = (modelSteps || []).filter(s => {
+    const term = searchTerm.toLowerCase();
+    return s.step_number.toString().includes(term) ||
+           (s.operation && s.operation.toLowerCase().includes(term)) ||
+           (s.description && s.description.toLowerCase().includes(term)) ||
+           (s.qc_criteria && s.qc_criteria.toLowerCase().includes(term));
+  });
+
+  const handleApplyRange = (e) => {
+    e.preventDefault();
+    const from = parseInt(rangeFrom, 10);
+    const to = parseInt(rangeTo, 10);
+    if (!isNaN(from) && !isNaN(to) && from >= 1 && to >= from) {
+      if (onAddStepRange) {
+        onAddStepRange(from, to);
+      }
+      setRangeFrom("");
+      setRangeTo("");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+        {/* Header del Modal */}
+        <div className="bg-purple-700 text-white p-4 flex justify-between items-center flex-shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm flex-shrink-0">
+              🛡️
+            </div>
+            <div className="truncate">
+              <h3 className="text-sm font-bold truncate">
+                Pasos a Supervisar: {supervisorName || "Supervisor de Calidad"}
+              </h3>
+              <p className="text-[11px] text-purple-100 truncate">
+                Asignados: <strong className="text-white">{currentStepNumbers.size} de {totalSteps} pasos</strong> {currentStepNumbers.size > 0 ? `(${formatStepNumbersRange(Array.from(currentStepNumbers))})` : "— (Todos por defecto si no se selecciona ninguno)"}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg touch-target flex items-center justify-center flex-shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Herramientas de filtro y rangos */}
+        <div className="p-3 bg-purple-50/50 border-b border-purple-100 space-y-2.5 flex-shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
+            {/* Buscador */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filtrar por número, operación o criterio QC..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-white border border-purple-200 rounded-xl text-xs font-medium focus:outline-none focus:border-purple-500 shadow-2xs"
+              />
+            </div>
+
+            {/* Asignar Rango Rápido */}
+            <form onSubmit={handleApplyRange} className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-purple-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-purple-900 whitespace-nowrap">Rango:</span>
+              <span className="text-[10px] text-gray-400">De</span>
+              <input
+                type="number"
+                min="1"
+                max={totalSteps}
+                placeholder="1"
+                value={rangeFrom}
+                onChange={(e) => setRangeFrom(e.target.value)}
+                className="w-12 text-center p-1 text-xs font-bold border border-gray-200 rounded focus:border-purple-500"
+              />
+              <span className="text-[10px] text-gray-400">A</span>
+              <input
+                type="number"
+                min="1"
+                max={totalSteps}
+                placeholder={totalSteps.toString()}
+                value={rangeTo}
+                onChange={(e) => setRangeTo(e.target.value)}
+                className="w-12 text-center p-1 text-xs font-bold border border-gray-200 rounded focus:border-purple-500"
+              />
+              <button
+                type="submit"
+                className="px-2.5 py-1 bg-purple-700 hover:bg-purple-800 text-white rounded text-xs font-bold transition flex-shrink-0"
+              >
+                + Asignar
+              </button>
+            </form>
+          </div>
+
+          {/* Acciones de selección masiva */}
+          <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
+            <span className="text-[11px] text-purple-900/80">
+              💡 Toca cualquier paso para <strong>activar o desactivar</strong> su supervisión.
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onSelectAll}
+                className="text-[11px] text-purple-700 hover:underline font-bold"
+              >
+                + Supervisar Todos ({totalSteps})
+              </button>
+              <span className="text-purple-300">|</span>
+              <button
+                type="button"
+                onClick={onSelectCleaningOnly}
+                className="text-[11px] text-emerald-700 hover:underline font-bold"
+              >
+                🧼 Solo Limpieza
+              </button>
+              <span className="text-purple-300">|</span>
+              <button
+                type="button"
+                onClick={onClearAll}
+                className="text-[11px] text-rose-600 hover:underline font-bold"
+              >
+                Vaciar Selección
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista interactiva de pasos */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {filteredSteps.map(step => {
+            const isSupervised = currentStepNumbers.has(step.step_number);
+            const isClean = isStepCleaning(step);
+
+            return (
+              <div
+                key={step.step_number}
+                onClick={() => onToggleStep(step.step_number)}
+                className={`p-2.5 rounded-xl border transition cursor-pointer flex items-start gap-3 select-none ${
+                  isSupervised
+                    ? "bg-purple-50 border-purple-400 shadow-xs hover:bg-purple-100/70"
+                    : "bg-white border-gray-200 hover:border-purple-300 hover:bg-gray-50"
+                }`}
+              >
+                {/* Badge número */}
+                <div className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs ${
+                  isSupervised
+                    ? "bg-purple-700 text-white"
+                    : isClean
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : "bg-gray-100 text-gray-700 border border-gray-300"
+                }`}>
+                  #{step.step_number}
+                </div>
+
+                {/* Contenido */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <h4 className={`text-xs font-bold truncate ${isSupervised ? "text-purple-950" : "text-gray-900"}`}>
+                        {step.operation}
+                      </h4>
+                      {isClean && (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
+                          Limpieza
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Estado y Acción */}
+                    {isSupervised ? (
+                      <span className="text-[10px] font-bold text-purple-900 bg-purple-100 border border-purple-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0">
+                        <Check className="w-3 h-3 text-purple-700" />
+                        <span>Supervisado</span>
+                        <span className="text-rose-600 font-extrabold ml-1 hover:text-rose-800" title="Quitar">✕</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full flex-shrink-0 hover:bg-purple-100 hover:text-purple-700">
+                        + Supervisar
+                      </span>
+                    )}
+                  </div>
+
+                  {step.description && (
+                    <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
+                      {step.description}
+                    </p>
+                  )}
+                  {step.qc_criteria && (
+                    <span className="text-[10px] text-purple-800 font-medium block mt-0.5 truncate">
+                      Criterio QC: {step.qc_criteria}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {filteredSteps.length === 0 && (
+            <div className="p-8 text-center text-gray-500 text-xs">
+              No se encontraron pasos coincidentes con "{searchTerm}".
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-3 bg-gray-100 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
+          <div className="text-xs font-semibold text-gray-700">
+            Total a supervisar: <strong className="text-purple-700">{currentStepNumbers.size} pasos</strong>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl shadow-xs transition touch-target"
+          >
+            ✓ Guardar y Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
 // 2. CREADOR DE ORDEN (CON SELECCIÓN Y GESTIÓN LIBRE DE PASOS)
 // =============================================
 function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) {
@@ -1418,6 +1662,9 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
   const [totalUnits, setTotalUnits] = useState(50);
   const [supervisorId, setSupervisorId] = useState("");
   const [supervisorName, setSupervisorName] = useState("");
+  const [supervisorSteps, setSupervisorSteps] = useState([]);
+  const [supervisorQuickInput, setSupervisorQuickInput] = useState("");
+  const [supervisorPickerOpen, setSupervisorPickerOpen] = useState(false);
   const [stationCount, setStationCount] = useState(5);
   const [selectedOperators, setSelectedOperators] = useState([]);
   const [modelSteps, setModelSteps] = useState([]);
@@ -1662,6 +1909,47 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
     notify?.("Pasos distribuidos: Las estaciones de ensamblaje NO contienen pasos de limpieza.", "success");
   };
 
+  // Manejadores para Pasos Asignados a Supervisión
+  const handleToggleSupervisorStep = (stepNumber) => {
+    setSupervisorSteps(prev => {
+      const exists = prev.includes(stepNumber);
+      const next = exists ? prev.filter(n => n !== stepNumber) : [...prev, stepNumber];
+      return next.sort((a, b) => a - b);
+    });
+  };
+
+  const handleAddSupervisorStepRange = (from, to) => {
+    const range = [];
+    for (let i = from; i <= to; i++) range.push(i);
+    setSupervisorSteps(prev => {
+      const combined = Array.from(new Set([...prev, ...range]));
+      return combined.sort((a, b) => a - b);
+    });
+  };
+
+  const handleAddSupervisorQuickSteps = () => {
+    if (!supervisorQuickInput.trim()) return;
+    const newNums = parseStepNumbersInput(supervisorQuickInput, modelSteps.length || 100);
+    if (newNums.length === 0) return;
+    setSupervisorSteps(prev => {
+      const combined = Array.from(new Set([...prev, ...newNums]));
+      return combined.sort((a, b) => a - b);
+    });
+    setSupervisorQuickInput("");
+  };
+
+  const handleSelectAllSupervisorSteps = () => {
+    setSupervisorSteps((modelSteps || []).map(s => s.step_number));
+  };
+
+  const handleSelectCleaningOnlySupervisorSteps = () => {
+    setSupervisorSteps((modelSteps || []).filter(s => isStepCleaning(s)).map(s => s.step_number));
+  };
+
+  const handleClearSupervisorSteps = () => {
+    setSupervisorSteps([]);
+  };
+
   // Análisis de cobertura global
   const coverageAnalysis = useMemo(() => {
     const total = modelSteps.length || 52;
@@ -1749,6 +2037,7 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
           total_units: parseInt(totalUnits, 10),
           supervisor_id: supervisorId || null,
           supervisor_name: supervisorName || null,
+          supervisor_steps: supervisorId && supervisorSteps.length > 0 ? supervisorSteps.join(",") : null,
           assignment_mode: "MANUAL",
           stations: payloadStations,
           created_by: "Admin / Supervisor QC"
@@ -2056,6 +2345,9 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
                     setSupervisorId(sid);
                     const u = users.find(x => x.id === sid);
                     setSupervisorName(u ? u.name : "");
+                    if (!sid) {
+                      setSupervisorSteps([]);
+                    }
                   }}
                   className="w-full text-xs border border-purple-200 rounded-lg p-2.5 bg-purple-50/40 font-medium text-purple-900 touch-target"
                 >
@@ -2066,6 +2358,136 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
                     </option>
                   ))}
                 </select>
+
+                {/* Apartado para seleccionar qué pasos va a supervisar */}
+                {supervisorId && (
+                  <div className="mt-2.5 p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-2.5">
+                    {/* Fila 1: Resumen y Acciones Rápidas */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                          <span>Pasos a Supervisar:</span>
+                        </span>
+                        <span className="font-bold px-2 py-0.5 rounded text-[10px] bg-purple-200 text-purple-900 border border-purple-300">
+                          {supervisorSteps.length > 0 ? `${supervisorSteps.length} pasos asignados` : `Todos los pasos (${modelSteps.length || 52})`}
+                        </span>
+                        {supervisorSteps.length > 0 && (
+                          <span className="text-purple-700 font-mono text-[11px]">
+                            {formatStepNumbersRange(supervisorSteps)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setSupervisorPickerOpen(true)}
+                          className="px-2.5 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-800 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
+                        >
+                          <Layers className="w-3.5 h-3.5 text-purple-600" />
+                          <span>📋 Selector Visual</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSelectCleaningOnlySupervisorSteps}
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
+                          title="Supervisar únicamente los pasos de limpieza"
+                        >
+                          <Sparkles className="w-3 h-3 text-emerald-600" />
+                          <span>Solo Limpieza</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSelectAllSupervisorSteps}
+                          className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-bold rounded-lg text-[11px] transition"
+                        >
+                          Todos
+                        </button>
+                        {supervisorSteps.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearSupervisorSteps}
+                            className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-lg text-[11px] font-bold transition"
+                          >
+                            Vaciar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Fila 2: Input Rápido para agregar pasos o rangos */}
+                    <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-purple-200">
+                      <span className="text-[11px] font-bold text-purple-900 whitespace-nowrap hidden sm:inline pl-1">
+                        + Agregar paso(s):
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Escribe números o rangos, ej: 12, 13, 14, 43 o 1-5, 48-52..."
+                        value={supervisorQuickInput}
+                        onChange={(e) => setSupervisorQuickInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddSupervisorQuickSteps();
+                          }
+                        }}
+                        className="flex-1 text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-mono focus:border-purple-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSupervisorQuickSteps}
+                        className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-bold transition flex-shrink-0"
+                      >
+                        + Añadir
+                      </button>
+                    </div>
+
+                    {/* Fila 3: Chips interactivos de pasos */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-purple-900/80 px-0.5">
+                        <span>Pasos asignados ({supervisorSteps.length}):</span>
+                        <span className="text-purple-600">Toca ✕ para quitar cualquier paso</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-white rounded-xl border border-dashed border-purple-300">
+                        {supervisorSteps.length > 0 ? (
+                          supervisorSteps.map(num => {
+                            const stepInfo = modelSteps.find(s => s.step_number === num);
+                            const isClean = stepInfo && isStepCleaning(stepInfo);
+                            return (
+                              <span
+                                key={num}
+                                title={stepInfo ? `Paso #${num}: ${stepInfo.operation} · Clic en ✕ para quitar` : `Paso #${num}`}
+                                className="inline-flex items-center gap-1.5 bg-purple-50 hover:bg-rose-50 text-purple-950 hover:text-rose-700 pl-2 pr-1.5 py-1 rounded-lg text-xs font-bold border border-purple-200 hover:border-rose-300 shadow-2xs transition group"
+                              >
+                                <span className={isClean ? "text-emerald-700 group-hover:text-rose-700" : "text-purple-700 group-hover:text-rose-700"}>
+                                  #{num}
+                                </span>
+                                {stepInfo && (
+                                  <span className="text-[10px] text-purple-900/70 group-hover:text-rose-600 max-w-[140px] truncate hidden sm:inline">
+                                    {stepInfo.operation}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSupervisorStep(num)}
+                                  className="w-4 h-4 rounded-full flex items-center justify-center text-purple-400 hover:text-white hover:bg-rose-600 transition"
+                                  title={`Quitar paso #${num}`}
+                                >
+                                  ✕
+                                </button>
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-xs text-purple-700/70 italic py-1">
+                            ℹ️ Sin pasos específicos asignados: supervisará <strong>todos los pasos</strong> por defecto. Escribe arriba (ej: 12, 13, 14, 43) o abre el selector visual para restringir la supervisión.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2414,6 +2836,22 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
           onAddStepRange={handleAddStepRange}
           onClearStationSteps={handleClearStationSteps}
           onClaimAllFreeSteps={handleClaimAllFreeSteps}
+        />
+      )}
+
+      {/* Modal Selector Visual de Pasos para Supervisor */}
+      {supervisorPickerOpen && (
+        <SupervisorStepPickerModal
+          isOpen={true}
+          onClose={() => setSupervisorPickerOpen(false)}
+          supervisorName={supervisorName}
+          modelSteps={modelSteps}
+          supervisedSteps={supervisorSteps}
+          onToggleStep={handleToggleSupervisorStep}
+          onAddStepRange={handleAddSupervisorStepRange}
+          onSelectAll={handleSelectAllSupervisorSteps}
+          onSelectCleaningOnly={handleSelectCleaningOnlySupervisorSteps}
+          onClearAll={handleClearSupervisorSteps}
         />
       )}
 
@@ -3482,6 +3920,21 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
   const isSupport = is_support_operator || currentUser.id === 'OP-106' || (currentUser.email || '').toLowerCase().includes('apoyo');
 
+  // Pasos específicos asignados para supervisión en esta orden
+  const supervisedStepsSet = useMemo(() => {
+    if (!order?.supervisor_steps) return null;
+    const nums = order.supervisor_steps.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    return nums.length > 0 ? new Set(nums) : null;
+  }, [order?.supervisor_steps]);
+
+  const [filterSupervisorOnly, setFilterSupervisorOnly] = useState(false);
+
+  // Pasos de la estación filtrados si el supervisor activa su filtro personal
+  const displayedStationSteps = useMemo(() => {
+    if (!filterSupervisorOnly || !supervisedStepsSet) return uniqueStationSteps;
+    return uniqueStationSteps.filter(s => supervisedStepsSet.has(s.step_number));
+  }, [uniqueStationSteps, filterSupervisorOnly, supervisedStepsSet]);
+
   const handleToggleStep = async (step) => {
     const isDone = completedSteps.includes(step.step_number);
     if (isDone) {
@@ -3727,19 +4180,36 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-amber-900 flex-shrink-0">Puesto a Auditar:</span>
-              <select
-                value={assignment.station_number}
-                onChange={(e) => onSelectStation && onSelectStation(parseInt(e.target.value, 10))}
-                className="text-xs font-bold border border-amber-400 bg-white text-gray-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-amber-500 shadow-xs touch-target"
-              >
-                {all_stations.map(st => (
-                  <option key={st.station_number} value={st.station_number}>
-                    E{st.station_number}: {st.station_name} (Operario: {st.user_name}) {st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2 flex-wrap">
+              {supervisedStepsSet && (
+                <button
+                  type="button"
+                  onClick={() => setFilterSupervisorOnly(!filterSupervisorOnly)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs ${
+                    filterSupervisorOnly
+                      ? 'bg-purple-700 text-white hover:bg-purple-800 ring-2 ring-purple-400'
+                      : 'bg-white text-purple-900 border border-purple-300 hover:bg-purple-50'
+                  }`}
+                  title="Muestra únicamente los pasos que tienes asignados para supervisar"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{filterSupervisorOnly ? `Mostrando mis pasos (${supervisedStepsSet.size})` : `Filtrar solo mis pasos (${supervisedStepsSet.size})`}</span>
+                </button>
+              )}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-amber-900 flex-shrink-0">Puesto a Auditar:</span>
+                <select
+                  value={assignment.station_number}
+                  onChange={(e) => onSelectStation && onSelectStation(parseInt(e.target.value, 10))}
+                  className="text-xs font-bold border border-amber-400 bg-white text-gray-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-amber-500 shadow-xs touch-target"
+                >
+                  {all_stations.map(st => (
+                    <option key={st.station_number} value={st.station_number}>
+                      E{st.station_number}: {st.station_name} (Operario: {st.user_name}) {st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </Card>
@@ -4164,10 +4634,27 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
 
           {/* Lista de pasos principales de la estación (Deduplicados) */}
           <div className="p-3 space-y-3">
-            {uniqueStationSteps.map((st) => {
+            {displayedStationSteps.length === 0 && (
+              <div className="p-6 text-center text-gray-500 bg-purple-50/40 border border-dashed border-purple-200 rounded-2xl text-xs">
+                <ShieldCheck className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+                <p className="font-bold text-purple-950">No hay pasos asignados a tu supervisión en esta estación</p>
+                <p className="text-[11px] text-purple-700 mt-0.5">
+                  Tus {supervisedStepsSet?.size} pasos asignados se encuentran en otras estaciones de la línea.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFilterSupervisorOnly(false)}
+                  className="mt-3 px-3 py-1.5 bg-purple-700 text-white font-bold rounded-lg text-xs hover:bg-purple-800 transition shadow-xs"
+                >
+                  Ver todos los pasos de la estación
+                </button>
+              </div>
+            )}
+            {displayedStationSteps.map((st) => {
               const isDone = completedSteps.includes(st.step_number);
               const isSubmitting = submittingStep === st.step_number;
               const stepLog = stepLogsMap[st.step_number];
+              const isSupervisedByRole = isSupervisorUser && (!supervisedStepsSet || supervisedStepsSet.has(st.step_number));
 
               return (
                 <div
@@ -4229,6 +4716,19 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                                 Recibido de E{st.delegated_from_station}
                               </span>
                             )}
+                            {isSupervisorUser && (
+                              supervisedStepsSet ? (
+                                supervisedStepsSet.has(st.step_number) ? (
+                                  <span className="text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded ml-1.5 inline-flex items-center gap-1">
+                                    🛡️ Supervisión Asignada
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-gray-400 font-medium ml-1.5 hidden sm:inline">
+                                    (Sin supervisión requerida)
+                                  </span>
+                                )
+                              ) : null
+                            )}
                           </p>
 
                           {/* Indicador de 2 técnicos asignados */}
@@ -4248,53 +4748,32 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                           <div className={`flex items-start gap-1.5 rounded-lg px-2 py-1.5 ${
                             isDone ? 'bg-emerald-100/70' : 'bg-blue-50 border border-blue-100'
                           }`}>
-                            <span className="text-[10px] flex-shrink-0">🔍</span>
-                            <span className={`text-[10px] font-medium leading-snug ${
-                              isDone ? 'text-emerald-700' : 'text-blue-800'
+                            <AlertCircle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
+                              isDone ? 'text-emerald-700' : 'text-blue-600'
+                            }`} />
+                            <p className={`text-xs ${
+                              isDone ? 'text-emerald-900 font-medium' : 'text-blue-900'
                             }`}>
-                              {st.qc_criteria}
-                            </span>
+                              <strong>Criterio de Calidad:</strong> {st.qc_criteria || "Verificación estándar de ensamblaje"}
+                            </p>
                           </div>
 
                           {/* Miniatura y Badge de Foto de Evidencia Verificada */}
-                          {stepLog?.photo_url && (
-                            <div 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onPreviewPhoto && onPreviewPhoto({
-                                  url: stepLog.photo_url,
-                                  title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}`,
-                                  subtitle: st.operation,
-                                  user_name: stepLog.user_name || currentUser.name,
-                                  timestamp: stepLog.timestamp
-                                });
-                              }}
-                              className={`mt-2.5 inline-flex items-center gap-2 border px-2.5 py-1.5 rounded-xl cursor-pointer transition group shadow-xs ${
-                                stepLog.is_supervisor_verified
-                                  ? 'bg-amber-50/90 hover:bg-amber-100 border-amber-300'
-                                  : 'bg-emerald-100/90 hover:bg-emerald-200 border-emerald-300'
-                              }`}
-                            >
-                              <img 
-                                src={stepLog.photo_url} 
-                                alt="Foto evidencia" 
-                                className="w-8 h-8 object-cover rounded-lg border border-emerald-400 group-hover:scale-105 transition"
+                          {(stepLog?.media_url || stepLog?.photo_url) && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <img
+                                src={stepLog.media_url || stepLog.photo_url}
+                                alt={`Evidencia paso #${st.step_number}`}
+                                className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shadow-2xs cursor-pointer hover:opacity-90"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(stepLog.media_url || stepLog.photo_url, "_blank");
+                                }}
                               />
-                              <div className="text-left">
-                                <span className={`text-[11px] font-bold flex items-center gap-1 ${
-                                  stepLog.is_supervisor_verified ? 'text-amber-950' : 'text-emerald-950'
-                                }`}>
-                                  {stepLog.is_supervisor_verified ? (
-                                    <>
-                                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                                      <span>Foto de Cumplimiento (Supervisor)</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Camera className="w-3.5 h-3.5 text-emerald-700" />
-                                      <span>Foto de Evidencia Guardada</span>
-                                    </>
-                                  )}
+                              <div className="text-[10px]">
+                                <span className="font-bold text-emerald-800 flex items-center gap-1">
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>{stepLog.is_supervisor_verified ? "Certificado por Supervisor" : "Foto registrada"}</span>
                                 </span>
                                 <span className={`text-[9px] block ${
                                   stepLog.is_supervisor_verified ? 'text-amber-800' : 'text-emerald-700'
@@ -4306,7 +4785,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                           )}
 
                           {/* Botón de Acción Directo de Supervisor para Tomar Foto de Cumplimiento */}
-                          {isSupervisorUser && (
+                          {isSupervisedByRole && (
                             <div className="mt-2.5 pt-2 border-t border-amber-100 flex items-center gap-2 flex-wrap">
                               <button
                                 type="button"
@@ -4341,7 +4820,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                         {/* Botones de acción del paso */}
                         <div className="flex flex-col gap-1.5 ml-1 flex-shrink-0">
                           {/* Botón de Cámara para Supervisor */}
-                          {isSupervisorUser && (
+                          {isSupervisedByRole && (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -7075,6 +7554,14 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
   const [status, setStatus] = useState(order?.status || "IN_PROGRESS");
   const [supervisorId, setSupervisorId] = useState(order?.supervisor_id || "");
   const [supervisorName, setSupervisorName] = useState(order?.supervisor_name || "");
+  const [supervisorSteps, setSupervisorSteps] = useState(() => {
+    if (!order?.supervisor_steps) return [];
+    return order.supervisor_steps.split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => !isNaN(n));
+  });
+  const [supervisorQuickInput, setSupervisorQuickInput] = useState("");
+  const [supervisorPickerOpen, setSupervisorPickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [visualPickerStation, setVisualPickerStation] = useState(null);
   const [modelSteps, setModelSteps] = useState([]);
@@ -7102,6 +7589,7 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
     setSupervisorId(newSupId);
     if (!newSupId) {
       setSupervisorName("");
+      setSupervisorSteps([]);
     } else {
       const u = users.find(x => x.id === newSupId);
       setSupervisorName(u ? u.name : "");
@@ -7311,6 +7799,47 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
     }));
   };
 
+  // Handlers para SupervisorStepPickerModal
+  const handleToggleSupervisorStep = (stepNumber) => {
+    setSupervisorSteps(prev => {
+      const exists = prev.includes(stepNumber);
+      const next = exists ? prev.filter(n => n !== stepNumber) : [...prev, stepNumber];
+      return next.sort((a, b) => a - b);
+    });
+  };
+
+  const handleAddSupervisorStepRange = (from, to) => {
+    const range = [];
+    for (let i = from; i <= to; i++) range.push(i);
+    setSupervisorSteps(prev => {
+      const combined = Array.from(new Set([...prev, ...range]));
+      return combined.sort((a, b) => a - b);
+    });
+  };
+
+  const handleAddSupervisorQuickSteps = () => {
+    if (!supervisorQuickInput.trim()) return;
+    const newNums = parseStepNumbersInput(supervisorQuickInput, modelSteps.length || 100);
+    if (newNums.length === 0) return;
+    setSupervisorSteps(prev => {
+      const combined = Array.from(new Set([...prev, ...newNums]));
+      return combined.sort((a, b) => a - b);
+    });
+    setSupervisorQuickInput("");
+  };
+
+  const handleSelectAllSupervisorSteps = () => {
+    setSupervisorSteps((modelSteps || []).map(s => s.step_number));
+  };
+
+  const handleSelectCleaningOnlySupervisorSteps = () => {
+    setSupervisorSteps((modelSteps || []).filter(s => isStepCleaning(s)).map(s => s.step_number));
+  };
+
+  const handleClearSupervisorSteps = () => {
+    setSupervisorSteps([]);
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (cleaningCount < 2) {
@@ -7334,6 +7863,7 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
         status: status,
         supervisor_id: supervisorId || null,
         supervisor_name: supervisorName || null,
+        supervisor_steps: supervisorId && supervisorSteps.length > 0 ? supervisorSteps.join(",") : null,
         stations: stationsList.map(st => ({
           station_number: st.station_number,
           station_name: st.station_name,
@@ -7625,7 +8155,7 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
             )}
 
             {/* Asignación de Supervisor de Calidad */}
-            <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3.5 space-y-2">
+            <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3.5 space-y-2.5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="font-bold text-purple-900 flex items-center gap-1.5 text-xs">
                   <ShieldCheck className="w-4 h-4 text-purple-700" />
@@ -7652,6 +8182,136 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
                   El supervisor es el encargado de verificar el cumplimiento de los pasos y certificar la orden capturando fotos de evidencia directa.
                 </p>
               </div>
+
+              {/* Apartado para seleccionar qué pasos va a supervisar en edición */}
+              {supervisorId && (
+                <div className="mt-2 pt-2.5 border-t border-purple-200/80 space-y-2.5">
+                  {/* Fila 1: Resumen y Acciones Rápidas */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                        <span>Pasos a Supervisar:</span>
+                      </span>
+                      <span className="font-bold px-2 py-0.5 rounded text-[10px] bg-purple-200 text-purple-900 border border-purple-300">
+                        {supervisorSteps.length > 0 ? `${supervisorSteps.length} pasos asignados` : `Todos los pasos (${modelSteps.length || 52})`}
+                      </span>
+                      {supervisorSteps.length > 0 && (
+                        <span className="text-purple-700 font-mono text-[11px]">
+                          {formatStepNumbersRange(supervisorSteps)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setSupervisorPickerOpen(true)}
+                        className="px-2.5 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-800 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-purple-600" />
+                        <span>📋 Selector Visual</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSelectCleaningOnlySupervisorSteps}
+                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
+                        title="Supervisar únicamente los pasos de limpieza"
+                      >
+                        <Sparkles className="w-3 h-3 text-emerald-600" />
+                        <span>Solo Limpieza</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSelectAllSupervisorSteps}
+                        className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-bold rounded-lg text-[11px] transition"
+                      >
+                        Todos
+                      </button>
+                      {supervisorSteps.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearSupervisorSteps}
+                          className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-lg text-[11px] font-bold transition"
+                        >
+                          Vaciar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Fila 2: Input Rápido para agregar pasos o rangos */}
+                  <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-purple-200">
+                    <span className="text-[11px] font-bold text-purple-900 whitespace-nowrap hidden sm:inline pl-1">
+                      + Agregar paso(s):
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Escribe números o rangos, ej: 12, 13, 14, 43 o 1-5, 48-52..."
+                      value={supervisorQuickInput}
+                      onChange={(e) => setSupervisorQuickInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddSupervisorQuickSteps();
+                        }
+                      }}
+                      className="flex-1 text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-mono focus:border-purple-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSupervisorQuickSteps}
+                      className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-bold transition flex-shrink-0"
+                    >
+                      + Añadir
+                    </button>
+                  </div>
+
+                  {/* Fila 3: Chips interactivos de pasos */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-purple-900/80 px-0.5">
+                      <span>Pasos asignados ({supervisorSteps.length}):</span>
+                      <span className="text-purple-600">Toca ✕ para quitar cualquier paso</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-white rounded-xl border border-dashed border-purple-300">
+                      {supervisorSteps.length > 0 ? (
+                        supervisorSteps.map(num => {
+                          const stepInfo = modelSteps.find(s => s.step_number === num);
+                          const isClean = stepInfo && isStepCleaning(stepInfo);
+                          return (
+                            <span
+                              key={num}
+                              title={stepInfo ? `Paso #${num}: ${stepInfo.operation} · Clic en ✕ para quitar` : `Paso #${num}`}
+                              className="inline-flex items-center gap-1.5 bg-purple-50 hover:bg-rose-50 text-purple-950 hover:text-rose-700 pl-2 pr-1.5 py-1 rounded-lg text-xs font-bold border border-purple-200 hover:border-rose-300 shadow-2xs transition group"
+                            >
+                              <span className={isClean ? "text-emerald-700 group-hover:text-rose-700" : "text-purple-700 group-hover:text-rose-700"}>
+                                #{num}
+                              </span>
+                              {stepInfo && (
+                                <span className="text-[10px] text-purple-900/70 group-hover:text-rose-600 max-w-[140px] truncate hidden sm:inline">
+                                  {stepInfo.operation}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleSupervisorStep(num)}
+                                className="w-4 h-4 rounded-full flex items-center justify-center text-purple-400 hover:text-white hover:bg-rose-600 transition"
+                                title={`Quitar paso #${num}`}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="text-xs text-purple-700/70 italic py-1">
+                          ℹ️ Sin pasos específicos asignados: supervisará <strong>todos los pasos</strong> por defecto. Escribe arriba (ej: 12, 13, 14, 43) o abre el selector visual para restringir la supervisión.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -7811,6 +8471,22 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
             onAddStepRange={handleAddStepRange}
             onClearStationSteps={handleClearStationSteps}
             onClaimAllFreeSteps={handleClaimAllFreeSteps}
+          />
+        )}
+
+        {/* Modal Selector Visual de Pasos para Supervisor */}
+        {supervisorPickerOpen && (
+          <SupervisorStepPickerModal
+            isOpen={true}
+            onClose={() => setSupervisorPickerOpen(false)}
+            supervisorName={supervisorName}
+            modelSteps={modelSteps}
+            supervisedSteps={supervisorSteps}
+            onToggleStep={handleToggleSupervisorStep}
+            onAddStepRange={handleAddSupervisorStepRange}
+            onSelectAll={handleSelectAllSupervisorSteps}
+            onSelectCleaningOnly={handleSelectCleaningOnlySupervisorSteps}
+            onClearAll={handleClearSupervisorSteps}
           />
         )}
       </div>

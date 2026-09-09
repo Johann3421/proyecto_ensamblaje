@@ -56,8 +56,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Migraciones automáticas seguras
-@app.on_event("startup")
-def startup_event():
+def auto_migrate_schema():
     Base.metadata.create_all(bind=engine)
     migrations = [
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS email VARCHAR(150);",

@@ -1,107 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Mail, Lock, User, Eye, EyeOff, ArrowRight, Cpu, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, ShieldCheck, Mail, Lock, User, Eye, EyeOff, ArrowRight, Cpu, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 
-const API_BASE = '/api';
+import { API_BASE } from './utils/api';
 
-// ============================================
-// FLOATING PARTICLES BACKGROUND
-// ============================================
-const ParticlesCanvas = () => {
-  const canvasRef = useRef(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let animationId;
-    let particles = [];
-
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-
-    class Particle {
-      constructor() {
-        this.reset();
-      }
-      reset() {
-        this.x = Math.random() * canvas.width;
-        this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 2 + 0.5;
-        this.speedX = (Math.random() - 0.5) * 0.5;
-        this.speedY = (Math.random() - 0.5) * 0.5;
-        this.opacity = Math.random() * 0.5 + 0.1;
-      }
-      update() {
-        this.x += this.speedX;
-        this.y += this.speedY;
-        if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
-        if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
-      }
-      draw() {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(96, 165, 250, ${this.opacity})`;
-        ctx.fill();
-      }
-    }
-
-    // Create particles
-    for (let i = 0; i < 60; i++) {
-      particles.push(new Particle());
-    }
-
-    // Draw connections
-    const drawLines = () => {
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 150) {
-            ctx.beginPath();
-            ctx.strokeStyle = `rgba(96, 165, 250, ${0.08 * (1 - dist / 150)})`;
-            ctx.lineWidth = 0.5;
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.stroke();
-          }
-        }
-      }
-    };
-
-    const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      particles.forEach(p => { p.update(); p.draw(); });
-      drawLines();
-      animationId = requestAnimationFrame(animate);
-    };
-    animate();
-
-    return () => {
-      cancelAnimationFrame(animationId);
-      window.removeEventListener('resize', resize);
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 1,
-      }}
-    />
-  );
-};
 
 // ============================================
 // LOGIN PAGE COMPONENT
@@ -189,16 +91,6 @@ export default function LoginPage({ onLogin }) {
 
   return (
     <div className="login-page-root">
-      {/* Gradient background */}
-      <div className="login-bg" />
-      
-      {/* Animated particles */}
-      <ParticlesCanvas />
-      
-      {/* Floating orbs */}
-      <div className="login-orb login-orb-1" />
-      <div className="login-orb login-orb-2" />
-      <div className="login-orb login-orb-3" />
 
       {/* Main content */}
       <div className={`login-container ${animateIn ? 'animate-in' : ''}`}>
@@ -259,7 +151,7 @@ export default function LoginPage({ onLogin }) {
                   <option value="">— Selecciona tu identificador —</option>
                   {unregisteredUsers.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.role === 'ADMIN' ? '👑 ' : u.role === 'SUPERVISOR' ? '🛡️ ' : '🔧 '}{u.name} ({u.id})
+                      [{u.role}] {u.name} ({u.id})
                     </option>
                   ))}
                 </select>
@@ -352,9 +244,9 @@ export default function LoginPage({ onLogin }) {
             </button>
             {/* Quick Access Account Selector */}
             {mode === 'login' && (
-              <div className="mt-2 pt-3 border-t border-white/10">
-                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>Cuentas de Personal Técnico:</span>
+              <div className="mt-2 pt-3 border-t border-stone-200">
+                <div className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>Acceso Rápido por Rol:</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {/* Admin */}
@@ -369,12 +261,12 @@ export default function LoginPage({ onLogin }) {
                           setEmail(uEmail);
                           setPassword('admin123');
                         }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 border border-blue-500/20 text-left text-xs text-blue-200 transition"
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-left text-xs transition"
                       >
-                        <span>👑</span>
+                        <Shield className="w-3.5 h-3.5 text-primary flex-shrink-0" />
                         <div className="truncate">
-                          <div className="font-bold text-white text-[11px] truncate">{uName}</div>
-                          <div className="text-[9px] text-blue-300 truncate">Admin · {uEmail}</div>
+                          <div className="font-bold text-stone-900 text-[11px] truncate">{uName}</div>
+                          <div className="text-[9px] text-stone-500 truncate">Admin · {uEmail}</div>
                         </div>
                       </button>
                     );
@@ -392,12 +284,12 @@ export default function LoginPage({ onLogin }) {
                           setEmail(uEmail);
                           setPassword('supervisor123');
                         }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-900/30 hover:bg-amber-800/50 border border-amber-500/30 text-left text-xs text-amber-200 transition"
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-left text-xs transition"
                       >
-                        <span>🛡️</span>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
                         <div className="truncate">
-                          <div className="font-bold text-white text-[11px] truncate">{uName}</div>
-                          <div className="text-[9px] text-amber-300 truncate">Supervisor · {uEmail}</div>
+                          <div className="font-bold text-stone-900 text-[11px] truncate">{uName}</div>
+                          <div className="text-[9px] text-stone-500 truncate">Supervisor · {uEmail}</div>
                         </div>
                       </button>
                     );
@@ -417,12 +309,12 @@ export default function LoginPage({ onLogin }) {
                           setEmail(uEmail);
                           setPassword('kenya123');
                         }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-left text-xs text-slate-200 transition"
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-left text-xs transition"
                       >
-                        <span>🔧</span>
+                        <User className="w-3.5 h-3.5 text-stone-600 flex-shrink-0" />
                         <div className="truncate">
-                          <div className="font-bold text-white text-[11px] truncate">{uName}</div>
-                          <div className="text-[9px] text-slate-400 truncate">{opId} · {uEmail}</div>
+                          <div className="font-bold text-stone-900 text-[11px] truncate">{uName}</div>
+                          <div className="text-[9px] text-stone-500 truncate">{opId} · {uEmail}</div>
                         </div>
                       </button>
                     );
@@ -441,11 +333,11 @@ export default function LoginPage({ onLogin }) {
                           setEmail(uEmail);
                           setPassword('kenya123');
                         }}
-                        className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-xs text-amber-200 transition"
+                        className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-xs text-stone-700 transition"
                       >
-                        <span>⚡</span>
-                        <span className="font-semibold text-[11px] truncate">{uName}</span>
-                        <span className="text-[10px] text-amber-300 opacity-70 truncate">(Apoyo) · {uEmail}</span>
+                        <User className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" />
+                        <span className="font-semibold text-[11px] truncate text-stone-900">{uName}</span>
+                        <span className="text-[10px] text-stone-500 truncate">(Apoyo) · {uEmail}</span>
                       </button>
                     </div>
                   );

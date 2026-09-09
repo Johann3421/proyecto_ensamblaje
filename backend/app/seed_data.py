@@ -158,6 +158,13 @@ def seed_database(db: Session):
                 existing.password_hash = pwd_hash
             if not existing.avatar and u.get("avatar"):
                 existing.avatar = u.get("avatar")
+            # Asegurar consistencia de roles por defecto (OP-106 siempre OPERATOR, SUP-01 SUPERVISOR, ADM-01 ADMIN)
+            if existing.id in ["OP-101", "OP-102", "OP-103", "OP-104", "OP-105", "OP-106"]:
+                existing.role = "OPERATOR"
+            elif existing.id == "SUP-01":
+                existing.role = "SUPERVISOR"
+            elif existing.id == "ADM-01":
+                existing.role = "ADMIN"
     db.commit()
 
     # 2. Crear modelos base

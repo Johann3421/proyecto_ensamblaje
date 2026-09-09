@@ -12,13 +12,14 @@ from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, SessionLocal, get_db
-from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog, QCIssue, QCStepStationOverride
+from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog, QCIssue, QCStepStationOverride, QCSupervisorAudit
 from .schemas import (
     QCUserSchema, QCUserCreate, QCUserUpdate, AddUnitsRequest, ModelSchema, ChecklistItemSchema,
     OrderCreateRequest, OrderDetailSchema, StationAssignmentCreate, StationAssignmentSchema,
     StepLogCreate, StepLogSchema, StepUncheckRequest,
     IssueCreate, IssueSchema,
     ReassignEmergencyRequest, TransferUnitRequest, StepReassignRequest,
+    SupervisorAuditCreate, SupervisorAuditSchema,
     AuthRegister, AuthLogin, TokenResponse
 )
 from .seed_data import seed_database, DEFAULT_USERS, PROWORK_52_STEPS
@@ -231,6 +232,20 @@ def login_user(req: AuthLogin, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario desactivado. Contacte al administrador.")
     
+    # Auto-healing de roles estándar por seguridad de la línea de producción
+    if user.id in ["OP-101", "OP-102", "OP-103", "OP-104", "OP-105", "OP-106"] and user.role != "OPERATOR":
+        user.role = "OPERATOR"
+        db.commit()
+        db.refresh(user)
+    elif user.id == "SUP-01" and user.role != "SUPERVISOR":
+        user.role = "SUPERVISOR"
+        db.commit()
+        db.refresh(user)
+    elif user.id == "ADM-01" and user.role != "ADMIN":
+        user.role = "ADMIN"
+        db.commit()
+        db.refresh(user)
+    
     token = create_access_token({"sub": user.id, "role": user.role})
     return TokenResponse(
         access_token=token,
@@ -238,8 +253,20 @@ def login_user(req: AuthLogin, db: Session = Depends(get_db)):
     )
 
 @api_router.get("/auth/me", response_model=QCUserSchema)
-def get_current_user_info(current_user: QCUser = Depends(require_auth)):
-    """Obtener información del usuario autenticado."""
+def get_current_user_info(current_user: QCUser = Depends(require_auth), db: Session = Depends(get_db)):
+    """Obtener información del usuario autenticado con auto-healing de roles."""
+    if current_user.id in ["OP-101", "OP-102", "OP-103", "OP-104", "OP-105", "OP-106"] and current_user.role != "OPERATOR":
+        current_user.role = "OPERATOR"
+        db.commit()
+        db.refresh(current_user)
+    elif current_user.id == "SUP-01" and current_user.role != "SUPERVISOR":
+        current_user.role = "SUPERVISOR"
+        db.commit()
+        db.refresh(current_user)
+    elif current_user.id == "ADM-01" and current_user.role != "ADMIN":
+        current_user.role = "ADMIN"
+        db.commit()
+        db.refresh(current_user)
     return current_user
 
 @api_router.get("/users", response_model=List[QCUserSchema])
@@ -1032,6 +1059,11 @@ def get_operator_workspace(
     station_number: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
+    # Identificar al usuario que realiza la consulta
+    requesting_user = db.query(QCUser).filter(QCUser.id == user_id).first()
+    is_supervisor = requesting_user and requesting_user.role in ["SUPERVISOR", "ADMIN"]
+    is_support = (user_id == "OP-106") or (requesting_user and requesting_user.role == "OPERATOR" and "apoyo" in (requesting_user.email or "").lower())
+
     all_orders = db.query(QCOrder).order_by(QCOrder.created_at.desc()).all()
     available_orders_info = []
     for ord_item in all_orders:
@@ -1042,11 +1074,12 @@ def get_operator_workspace(
             "total_units": ord_item.total_units,
             "status": ord_item.status,
             "is_assigned": user_asgn is not None,
-            "assigned_station": user_asgn.station_number if user_asgn else 1,
-            "assigned_station_name": user_asgn.station_name if user_asgn else "Estación 1"
+            "assigned_station": user_asgn.station_number if user_asgn else (station_number or 1),
+            "assigned_station_name": user_asgn.station_name if user_asgn else f"Estación {station_number or 1}",
+            "is_support": is_support
         })
 
-    # Si se especificó station_number explícitamente (ej: por Supervisor o Admin para inspeccionar la estación)
+    # Si se especificó station_number explícitamente (ej: por Supervisor, Apoyo o Admin para seleccionar puesto de trabajo)
     assignment = None
     if order_id and station_number:
         assignment = db.query(QCStationAssignment).filter(
@@ -1054,17 +1087,23 @@ def get_operator_workspace(
             QCStationAssignment.station_number == station_number
         ).first()
 
-    # Si se especificó un order_id, buscar la asignación del usuario en esa orden específica
+    # Si se especificó un order_id, buscar la asignación directa del usuario en esa orden específica
     if not assignment and order_id:
         assignment = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == order_id,
             QCStationAssignment.user_id == user_id
         ).first()
         if not assignment:
-            # Si el usuario no está asignado expresamente en esa orden (o es admin/supervisor), usar la primera estación de esa orden
+            # Si el usuario es de apoyo o supervisor o no tiene estación fija en esta orden
+            target_st = station_number or 1
             assignment = db.query(QCStationAssignment).filter(
-                QCStationAssignment.order_id == order_id
+                QCStationAssignment.order_id == order_id,
+                QCStationAssignment.station_number == target_st
             ).first()
+            if not assignment:
+                assignment = db.query(QCStationAssignment).filter(
+                    QCStationAssignment.order_id == order_id
+                ).first()
 
     if not assignment and station_number:
         assignment = db.query(QCStationAssignment).filter(
@@ -1088,14 +1127,21 @@ def get_operator_workspace(
         if not assignment:
             return {"active": False, "message": "No hay órdenes ni asignaciones registradas"}
 
-    # Sincronizar con el nombre más reciente del técnico
+    # Sincronizar nombre únicamente con el titular asignado a la estación (NUNCA pisar con el nombre de apoyo o supervisor)
     u_latest = db.query(QCUser).filter(QCUser.id == assignment.user_id).first()
-    if u_latest and u_latest.name != assignment.user_name:
+    if u_latest and u_latest.id == assignment.user_id and u_latest.name != assignment.user_name:
         assignment.user_name = u_latest.name
         db.commit()
 
     order = db.query(QCOrder).filter(QCOrder.order_id == assignment.order_id).first()
-    all_steps = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).order_by(QCChecklistItem.step_number).all()
+    
+    # DEDUPLICAR all_steps por step_number para evitar duplicados en checklists importados o modificados
+    all_steps_raw = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).order_by(QCChecklistItem.step_number, QCChecklistItem.id).all()
+    unique_steps_map = {}
+    for it in all_steps_raw:
+        if it.step_number not in unique_steps_map:
+            unique_steps_map[it.step_number] = it
+    all_steps = [unique_steps_map[k] for k in sorted(unique_steps_map.keys())]
 
     units_in_station = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order.order_id,
@@ -1134,9 +1180,12 @@ def get_operator_workspace(
         else (assignment.start_step <= num <= assignment.end_step)
     )
 
-    # Calcular la lista de pasos que esta estación debe ejecutar
+    # Calcular la lista de pasos que esta estación debe ejecutar con DEDUPLICACIÓN ESTRICTA
     station_steps = []
+    seen_station_step_nums = set()
     for s in all_steps:
+        if s.step_number in seen_station_step_nums:
+            continue
         if s.step_number in in_step_map:
             # Paso recibido de otra estación
             o = in_step_map[s.step_number]
@@ -1153,6 +1202,7 @@ def get_operator_workspace(
                 "delegated_from_station": o.from_station,
                 "delegated_reason": o.reason
             })
+            seen_station_step_nums.add(s.step_number)
         elif is_station_own_step(s.step_number) and s.step_number not in out_step_map:
             # Paso original propio de la estación
             station_steps.append({
@@ -1166,6 +1216,7 @@ def get_operator_workspace(
                 "media_type": s.media_type,
                 "is_delegated_in": False
             })
+            seen_station_step_nums.add(s.step_number)
 
     # Pasos transferidos fuera de esta estación
     transferred_out_steps = []
@@ -1199,15 +1250,17 @@ def get_operator_workspace(
             }
             for l in logs
         ]
-        # Identificar si hay pasos de estaciones previas que aún falten completar
+        # Identificar si hay pasos de estaciones previas que aún falten completar (Deduplicados)
         current_station_step_nums = {s["step_number"] for s in station_steps}
         min_own_step = min(assigned_step_numbers) if assigned_step_numbers else assignment.start_step
-        pending_prior_steps = [
-            s for s in all_steps
-            if s.step_number < min_own_step 
-            and s.step_number not in completed_steps_ids 
-            and s.step_number not in current_station_step_nums
-        ]
+        seen_prior_step_nums = set()
+        for s in all_steps:
+            if (s.step_number < min_own_step 
+                and s.step_number not in completed_steps_ids 
+                and s.step_number not in current_station_step_nums
+                and s.step_number not in seen_prior_step_nums):
+                pending_prior_steps.append(s)
+                seen_prior_step_nums.add(s.step_number)
 
     queue_units = [u for u in units_in_station if active_unit and u.unit_number != active_unit.unit_number]
     completed_units = db.query(QCPCUnit).filter(
@@ -1218,6 +1271,33 @@ def get_operator_workspace(
     all_stations = db.query(QCStationAssignment).filter(
         QCStationAssignment.order_id == order.order_id
     ).order_by(QCStationAssignment.station_number).all()
+
+    # Consultar último visto bueno de auditoría de supervisión para la unidad activa
+    supervisor_audit = None
+    if active_unit:
+        import json
+        aud = db.query(QCSupervisorAudit).filter(
+            QCSupervisorAudit.order_id == order.order_id,
+            QCSupervisorAudit.unit_number == active_unit.unit_number
+        ).order_by(QCSupervisorAudit.created_at.desc()).first()
+        if aud:
+            checks = []
+            if aud.checks_json:
+                try:
+                    checks = json.loads(aud.checks_json)
+                except Exception:
+                    checks = []
+            supervisor_audit = {
+                "id": aud.id,
+                "order_id": aud.order_id,
+                "unit_number": aud.unit_number,
+                "supervisor_id": aud.supervisor_id,
+                "supervisor_name": aud.supervisor_name,
+                "status": aud.status,
+                "checks": checks,
+                "notes": aud.notes or "",
+                "created_at": aud.created_at.isoformat() if aud.created_at else None
+            }
 
     return {
         "active": True,
@@ -1233,8 +1313,106 @@ def get_operator_workspace(
         "completed_step_numbers": completed_steps_ids,
         "completed_step_logs": completed_step_logs,
         "queue_units": queue_units,
-        "completed_units": completed_units
+        "completed_units": completed_units,
+        "is_support_operator": is_support,
+        "requesting_user": {
+            "id": requesting_user.id if requesting_user else user_id,
+            "name": requesting_user.name if requesting_user else user_id,
+            "role": requesting_user.role if requesting_user else "OPERATOR"
+        },
+        "supervisor_audit": supervisor_audit
     }
+
+@api_router.post("/supervisor/approve-unit")
+def approve_unit_supervisor(req: SupervisorAuditCreate, db: Session = Depends(get_db)):
+    """Registrar Visto Bueno o Dictamen de Auditoría de Calidad por el Supervisor para una PC"""
+    unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == req.order_id,
+        QCPCUnit.unit_number == req.unit_number
+    ).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad de PC no encontrada")
+
+    import json
+    checks_str = json.dumps(req.checks or [])
+    
+    audit_record = QCSupervisorAudit(
+        order_id=req.order_id,
+        unit_number=req.unit_number,
+        supervisor_id=req.supervisor_id,
+        supervisor_name=req.supervisor_name,
+        status=req.status or "APPROVED",
+        checks_json=checks_str,
+        notes=req.notes or ""
+    )
+    db.add(audit_record)
+
+    # Registrar en logs de calidad oficiales
+    audit_log = QCStepLog(
+        order_id=req.order_id,
+        unit_number=req.unit_number,
+        step_number=999, # Código de Auditoría Oficial de Supervisión
+        station_number=unit.current_station,
+        user_id=req.supervisor_id,
+        user_name=f"{req.supervisor_name} (Supervisor)",
+        status="PASS" if req.status == "APPROVED" else "FAIL",
+        notes=f"Auditoría Supervisor: {req.notes or 'Visto Bueno Conforme'}. Verificaciones: {', '.join(req.checks or [])}"
+    )
+    db.add(audit_log)
+
+    if req.status == "REJECTED":
+        unit.overall_status = "FAILED"
+    elif req.status == "APPROVED" and unit.overall_status == "FAILED":
+        unit.overall_status = "IN_PROGRESS"
+
+    db.commit()
+    db.refresh(audit_record)
+
+    return {
+        "message": f"✓ Visto Bueno registrado exitosamente para la PC #{req.unit_number} por {req.supervisor_name}",
+        "audit": {
+            "id": audit_record.id,
+            "order_id": audit_record.order_id,
+            "unit_number": audit_record.unit_number,
+            "supervisor_id": audit_record.supervisor_id,
+            "supervisor_name": audit_record.supervisor_name,
+            "status": audit_record.status,
+            "checks": req.checks or [],
+            "notes": audit_record.notes,
+            "created_at": audit_record.created_at.isoformat() if audit_record.created_at else None
+        }
+    }
+
+@api_router.get("/supervisor/unit/{order_id}/{unit_number}/audit")
+def get_unit_supervisor_audit(order_id: str, unit_number: int, db: Session = Depends(get_db)):
+    """Consultar auditorías y visto bueno de supervisión para una PC específica"""
+    audits = db.query(QCSupervisorAudit).filter(
+        QCSupervisorAudit.order_id == order_id,
+        QCSupervisorAudit.unit_number == unit_number
+    ).order_by(QCSupervisorAudit.created_at.desc()).all()
+    
+    import json
+    result = []
+    for a in audits:
+        checks = []
+        if a.checks_json:
+            try:
+                checks = json.loads(a.checks_json)
+            except Exception:
+                checks = []
+        result.append({
+            "id": a.id,
+            "order_id": a.order_id,
+            "unit_number": a.unit_number,
+            "supervisor_id": a.supervisor_id,
+            "supervisor_name": a.supervisor_name,
+            "status": a.status,
+            "checks": checks,
+            "notes": a.notes,
+            "created_at": a.created_at.isoformat() if a.created_at else None
+        })
+    return {"order_id": order_id, "unit_number": unit_number, "audits": result, "latest": result[0] if result else None}
+
 
 @api_router.post("/operator/submit-step")
 def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):

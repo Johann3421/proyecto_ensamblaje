@@ -226,3 +226,26 @@ class OrderDetailSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+class SupervisorAuditCreate(BaseModel):
+    order_id: str
+    unit_number: int
+    supervisor_id: str
+    supervisor_name: str
+    status: Optional[str] = "APPROVED" # APPROVED, OBSERVED, REJECTED
+    checks: Optional[List[str]] = []
+    notes: Optional[str] = ""
+
+class SupervisorAuditSchema(BaseModel):
+    id: int
+    order_id: str
+    unit_number: int
+    supervisor_id: str
+    supervisor_name: str
+    status: str
+    checks_json: Optional[str] = None
+    notes: Optional[str] = ""
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

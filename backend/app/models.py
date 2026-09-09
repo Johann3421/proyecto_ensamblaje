@@ -129,3 +129,16 @@ class QCStepStationOverride(Base):
     transferred_by = Column(String(100), nullable=False)
     reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class QCSupervisorAudit(Base):
+    __tablename__ = "qc_supervisor_audits"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(String(50), nullable=False)
+    unit_number = Column(Integer, nullable=False)
+    supervisor_id = Column(String(50), nullable=False)
+    supervisor_name = Column(String(100), nullable=False)
+    status = Column(String(20), default="APPROVED") # APPROVED, OBSERVED, REJECTED
+    checks_json = Column(Text, nullable=True) # JSON con los 5 puntos de control
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

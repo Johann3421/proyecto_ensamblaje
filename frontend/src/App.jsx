@@ -2563,11 +2563,167 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
     }
   };
 
-  const filteredSteps = steps.filter(s =>
+  const [filterType, setFilterType] = useState("GROUPED"); // "GROUPED" | "ALL" | "ASSEMBLY" | "CLEANING"
+
+  // Quick toggle cleaning endpoint
+  const handleToggleStepCleaning = async (st) => {
+    if (!st || !st.id) return;
+    try {
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/checklist/${st.id}/toggle-cleaning`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al cambiar tipo de paso");
+      notify?.(
+        data.is_cleaning
+          ? `Paso #${st.step_number} marcado como Limpieza QC`
+          : `Paso #${st.step_number} marcado como Ensamblaje`,
+        "success"
+      );
+      loadSteps();
+      onRefreshModels?.();
+    } catch (err) {
+      notify?.("Error: " + err.message, "danger");
+    }
+  };
+
+  // Auto-clasificar todos los pasos de limpieza del modelo
+  const handleAutoClassifyCleaning = async () => {
+    try {
+      setProcessingAction("classify-cleaning");
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/classify-cleaning`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al auto-clasificar");
+      notify?.(data.message || "Clasificación de limpieza completada", "success");
+      loadSteps();
+      onRefreshModels?.();
+    } catch (err) {
+      notify?.("Error: " + err.message, "danger");
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const isCleaning = (s) => isStepCleaning(s);
+  const assemblySteps = steps.filter(s => !isCleaning(s));
+  const cleaningSteps = steps.filter(s => isCleaning(s));
+
+  const filterBySearch = (list) => list.filter(s =>
     (s.operation || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.qc_criteria || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.description || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const filteredSteps = filterBySearch(steps);
+  const filteredAssembly = filterBySearch(assemblySteps);
+  const filteredCleaning = filterBySearch(cleaningSteps);
+
+  const filteredStepsToRender =
+    filterType === "ASSEMBLY" ? filteredAssembly :
+    filterType === "CLEANING" ? filteredCleaning :
+    filteredSteps;
+
+  const renderStepCard = (st, idx, listContext = "default") => {
+    const isClean = isCleaning(st);
+    const isExpanded = expandedStep === st.step_number;
+
+    return (
+      <Card key={st.step_number || st.id || idx} className={`overflow-hidden transition border ${
+        isClean ? "border-emerald-200 bg-emerald-50/20" : "border-gray-200"
+      }`}>
+        <div
+          onClick={() => setExpandedStep(isExpanded ? null : st.step_number)}
+          className="w-full flex items-center gap-3 p-3 text-left touch-target cursor-pointer hover:bg-gray-50/80 transition"
+        >
+          <span className={`w-7 h-7 rounded-full text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-xs ${
+            isClean ? "bg-emerald-600 ring-2 ring-emerald-400/30" : "bg-blue-600 ring-2 ring-blue-400/30"
+          }`}>
+            {st.step_number}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleStepCleaning(st);
+                }}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition flex items-center gap-1 touch-target ${
+                  isClean
+                    ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-emerald-300"
+                    : "bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200"
+                }`}
+                title="Clic para alternar entre Ensamblaje y Limpieza QC"
+              >
+                {isClean ? <Sparkles className="w-3 h-3 text-emerald-600" /> : <Wrench className="w-3 h-3 text-blue-600" />}
+                <span>{isClean ? "🧼 Limpieza QC" : "⚙️ Ensamblaje"}</span>
+              </button>
+            </div>
+            {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate mt-0.5">{st.qc_criteria}</p>}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {st.media_url && <ImageIcon className="w-3.5 h-3.5 text-blue-500" />}
+            {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="px-3 pb-3 pt-2 border-t border-gray-100 space-y-2.5 fade-in bg-white/80">
+            <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 flex-wrap text-xs ${
+              isClean ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-blue-50/60 border-blue-200 text-blue-900"
+            }`}>
+              <div className="flex items-center gap-1.5">
+                {isClean ? <Sparkles className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-blue-600" />}
+                <span className="font-bold">
+                  {isClean ? "Paso Exclusivo de Limpieza QC" : "Paso de Ensamblaje General"}
+                </span>
+                <span className="text-[10px] opacity-75">
+                  ({isClean ? "Aislado de estaciones de ensamble" : "Asignable a puestos de armado"})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleStepCleaning(st)}
+                className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white border shadow-2xs hover:bg-gray-50 transition"
+              >
+                {isClean ? "Cambiar a ⚙️ Ensamblaje" : "Mover a 🧼 Limpieza QC"}
+              </button>
+            </div>
+
+            {st.description && <p className="text-xs text-gray-700 leading-relaxed">{st.description}</p>}
+            {st.qc_criteria && (
+              <div className="bg-blue-50/60 border border-blue-200/60 p-2 rounded-lg text-xs text-blue-900">
+                <span className="font-semibold">Criterio QC: </span>{st.qc_criteria}
+              </div>
+            )}
+            {st.media_url && (
+              <img src={st.media_url} alt={st.operation} className="w-full max-h-48 object-cover rounded-lg border border-gray-200" />
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setEditingItem(st)}
+                className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Editar Paso</span>
+              </button>
+              <button
+                onClick={() => handleDeleteSingleStep(st.id, st.step_number)}
+                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
+                title="Eliminar este paso"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-4 fade-in">
@@ -2628,13 +2784,52 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Botón Nuevo Paso Ensamblaje */}
             <button
-              onClick={() => setEditingItem({ model_name: selectedModel, step_number: steps.length + 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
+              onClick={() => setEditingItem({
+                model_name: selectedModel,
+                step_number: steps.length + 1,
+                operation: "",
+                description: "",
+                qc_criteria: "",
+                media_url: "",
+                is_cleaning: false
+              })}
               className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition touch-target"
+              title="Crear un paso normal para estaciones de ensamblaje"
             >
               <Plus className="w-4 h-4" />
-              <span>Nuevo Paso</span>
+              <span>+ Paso Ensamblaje</span>
+            </button>
+
+            {/* Botón Exclusivo Nuevo Paso Limpieza */}
+            <button
+              onClick={() => setEditingItem({
+                model_name: selectedModel,
+                step_number: steps.length + 1,
+                operation: "Limpieza profunda de equipo",
+                description: "Retiro de película protectora, limpieza con alcohol isopropílico y paño de microfibra.",
+                qc_criteria: "Equipo 100% libre de huellas, residuos, adhesivos y polvo.",
+                media_url: "",
+                is_cleaning: true
+              })}
+              className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition touch-target"
+              title="Crear un paso exclusivo para estaciones de limpieza QC"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>+ Paso Limpieza</span>
+            </button>
+
+            {/* Botón Auto-clasificar Limpieza */}
+            <button
+              onClick={handleAutoClassifyCleaning}
+              disabled={processingAction === "classify-cleaning" || steps.length === 0}
+              className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              title="Detectar automáticamente pasos de limpieza según palabras clave (microfibra, película, polvo, etc.)"
+            >
+              {processingAction === "classify-cleaning" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-emerald-600" />}
+              <span>Auto-clasificar Limpieza</span>
             </button>
 
             {/* Botón Descargar Plantilla Excel */}
@@ -2666,10 +2861,65 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
                   ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
                   : "bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300"
               }`}
-              title="Exportar pasos actuales a Excel"
+              title="Exportar pasos actuales a Excel con indicador de limpieza"
             >
               <FileText className="w-4 h-4 text-emerald-600" />
               <span>Exportar Excel</span>
+            </button>
+          </div>
+
+          {/* Selector de modo de visualización / filtro de pasos */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-t border-gray-100 pt-2.5">
+            <span className="text-[11px] font-semibold text-gray-500 whitespace-nowrap mr-1">Separar Vista:</span>
+            <button
+              type="button"
+              onClick={() => setFilterType("GROUPED")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                filterType === "GROUPED"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+              title="Mostrar bloques separados: Bloque Ensamblaje y Bloque Limpieza"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>🗂️ Vista Dividida por Bloques</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("ALL")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 whitespace-nowrap ${
+                filterType === "ALL"
+                  ? "bg-gray-800 text-white shadow-xs"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              <span>Todos</span>
+              <span className="text-[10px] opacity-75">({steps.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("ASSEMBLY")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 whitespace-nowrap ${
+                filterType === "ASSEMBLY"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-blue-50 text-blue-800 hover:bg-blue-100"
+              }`}
+            >
+              <span>⚙️ Ensamblaje</span>
+              <span className="text-[10px] opacity-75">({assemblySteps.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType("CLEANING")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 whitespace-nowrap ${
+                filterType === "CLEANING"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+              }`}
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>🧼 Limpieza QC</span>
+              <span className="text-[10px] opacity-75">({cleaningSteps.length})</span>
             </button>
           </div>
 
@@ -2733,7 +2983,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
                   )}
                 </div>
                 <p className="text-[11px] text-gray-600 mt-0.5">
-                  {diagnostics.total_steps} pasos registrados · {diagnostics.has_cleaning ? "🧼 Limpieza cubierta" : "⚠️ Requiere pasos de limpieza"} · {diagnostics.has_bios ? "✓ BIOS verificado" : "Falta BIOS"}
+                  {diagnostics.total_steps} pasos registrados ({assemblySteps.length} ensamblaje, {cleaningSteps.length} limpieza QC) · {diagnostics.has_cleaning ? "🧼 Limpieza cubierta" : "⚠️ Requiere pasos de limpieza"} · {diagnostics.has_bios ? "✓ BIOS verificado" : "Falta BIOS"}
                 </p>
               </div>
             </div>
@@ -2840,7 +3090,15 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
               <span>Importar Archivo</span>
             </button>
             <button
-              onClick={() => setEditingItem({ model_name: selectedModel, step_number: 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
+              onClick={() => setEditingItem({
+                model_name: selectedModel,
+                step_number: 1,
+                operation: "",
+                description: "",
+                qc_criteria: "",
+                media_url: "",
+                is_cleaning: false
+              })}
               className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition touch-target"
             >
               <Plus className="w-4 h-4" />
@@ -2848,15 +3106,150 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
             </button>
           </div>
         </Card>
-      ) : filteredSteps.length === 0 ? (
+      ) : filteredStepsToRender.length === 0 && filterType !== "GROUPED" ? (
         <Card className="p-6 text-center text-xs text-gray-500">
-          No se encontraron pasos que coincidan con "{searchTerm}"
+          No se encontraron pasos que coincidan con la búsqueda o filtro seleccionado.
         </Card>
+      ) : filterType === "GROUPED" ? (
+        <div className="space-y-6">
+          {/* BLOQUE 1: PASOS NORMALES DE ENSAMBLAJE */}
+          <div className="space-y-3">
+            <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs font-bold text-gray-900">
+                      Pasos Normales de Ensamblaje
+                    </h3>
+                    <Badge variant="info">{filteredAssembly.length} pasos</Badge>
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-0.5">
+                    Pasos de armado físico, cableado y configuración asignados a las estaciones de trabajo de los técnicos.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingItem({
+                  model_name: selectedModel,
+                  step_number: steps.length + 1,
+                  operation: "",
+                  description: "",
+                  qc_criteria: "",
+                  media_url: "",
+                  is_cleaning: false
+                })}
+                className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition self-start sm:self-center"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Paso Ensamblaje</span>
+              </button>
+            </div>
+
+            {filteredAssembly.length === 0 ? (
+              <Card className="p-6 text-center text-xs text-gray-500 border-dashed">
+                No hay pasos normales de ensamblaje registrados para este filtro.
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {filteredAssembly.map((st, idx) => renderStepCard(st, idx, "assembly"))}
+              </div>
+            )}
+          </div>
+
+          {/* BLOQUE 2: BLOQUE EXCLUSIVO DE PASOS DE LIMPIEZA */}
+          <div className="space-y-3">
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                      <span>Bloque Exclusivo de Pasos de Limpieza (QC Obligatorio)</span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
+                        Exclusivo
+                      </span>
+                    </h3>
+                    <Badge variant="success">{filteredCleaning.length} pasos de limpieza</Badge>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 mt-0.5">
+                    Pasos reservados exclusivamente para limpieza profunda, microfibra, soplado y desprotección. <strong>NO</strong> se mezclan en las estaciones de ensamblaje.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem({
+                    model_name: selectedModel,
+                    step_number: steps.length + 1,
+                    operation: "Limpieza profunda de equipo",
+                    description: "Retiro de película protectora, limpieza con alcohol isopropílico y paño de microfibra.",
+                    qc_criteria: "Equipo 100% libre de huellas, residuos, adhesivos y polvo.",
+                    media_url: "",
+                    is_cleaning: true
+                  })}
+                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Nuevo Paso Limpieza</span>
+                </button>
+              </div>
+            </div>
+
+            {filteredCleaning.length === 0 ? (
+              <Card className="p-6 text-center border-dashed border-emerald-200 bg-emerald-50/20">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <p className="text-xs font-bold text-gray-800">Aún no hay pasos de limpieza en este modelo</p>
+                <p className="text-[11px] text-gray-500 max-w-sm mx-auto mt-1 mb-3">
+                  Puedes agregar un paso exclusivo de limpieza o pulsar auto-clasificar para detectar pasos de microfibra, película o limpieza.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAutoClassifyCleaning}
+                  disabled={processingAction === "classify-cleaning"}
+                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-xs transition"
+                >
+                  {processingAction === "classify-cleaning" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  <span>✨ Detectar y Clasificar Pasos de Limpieza</span>
+                </button>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {filteredCleaning.map((st, idx) => renderStepCard(st, idx, "cleaning"))}
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="space-y-2">
-          {filteredSteps.map((st, idx) => {
-            const prevStep = idx > 0 ? filteredSteps[idx - 1] : null;
-            const hasGapBefore = prevStep && st.step_number > prevStep.step_number + 1;
+          {filterType === "ASSEMBLY" && (
+            <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs font-bold text-blue-900 flex items-center justify-between">
+              <span>Mostrando únicamente Pasos de Ensamblaje ({filteredAssembly.length})</span>
+              <button onClick={() => setFilterType("GROUPED")} className="text-[11px] text-blue-700 hover:underline">
+                Ver vista dividida por bloques →
+              </button>
+            </div>
+          )}
+          {filterType === "CLEANING" && (
+            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex items-center justify-between">
+              <span>Mostrando únicamente Pasos Exclusivos de Limpieza QC ({filteredCleaning.length})</span>
+              <button onClick={() => setFilterType("GROUPED")} className="text-[11px] text-emerald-700 hover:underline">
+                Ver vista dividida por bloques →
+              </button>
+            </div>
+          )}
+          {filteredStepsToRender.map((st, idx) => {
+            const prevStep = idx > 0 ? filteredStepsToRender[idx - 1] : null;
+            const hasGapBefore = filterType === "ALL" && prevStep && st.step_number > prevStep.step_number + 1;
             const gapCount = hasGapBefore ? (st.step_number - prevStep.step_number - 1) : 0;
 
             return (
@@ -2891,53 +3284,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
                     </div>
                   </div>
                 )}
-                <Card className="overflow-hidden">
-                  <button
-                    onClick={() => setExpandedStep(expandedStep === st.step_number ? null : st.step_number)}
-                    className="w-full flex items-center gap-3 p-3 text-left touch-target"
-                  >
-                    <span className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
-                      {st.step_number}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
-                      {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate">{st.qc_criteria}</p>}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {st.media_url && <ImageIcon className="w-3.5 h-3.5 text-blue-500" />}
-                      {expandedStep === st.step_number ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                    </div>
-                  </button>
-
-                  {expandedStep === st.step_number && (
-                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-2 fade-in">
-                      {st.description && <p className="text-xs text-gray-700">{st.description}</p>}
-                      <div className="bg-blue-50 p-2 rounded-lg text-xs text-blue-800">
-                        <span className="font-semibold">Criterio QC: </span>{st.qc_criteria}
-                      </div>
-                      {st.media_url && (
-                        <img src={st.media_url} alt={st.operation} className="w-full max-h-40 object-cover rounded-lg" />
-                      )}
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => setEditingItem(st)}
-                          className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                          <span>Editar Paso</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSingleStep(st.id, st.step_number)}
-                          className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
-                          title="Eliminar este paso"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Eliminar</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </Card>
+                {renderStepCard(st, idx)}
               </React.Fragment>
             );
           })}
@@ -5672,7 +6019,10 @@ function CreateModelModal({ isOpen, onClose, onSuccess, existingModels = [], not
 // MODAL EDICIÓN PASO CHECKLIST
 // =============================================
 function ChecklistStepModal({ item, onClose, onSave, onDelete }) {
-  const [formData, setFormData] = useState({ ...item });
+  const [formData, setFormData] = useState({
+    ...item,
+    is_cleaning: Boolean(item?.is_cleaning !== undefined ? item.is_cleaning : isStepCleaning(item))
+  });
   const [uploading, setUploading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
 
@@ -5747,6 +6097,69 @@ function ChecklistStepModal({ item, onClose, onSave, onDelete }) {
                 onChange={(e) => setFormData({ ...formData, qc_criteria: e.target.value })}
                 className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
               ></textarea>
+            </div>
+
+            {/* Campo Exclusivo: Clasificación del Paso (Ensamblaje vs Limpieza QC) */}
+            <div className={`p-3.5 rounded-xl border transition space-y-2.5 ${
+              formData.is_cleaning
+                ? "bg-emerald-50/80 border-emerald-300 shadow-2xs"
+                : "bg-blue-50/40 border-blue-200 shadow-2xs"
+            }`}>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                  {formData.is_cleaning ? <Sparkles className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-blue-600" />}
+                  <span>Clasificación del Paso (Asignación)</span>
+                </label>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  formData.is_cleaning
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                    : "bg-blue-100 text-blue-800 border-blue-300"
+                }`}>
+                  {formData.is_cleaning ? "🧼 Paso de Limpieza QC" : "⚙️ Paso de Ensamblaje"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, is_cleaning: false }))}
+                  className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
+                    !formData.is_cleaning
+                      ? "bg-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
+                      : "bg-white/60 border-gray-200 hover:bg-white text-gray-600"
+                  }`}
+                >
+                  <span className="text-xs font-bold text-gray-900 flex items-center gap-1">
+                    ⚙️ Ensamblaje
+                  </span>
+                  <span className="text-[10px] text-gray-500 leading-tight">
+                    Para estaciones de armado físico, componentes, cableado y configuración.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, is_cleaning: true }))}
+                  className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
+                    formData.is_cleaning
+                      ? "bg-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
+                      : "bg-white/60 border-gray-200 hover:bg-white text-gray-600"
+                  }`}
+                >
+                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1">
+                    🧼 Limpieza QC
+                  </span>
+                  <span className="text-[10px] text-emerald-700 leading-tight">
+                    Para estaciones de limpieza, retiro de películas, polvo y microfibra.
+                  </span>
+                </button>
+              </div>
+
+              <p className="text-[10px] text-gray-500">
+                {formData.is_cleaning
+                  ? "✨ Los pasos marcados como Limpieza se asignan automáticamente de forma exclusiva a las estaciones de limpieza (aislados de ensamble)."
+                  : "ℹ️ Los pasos de ensamblaje se distribuyen equitativamente entre los puestos de armado general."}
+              </p>
             </div>
             <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-2">
               <label className="block text-xs font-bold text-gray-700">Multimedia (GIF/Imagen)</label>

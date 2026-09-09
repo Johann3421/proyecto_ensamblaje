@@ -484,7 +484,8 @@ def populate_model_template(model_name: str, data: dict = {}, db: Session = Depe
                 description=it.description,
                 qc_criteria=it.qc_criteria,
                 media_url=it.media_url,
-                media_type=it.media_type
+                media_type=it.media_type,
+                is_cleaning=bool(it.is_cleaning)
             ))
             existing_steps.add(it.step_number)
             added_count += 1
@@ -492,6 +493,7 @@ def populate_model_template(model_name: str, data: dict = {}, db: Session = Depe
         for num, op, desc, crit, media, mtype in PROWORK_52_STEPS:
             if mode == "APPEND_MISSING" and num in existing_steps:
                 continue
+            is_clean = num in (12, 13, 14, 43, 52) or any(k in (op + " " + desc).lower() for k in ["limpieza", "película", "pelicula", "microfibra"])
             db.add(QCChecklistItem(
                 model_name=model_name,
                 step_number=num,
@@ -499,7 +501,8 @@ def populate_model_template(model_name: str, data: dict = {}, db: Session = Depe
                 description=desc,
                 qc_criteria=crit,
                 media_url=media,
-                media_type=mtype
+                media_type=mtype,
+                is_cleaning=is_clean
             ))
             existing_steps.add(num)
             added_count += 1
@@ -647,6 +650,45 @@ def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(g
     db.commit()
     return {"message": "Paso eliminado correctamente"}
 
+@api_router.post("/models/{model_name}/checklist/{step_id}/toggle-cleaning")
+def toggle_step_cleaning(model_name: str, step_id: int, db: Session = Depends(get_db)):
+    """Cambia directamente el estado is_cleaning (Limpieza vs Ensamblaje) de un paso"""
+    item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == model_name).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Paso no encontrado")
+    item.is_cleaning = not bool(item.is_cleaning)
+    db.commit()
+    db.refresh(item)
+    return {
+        "message": f"Paso #{item.step_number} marcado como {'LIMPIEZA' if item.is_cleaning else 'ENSAMBLAJE'}",
+        "is_cleaning": item.is_cleaning,
+        "step_number": item.step_number
+    }
+
+@api_router.post("/models/{model_name}/classify-cleaning")
+def classify_cleaning_steps(model_name: str, db: Session = Depends(get_db)):
+    """Auto-clasifica los pasos de limpieza del modelo basándose en palabras clave y números estándar"""
+    model_name = model_name.strip().upper()
+    items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).all()
+    if not items:
+        raise HTTPException(status_code=404, detail=f"No hay pasos para el modelo '{model_name}'")
+    
+    updated_count = 0
+    for it in items:
+        text = (it.operation or "") + " " + (it.description or "")
+        should_clean = (
+            any(k in text.lower() for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"])
+            or it.step_number in (12, 13, 14, 43, 52)
+        )
+        if bool(it.is_cleaning) != should_clean:
+            it.is_cleaning = should_clean
+            updated_count += 1
+    db.commit()
+    return {
+        "message": f"Se clasificaron los pasos de limpieza del modelo {model_name} ({updated_count} actualizados)",
+        "updated": updated_count
+    }
+
 @api_router.delete("/models/{model_name}/checklist")
 def delete_all_model_checklist(model_name: str, db: Session = Depends(get_db)):
     """Elimina todos los pasos configurados en el checklist de un modelo"""
@@ -686,7 +728,8 @@ def export_model_excel(model_name: str, db: Session = Depends(get_db)):
             "operation": it.operation,
             "description": it.description,
             "qc_criteria": it.qc_criteria,
-            "media_url": it.media_url
+            "media_url": it.media_url,
+            "is_cleaning": bool(it.is_cleaning)
         }
         for it in items
     ]
@@ -712,6 +755,10 @@ async def import_model_excel(model_name: str, file: UploadFile = File(...), db: 
     # Reemplazar pasos del modelo existente
     db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
     for it in parsed_items:
+        op_text = (it.get("operation") or "") + " " + (it.get("description") or "")
+        is_clean = it.get("is_cleaning")
+        if is_clean is None:
+            is_clean = any(k in op_text.lower() for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"]) or it["step_number"] in (12, 13, 14, 43, 52)
         db.add(QCChecklistItem(
             model_name=model_name,
             step_number=it["step_number"],
@@ -719,7 +766,8 @@ async def import_model_excel(model_name: str, file: UploadFile = File(...), db: 
             description=it.get("description", ""),
             qc_criteria=it["qc_criteria"],
             media_url=it.get("media_url", ""),
-            media_type=it.get("media_type", "image")
+            media_type=it.get("media_type", "image"),
+            is_cleaning=bool(is_clean)
         ))
     db.commit()
     return {

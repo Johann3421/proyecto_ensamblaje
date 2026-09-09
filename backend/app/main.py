@@ -21,7 +21,7 @@ from .schemas import (
     ReassignEmergencyRequest, TransferUnitRequest, StepReassignRequest,
     AuthRegister, AuthLogin, TokenResponse
 )
-from .seed_data import seed_database, DEFAULT_USERS
+from .seed_data import seed_database, DEFAULT_USERS, PROWORK_52_STEPS
 from .excel_handler import generate_checklist_excel, parse_checklist_excel, generate_checklist_template
 from .auth import hash_password, verify_password, create_access_token, require_auth
 
@@ -338,13 +338,224 @@ def create_model(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="El nombre del modelo es requerido")
     existing = db.query(QCModel).filter(QCModel.name == name).first()
     if existing:
-        raise HTTPException(status_code=400, detail="El modelo ya existe")
+        raise HTTPException(status_code=400, detail=f"El modelo '{name}' ya existe")
     
     new_model = QCModel(name=name, description=data.get("description", ""))
     db.add(new_model)
     db.commit()
     db.refresh(new_model)
-    return new_model
+
+    # Opciones de plantilla inicial de pasos
+    init_template = data.get("template", "STANDARD")  # "STANDARD", "CLONE", "EMPTY"
+    clone_from = data.get("clone_from")
+
+    if init_template == "CLONE" and clone_from:
+        source_items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == clone_from).order_by(QCChecklistItem.step_number).all()
+        for it in source_items:
+            db.add(QCChecklistItem(
+                model_name=name,
+                step_number=it.step_number,
+                operation=it.operation,
+                description=it.description,
+                qc_criteria=it.qc_criteria,
+                media_url=it.media_url,
+                media_type=it.media_type
+            ))
+        db.commit()
+    elif init_template == "STANDARD":
+        for num, op, desc, crit, media, mtype in PROWORK_52_STEPS:
+            db.add(QCChecklistItem(
+                model_name=name,
+                step_number=num,
+                operation=op,
+                description=desc,
+                qc_criteria=crit,
+                media_url=media,
+                media_type=mtype
+            ))
+        db.commit()
+
+    step_count = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == name).count()
+    return {
+        "id": new_model.id,
+        "name": new_model.name,
+        "description": new_model.description,
+        "step_count": step_count,
+        "created_at": new_model.created_at
+    }
+
+@api_router.delete("/models/{model_name}")
+def delete_model(model_name: str, db: Session = Depends(get_db)):
+    model_name = model_name.strip().upper()
+    existing = db.query(QCModel).filter(QCModel.name == model_name).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Modelo '{model_name}' no encontrado")
+    
+    # Verificar si está asociado a órdenes de producción
+    orders_count = db.query(QCOrder).filter(QCOrder.model_name == model_name).count()
+    if orders_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede eliminar el modelo '{model_name}' porque está vinculado a {orders_count} orden(es) de producción"
+        )
+    
+    # Eliminar pasos del checklist asociados y el modelo
+    deleted_steps = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
+    db.delete(existing)
+    db.commit()
+    return {
+        "message": f"Modelo '{model_name}' eliminado exitosamente ({deleted_steps} pasos removidos)",
+        "model_name": model_name
+    }
+
+@api_router.post("/models/{model_name}/populate-template")
+def populate_model_template(model_name: str, data: dict = {}, db: Session = Depends(get_db)):
+    """Rellena o complementa el checklist de un modelo con la plantilla estándar de 52 pasos o desde otro modelo"""
+    model_name = model_name.strip().upper()
+    model = db.query(QCModel).filter(QCModel.name == model_name).first()
+    if not model:
+        raise HTTPException(status_code=404, detail=f"Modelo '{model_name}' no encontrado")
+    
+    template_type = data.get("template", "STANDARD")  # "STANDARD" or "CLONE"
+    clone_from = data.get("clone_from")
+    mode = data.get("mode", "APPEND_MISSING")  # "REPLACE" or "APPEND_MISSING"
+
+    if mode == "REPLACE":
+        db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
+        db.commit()
+
+    existing_steps = {it.step_number for it in db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).all()}
+    added_count = 0
+
+    if template_type == "CLONE" and clone_from:
+        source_items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == clone_from).order_by(QCChecklistItem.step_number).all()
+        for it in source_items:
+            if mode == "APPEND_MISSING" and it.step_number in existing_steps:
+                continue
+            db.add(QCChecklistItem(
+                model_name=model_name,
+                step_number=it.step_number,
+                operation=it.operation,
+                description=it.description,
+                qc_criteria=it.qc_criteria,
+                media_url=it.media_url,
+                media_type=it.media_type
+            ))
+            existing_steps.add(it.step_number)
+            added_count += 1
+    else:
+        for num, op, desc, crit, media, mtype in PROWORK_52_STEPS:
+            if mode == "APPEND_MISSING" and num in existing_steps:
+                continue
+            db.add(QCChecklistItem(
+                model_name=model_name,
+                step_number=num,
+                operation=op,
+                description=desc,
+                qc_criteria=crit,
+                media_url=media,
+                media_type=mtype
+            ))
+            existing_steps.add(num)
+            added_count += 1
+
+    db.commit()
+    total_steps = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).count()
+    return {
+        "message": f"Se agregaron {added_count} pasos al modelo '{model_name}' (Total: {total_steps} pasos)",
+        "added_count": added_count,
+        "total_steps": total_steps
+    }
+
+@api_router.post("/models/{model_name}/resequence")
+def resequence_model_steps(model_name: str, db: Session = Depends(get_db)):
+    """Renumbra todos los pasos del checklist de 1 a N de forma consecutiva sin huecos"""
+    model_name = model_name.strip().upper()
+    items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number, QCChecklistItem.id).all()
+    if not items:
+        return {"message": f"El modelo '{model_name}' no tiene pasos registrados", "updated_count": 0, "total_steps": 0}
+
+    updated_count = 0
+    for idx, it in enumerate(items, start=1):
+        if it.step_number != idx:
+            it.step_number = idx
+            updated_count += 1
+    
+    db.commit()
+    return {
+        "message": f"Secuencia reordenada consecutivamente (1 a {len(items)}). {updated_count} pasos renumerados.",
+        "updated_count": updated_count,
+        "total_steps": len(items)
+    }
+
+@api_router.get("/models/{model_name}/diagnostics")
+def get_model_diagnostics(model_name: str, db: Session = Depends(get_db)):
+    """Diagnóstico de integridad del checklist: pasos faltantes en la secuencia y cobertura de fases críticas de calidad"""
+    model_name = model_name.strip().upper()
+    items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number).all()
+    
+    step_numbers = [it.step_number for it in items]
+    step_set = set(step_numbers)
+    max_step = max(step_numbers) if step_numbers else 0
+    total_steps = len(items)
+
+    missing_in_sequence = []
+    if max_step > 0:
+        for i in range(1, max_step + 1):
+            if i not in step_set:
+                missing_in_sequence.append(i)
+
+    duplicates = []
+    seen = set()
+    for s in step_numbers:
+        if s in seen and s not in duplicates:
+            duplicates.append(s)
+        seen.add(s)
+
+    all_text = " ".join([f"{it.operation} {it.description or ''} {it.qc_criteria}" for it in items]).lower()
+    
+    has_cleaning = any(k in all_text for k in ["limpieza", "limpiar", "microfibra", "polvo", "aspirar"])
+    has_intermediate_cleaning = any(k in all_text for k in ["limpieza intermedia", "limpieza de componentes", "limpieza y bios"])
+    has_final_cleaning = any(k in all_text for k in ["limpieza final", "limpieza y embalaje", "embalaje final"])
+    has_bios = any(k in all_text for k in ["bios", "uefi", "boot", "arranque"])
+    has_os = any(k in all_text for k in ["sistema operativo", "windows", "so ", "drivers"])
+    has_stress_tests = any(k in all_text for k in ["test", "temperatura", "prueba de", "bench", "estrés"])
+    has_packaging = any(k in all_text for k in ["embalaje", "empaque", "caja", "sellado", "rotulado"])
+
+    recommendations = []
+    if total_steps == 0:
+        recommendations.append("El modelo no tiene pasos registrados. Puedes autocompletarlo con la plantilla estándar de 52 pasos.")
+    else:
+        if missing_in_sequence:
+            rec_seq = ', '.join(map(str, missing_in_sequence[:8])) + ('...' if len(missing_in_sequence) > 8 else '')
+            recommendations.append(f"Hay {len(missing_in_sequence)} hueco(s) en la numeración (Faltan: {rec_seq}). Usa 'Re-secuenciar' o 'Rellenar Faltantes'.")
+        if duplicates:
+            recommendations.append(f"Hay números de paso duplicados ({', '.join(map(str, duplicates))}).")
+        if not has_cleaning:
+            recommendations.append("Atención de Calidad: No se encontraron pasos de limpieza (la línea exige 2 estaciones de limpieza obligatorias).")
+        if not has_bios:
+            recommendations.append("Sugerencia: Falta paso de configuración y actualización de BIOS.")
+        if not has_os:
+            recommendations.append("Sugerencia: Falta paso de instalación de Sistema Operativo y drivers.")
+        if total_steps < 52:
+            recommendations.append(f"El catálogo maestro SekaiTech tiene 52 pasos ({52 - total_steps} pasos disponibles para incorporar).")
+
+    return {
+        "model_name": model_name,
+        "total_steps": total_steps,
+        "max_step": max_step,
+        "missing_in_sequence": missing_in_sequence,
+        "duplicates": duplicates,
+        "has_cleaning": has_cleaning,
+        "has_intermediate_cleaning": has_intermediate_cleaning,
+        "has_final_cleaning": has_final_cleaning,
+        "has_bios": has_bios,
+        "has_os": has_os,
+        "has_stress_tests": has_stress_tests,
+        "has_packaging": has_packaging,
+        "recommendations": recommendations,
+        "is_healthy": len(missing_in_sequence) == 0 and len(duplicates) == 0 and total_steps >= 20 and has_cleaning
+    }
 
 @api_router.get("/models/{model_name}/checklist", response_model=List[ChecklistItemSchema])
 def get_model_checklist(model_name: str, db: Session = Depends(get_db)):

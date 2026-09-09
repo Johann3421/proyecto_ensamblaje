@@ -561,6 +561,8 @@ export default function App() {
                 setSelectedOrder(orderId);
                 navigate("matrix");
               }}
+              onRefreshModels={loadInitialData}
+              notify={notify}
             />
           )}
           {activeTab === "technicians" && (
@@ -1241,7 +1243,7 @@ function StepPickerModal({
 // =============================================
 // 2. CREADOR DE ORDEN (CON SELECCIÓN Y GESTIÓN LIBRE DE PASOS)
 // =============================================
-function CreateOrderView({ models, users, onSuccess }) {
+function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) {
   const [modelName, setModelName] = useState(models[0]?.name || "PROWORK");
   const [orderId, setOrderId] = useState(`ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [partNumber, setPartNumber] = useState("90MB0YZ0-M0EAY0");
@@ -1252,13 +1254,39 @@ function CreateOrderView({ models, users, onSuccess }) {
   const [submitting, setSubmitting] = useState(false);
   const [quickInputs, setQuickInputs] = useState({});
   const [visualPickerStation, setVisualPickerStation] = useState(null);
+  const [createModelModalOpen, setCreateModelModalOpen] = useState(false);
+  const [populatingSteps, setPopulatingSteps] = useState(false);
 
-  useEffect(() => {
-    fetch(`${API_BASE}/models/${modelName}/checklist`)
+  const loadModelSteps = useCallback((mName) => {
+    fetch(`${API_BASE}/models/${mName}/checklist`)
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setModelSteps(data); })
       .catch(() => {});
-  }, [modelName]);
+  }, []);
+
+  useEffect(() => {
+    loadModelSteps(modelName);
+  }, [modelName, loadModelSteps]);
+
+  const handlePopulateStandardSteps = async (targetModel) => {
+    try {
+      setPopulatingSteps(true);
+      const res = await fetch(`${API_BASE}/models/${targetModel}/populate-template`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template: "STANDARD", mode: "APPEND_MISSING" })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al cargar plantilla");
+      notify?.(data.message || `52 pasos cargados para ${targetModel}`, "success");
+      loadModelSteps(targetModel);
+      onRefreshModels?.();
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setPopulatingSteps(false);
+    }
+  };
 
   // Función para calcular la distribución equitativa de pasos
   const calculateEqualDistribution = useCallback((numStations, stepsList) => {
@@ -1548,16 +1576,50 @@ function CreateOrderView({ models, users, onSuccess }) {
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">Parámetros del Lote</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Modelo</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-gray-700">Modelo de PC</label>
+                  <button
+                    type="button"
+                    onClick={() => setCreateModelModalOpen(true)}
+                    className="text-[11px] font-bold text-[#0078d4] hover:text-[#106ebe] flex items-center gap-1 hover:underline"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Nuevo Modelo</span>
+                  </button>
+                </div>
                 <select
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
                   className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-medium touch-target"
                 >
                   {models.map(m => (
-                    <option key={m.name} value={m.name}>{m.name} ({m.step_count} pasos)</option>
+                    <option key={m.name} value={m.name}>{m.name} ({m.step_count || 0} pasos)</option>
                   ))}
                 </select>
+
+                {/* Alerta de modelo sin pasos */}
+                {modelSteps.length === 0 && (
+                  <div className="mt-2.5 p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-amber-950 fade-in">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                      <div>
+                        <p className="font-bold">El modelo "{modelName}" no tiene pasos registrados</p>
+                        <p className="text-[11px] text-amber-800">Se necesitan pasos en el checklist para asignarlos a las estaciones.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handlePopulateStandardSteps(modelName)}
+                        disabled={populatingSteps}
+                        className="px-3 py-1.5 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-lg font-bold text-xs shadow-xs flex items-center gap-1.5 transition touch-target"
+                      >
+                        {populatingSteps ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                        <span>⚡ Cargar 52 Pasos Estándar</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">N° de Orden</label>
@@ -1908,6 +1970,18 @@ function CreateOrderView({ models, users, onSuccess }) {
           onClaimAllFreeSteps={handleClaimAllFreeSteps}
         />
       )}
+
+      {/* Modal Crear Nuevo Modelo */}
+      <CreateModelModal
+        isOpen={createModelModalOpen}
+        onClose={() => setCreateModelModalOpen(false)}
+        onSuccess={(newModelName) => {
+          onRefreshModels?.();
+          setModelName(newModelName);
+        }}
+        existingModels={models}
+        notify={notify}
+      />
     </div>
   );
 }
@@ -1924,15 +1998,89 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [createModelModalOpen, setCreateModelModalOpen] = useState(false);
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [processingAction, setProcessingAction] = useState(null);
 
-  const loadSteps = () => {
+  const loadDiagnostics = useCallback((mName) => {
+    fetch(`${API_BASE}/models/${mName}/diagnostics`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setDiagnostics(data); })
+      .catch(() => {});
+  }, []);
+
+  const loadSteps = useCallback(() => {
     fetch(`${API_BASE}/models/${selectedModel}/checklist`)
       .then(r => r.ok ? r.json() : [])
-      .then(data => { if (Array.isArray(data)) setSteps(data); })
+      .then(data => {
+        if (Array.isArray(data)) setSteps(data);
+        loadDiagnostics(selectedModel);
+      })
       .catch(() => {});
+  }, [selectedModel, loadDiagnostics]);
+
+  useEffect(() => { loadSteps(); }, [selectedModel, loadSteps]);
+
+  // Handler: Resecuenciar pasos 1 a N
+  const handleResequence = async () => {
+    try {
+      setProcessingAction("resequence");
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/resequence`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al resecuenciar");
+      notify?.(data.message || "Pasos renumerados consecutivamente", "success");
+      loadSteps();
+      onRefreshModels?.();
+    } catch (err) {
+      notify?.("Error: " + err.message, "danger");
+    } finally {
+      setProcessingAction(null);
+    }
   };
 
-  useEffect(() => { loadSteps(); }, [selectedModel]);
+  // Handler: Rellenar pasos faltantes de la plantilla estándar
+  const handleFillMissing = async (mode = "APPEND_MISSING") => {
+    try {
+      setProcessingAction("fill");
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/populate-template`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template: "STANDARD", mode })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al completar pasos");
+      notify?.(data.message || "Pasos completados exitosamente", "success");
+      loadSteps();
+      onRefreshModels?.();
+    } catch (err) {
+      notify?.("Error: " + err.message, "danger");
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  // Handler: Eliminar modelo completo
+  const handleDeleteModel = async () => {
+    if (!window.confirm(`¿Estás seguro de eliminar permanentemente el modelo '${selectedModel}' y todos sus pasos asociados? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    try {
+      setProcessingAction("delete-model");
+      const res = await fetch(`${API_BASE}/models/${selectedModel}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al eliminar modelo");
+      notify?.(data.message || `Modelo '${selectedModel}' eliminado`, "success");
+      onRefreshModels?.();
+      const remaining = models.filter(m => m.name !== selectedModel);
+      if (remaining.length > 0) {
+        setSelectedModel(remaining[0].name);
+      }
+    } catch (err) {
+      notify?.("Error: " + err.message, "danger");
+    } finally {
+      setProcessingAction(null);
+    }
+  };
 
   const handleDeleteAllSteps = async () => {
     try {
@@ -1991,6 +2139,31 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
                 {models.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
               </select>
               <Badge variant="info">{steps.length} Pasos</Badge>
+
+              {/* Botón Nuevo Modelo */}
+              <button
+                type="button"
+                onClick={() => setCreateModelModalOpen(true)}
+                className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition touch-target"
+                title="Crear un nuevo modelo de computadora"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Nuevo Modelo</span>
+              </button>
+
+              {/* Botón Eliminar Modelo */}
+              {models.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteModel}
+                  disabled={processingAction === "delete-model"}
+                  className="text-xs bg-gray-50 hover:bg-rose-50 text-gray-600 hover:text-rose-700 border border-gray-200 hover:border-rose-300 px-2.5 py-2 rounded-lg flex items-center gap-1 transition touch-target"
+                  title={`Eliminar permanentemente el modelo ${selectedModel}`}
+                >
+                  <Trash className="w-3.5 h-3.5 text-rose-500" />
+                  <span className="hidden sm:inline">Eliminar Modelo</span>
+                </button>
+              )}
             </div>
 
             {/* Botón Borrar Todos los Pasos */}
@@ -2067,6 +2240,126 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
         </div>
       </Card>
 
+      {/* ASISTENTE DE PASOS FALTANTES Y CALIDAD */}
+      {diagnostics && (
+        <Card className={`p-4 border transition ${
+          diagnostics.is_healthy
+            ? "bg-emerald-50/40 border-emerald-300"
+            : diagnostics.total_steps === 0
+              ? "bg-blue-50/40 border-blue-300"
+              : "bg-amber-50/50 border-amber-300"
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className={`p-2 rounded-xl flex-shrink-0 ${
+                diagnostics.is_healthy ? "bg-emerald-100 text-emerald-700" : diagnostics.total_steps === 0 ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+              }`}>
+                {diagnostics.is_healthy ? (
+                  <ShieldCheck className="w-5 h-5" />
+                ) : diagnostics.total_steps === 0 ? (
+                  <ClipboardList className="w-5 h-5" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-xs font-bold text-gray-900">
+                    Control de Calidad y Pasos: {selectedModel}
+                  </h3>
+                  {diagnostics.is_healthy ? (
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span>Secuencia Completa y Continua</span>
+                    </span>
+                  ) : diagnostics.missing_in_sequence.length > 0 ? (
+                    <span className="text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full">
+                      ⚠️ {diagnostics.missing_in_sequence.length} pasos faltantes en secuencia
+                    </span>
+                  ) : diagnostics.total_steps === 0 ? (
+                    <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">
+                      Modelo sin pasos
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                      {diagnostics.recommendations.length} sugerencia(s)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-600 mt-0.5">
+                  {diagnostics.total_steps} pasos registrados · {diagnostics.has_cleaning ? "🧼 Limpieza cubierta" : "⚠️ Requiere pasos de limpieza"} · {diagnostics.has_bios ? "✓ BIOS verificado" : "Falta BIOS"}
+                </p>
+              </div>
+            </div>
+
+            {/* Acciones de reparación directa */}
+            <div className="flex items-center gap-2 flex-wrap self-end sm:self-center">
+              {diagnostics.missing_in_sequence.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleResequence}
+                    disabled={processingAction === "resequence"}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
+                    title="Renumerar los pasos de 1 a N eliminando saltos numéricos"
+                  >
+                    {processingAction === "resequence" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    <span>🛠️ Re-secuenciar (1 a N)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleFillMissing("APPEND_MISSING")}
+                    disabled={processingAction === "fill"}
+                    className="px-3 py-1.5 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
+                    title="Insertar los pasos estándar en los huecos faltantes"
+                  >
+                    {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>⚡ Rellenar Pasos Faltantes</span>
+                  </button>
+                </>
+              )}
+
+              {diagnostics.total_steps === 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleFillMissing("REPLACE")}
+                  disabled={processingAction === "fill"}
+                  className="px-3.5 py-1.5 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
+                >
+                  {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  <span>⚡ Cargar Plantilla Maestra (52 Pasos)</span>
+                </button>
+              )}
+
+              {diagnostics.total_steps > 0 && diagnostics.total_steps < 52 && diagnostics.missing_in_sequence.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleFillMissing("APPEND_MISSING")}
+                  disabled={processingAction === "fill"}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
+                  title="Incorporar pasos restantes del catálogo maestro de 52 pasos"
+                >
+                  {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+                  <span>+ Añadir Pasos Estándar ({52 - diagnostics.total_steps})</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Recomendaciones detalladas si existen */}
+          {diagnostics.recommendations.length > 0 && (
+            <div className="mt-3 pt-2.5 border-t border-gray-200/60 text-xs text-gray-700 space-y-1">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Diagnóstico de Calidad:</span>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-gray-600">
+                {diagnostics.recommendations.map((rec, i) => (
+                  <li key={i}>{rec}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Lista de pasos o Estado Vacío */}
       {steps.length === 0 ? (
         <Card className="p-8 text-center border-dashed border-2">
@@ -2075,9 +2368,17 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
           </div>
           <h3 className="text-sm font-bold text-gray-900">Checklist vacío para {selectedModel}</h3>
           <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto leading-relaxed">
-            Este modelo actualmente no tiene pasos registrados. Puedes descargar la <strong>Plantilla Oficial</strong> para crearlos en Excel y subirlos en un clic, o agregarlos manualmente uno por uno.
+            Este modelo actualmente no tiene pasos registrados. Puedes cargar la <strong>Plantilla Oficial</strong> completa de 52 pasos en un clic, descargar la plantilla Excel, o agregarlos manualmente uno por uno.
           </p>
           <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
+            <button
+              onClick={() => handleFillMissing("REPLACE")}
+              disabled={processingAction === "fill"}
+              className="text-xs bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow transition touch-target"
+            >
+              {processingAction === "fill" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              <span>⚡ Cargar 52 Pasos Estándar</span>
+            </button>
             <button
               onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}`, "_blank")}
               className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition touch-target"
@@ -2094,7 +2395,7 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
             </button>
             <button
               onClick={() => setEditingItem({ model_name: selectedModel, step_number: 1, operation: "", description: "", qc_criteria: "", media_url: "" })}
-              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow transition touch-target"
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition touch-target"
             >
               <Plus className="w-4 h-4" />
               <span>Nuevo Paso Manual</span>
@@ -2107,55 +2408,93 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
         </Card>
       ) : (
         <div className="space-y-2">
-          {filteredSteps.map((st) => (
-            <Card key={st.step_number} className="overflow-hidden">
-              <button
-                onClick={() => setExpandedStep(expandedStep === st.step_number ? null : st.step_number)}
-                className="w-full flex items-center gap-3 p-3 text-left touch-target"
-              >
-                <span className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
-                  {st.step_number}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
-                  {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate">{st.qc_criteria}</p>}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {st.media_url && <ImageIcon className="w-3.5 h-3.5 text-blue-500" />}
-                  {expandedStep === st.step_number ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                </div>
-              </button>
+          {filteredSteps.map((st, idx) => {
+            const prevStep = idx > 0 ? filteredSteps[idx - 1] : null;
+            const hasGapBefore = prevStep && st.step_number > prevStep.step_number + 1;
+            const gapCount = hasGapBefore ? (st.step_number - prevStep.step_number - 1) : 0;
 
-              {expandedStep === st.step_number && (
-                <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-2 fade-in">
-                  {st.description && <p className="text-xs text-gray-700">{st.description}</p>}
-                  <div className="bg-blue-50 p-2 rounded-lg text-xs text-blue-800">
-                    <span className="font-semibold">Criterio QC: </span>{st.qc_criteria}
+            return (
+              <React.Fragment key={st.step_number || st.id || idx}>
+                {hasGapBefore && (
+                  <div className="p-2.5 bg-amber-50/90 border border-dashed border-amber-300 rounded-xl flex items-center justify-between gap-2 text-xs text-amber-950 my-1 fade-in">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span className="font-semibold">
+                        Salto numérico: Faltan {gapCount} paso(s) entre #{prevStep.step_number} y #{st.step_number}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleResequence}
+                        disabled={processingAction === "resequence"}
+                        className="px-2 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] font-bold shadow-2xs transition"
+                        title="Renumerar para que sea continuo"
+                      >
+                        🛠️ Re-secuenciar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFillMissing("APPEND_MISSING")}
+                        disabled={processingAction === "fill"}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold shadow-2xs transition"
+                        title="Rellenar los pasos estándar correspondientes"
+                      >
+                        ⚡ Rellenar
+                      </button>
+                    </div>
                   </div>
-                  {st.media_url && (
-                    <img src={st.media_url} alt={st.operation} className="w-full max-h-40 object-cover rounded-lg" />
+                )}
+                <Card className="overflow-hidden">
+                  <button
+                    onClick={() => setExpandedStep(expandedStep === st.step_number ? null : st.step_number)}
+                    className="w-full flex items-center gap-3 p-3 text-left touch-target"
+                  >
+                    <span className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
+                      {st.step_number}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
+                      {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate">{st.qc_criteria}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {st.media_url && <ImageIcon className="w-3.5 h-3.5 text-blue-500" />}
+                      {expandedStep === st.step_number ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                    </div>
+                  </button>
+
+                  {expandedStep === st.step_number && (
+                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-2 fade-in">
+                      {st.description && <p className="text-xs text-gray-700">{st.description}</p>}
+                      <div className="bg-blue-50 p-2 rounded-lg text-xs text-blue-800">
+                        <span className="font-semibold">Criterio QC: </span>{st.qc_criteria}
+                      </div>
+                      {st.media_url && (
+                        <img src={st.media_url} alt={st.operation} className="w-full max-h-40 object-cover rounded-lg" />
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => setEditingItem(st)}
+                          className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Editar Paso</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSingleStep(st.id, st.step_number)}
+                          className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
+                          title="Eliminar este paso"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Eliminar</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => setEditingItem(st)}
-                      className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                      <span>Editar Paso</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteSingleStep(st.id, st.step_number)}
-                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
-                      title="Eliminar este paso"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Eliminar</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </Card>
-          ))}
+                </Card>
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
 
@@ -2245,6 +2584,18 @@ function ChecklistEditorView({ models, notify, onRefreshModels }) {
           </div>
         </div>
       )}
+
+      {/* Modal Crear Nuevo Modelo */}
+      <CreateModelModal
+        isOpen={createModelModalOpen}
+        onClose={() => setCreateModelModalOpen(false)}
+        onSuccess={(newModelName) => {
+          onRefreshModels?.();
+          setSelectedModel(newModelName);
+        }}
+        existingModels={models}
+        notify={notify}
+      />
     </div>
   );
 }
@@ -4251,6 +4602,244 @@ function ImportChecklistModal({ modelName, onClose, onSuccess, notify }) {
             )}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// MODAL CREAR NUEVO MODELO DE COMPUTADORA
+// =============================================
+function CreateModelModal({ isOpen, onClose, onSuccess, existingModels = [], notify }) {
+  const [modelName, setModelName] = useState("");
+  const [description, setDescription] = useState("");
+  const [initStrategy, setInitStrategy] = useState("STANDARD"); // "STANDARD", "CLONE", "EMPTY"
+  const [cloneSource, setCloneSource] = useState(existingModels[0]?.name || "PROWORK");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const cleanName = modelName.trim().toUpperCase();
+    if (!cleanName) {
+      setErrorMsg("El nombre del modelo es obligatorio.");
+      return;
+    }
+    if (existingModels.some(m => (m.name || "").toUpperCase() === cleanName)) {
+      setErrorMsg(`El modelo '${cleanName}' ya existe.`);
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setErrorMsg("");
+      const payload = {
+        name: cleanName,
+        description: description.trim(),
+        template: initStrategy,
+        clone_from: initStrategy === "CLONE" ? cloneSource : undefined
+      };
+
+      const res = await fetch(`${API_BASE}/models`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al crear modelo");
+
+      notify?.(`Modelo '${cleanName}' creado con éxito (${data.step_count || 0} pasos)`, "success");
+      onSuccess?.(cleanName);
+      onClose();
+    } catch (err) {
+      setErrorMsg(err.message || "Error al procesar la solicitud");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3 sm:p-4 fade-in backdrop-blur-xs" onClick={onClose}>
+      <div 
+        className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-gray-200 flex flex-col max-h-[92vh] animate-in"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-5 py-4 bg-gradient-to-r from-[#0078d4] to-[#106ebe] text-white flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-white/15 rounded-xl">
+              <PlusCircle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold leading-tight">Crear Nuevo Modelo de PC</h3>
+              <p className="text-[11px] text-blue-100">Configura una nueva línea de producto y su checklist</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Nombre del modelo */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Nombre del Modelo <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="Ej: GAMER-ULTRA, SLIM-OFFICE, WORKSTATION-AI"
+              value={modelName}
+              onChange={e => setModelName(e.target.value.toUpperCase())}
+              className="w-full text-xs font-bold uppercase tracking-wider border border-gray-300 rounded-xl p-2.5 bg-gray-50 focus:bg-white focus:border-blue-500 focus:outline-none transition"
+              autoFocus
+            />
+            <span className="text-[10px] text-gray-400 mt-1 block">Se registrará automáticamente en mayúsculas.</span>
+          </div>
+
+          {/* Descripción */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Descripción / Línea de Producto
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Ej: Línea gamer de alto rendimiento con refrigeración líquida y GPU RTX"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5 bg-white focus:border-blue-500 focus:outline-none transition resize-none"
+            />
+          </div>
+
+          {/* Estrategia de pasos iniciales */}
+          <div className="space-y-2 pt-1 border-t border-gray-100">
+            <label className="block text-xs font-bold text-gray-800">
+              Checklist Inicial de Pasos:
+            </label>
+
+            <div className="space-y-2">
+              {/* Opción 1: Plantilla Estándar */}
+              <label className={`flex items-start gap-3 p-3 rounded-xl border transition cursor-pointer ${
+                initStrategy === "STANDARD" ? "bg-blue-50/70 border-blue-400 shadow-xs" : "bg-white border-gray-200 hover:bg-gray-50"
+              }`}>
+                <input
+                  type="radio"
+                  name="initStrategy"
+                  value="STANDARD"
+                  checked={initStrategy === "STANDARD"}
+                  onChange={() => setInitStrategy("STANDARD")}
+                  className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                />
+                <div className="text-xs">
+                  <div className="font-bold text-gray-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    <span>⚡ Plantilla Maestra SekaiTech (52 Pasos)</span>
+                    <span className="text-[9px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">Recomendado</span>
+                  </div>
+                  <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">
+                    Incluye los 52 pasos completos: montajes de chasis, BIOS, Windows, software, estaciones obligatorias de limpieza intermedia y final.
+                  </p>
+                </div>
+              </label>
+
+              {/* Opción 2: Clonar de modelo existente */}
+              <label className={`flex items-start gap-3 p-3 rounded-xl border transition cursor-pointer ${
+                initStrategy === "CLONE" ? "bg-indigo-50/70 border-indigo-400 shadow-xs" : "bg-white border-gray-200 hover:bg-gray-50"
+              }`}>
+                <input
+                  type="radio"
+                  name="initStrategy"
+                  value="CLONE"
+                  checked={initStrategy === "CLONE"}
+                  onChange={() => setInitStrategy("CLONE")}
+                  className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                />
+                <div className="text-xs flex-1">
+                  <div className="font-bold text-gray-900 flex items-center gap-1.5">
+                    <ClipboardList className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>📋 Clonar pasos desde otro modelo</span>
+                  </div>
+                  <p className="text-gray-500 text-[11px] mt-0.5">
+                    Copia idénticamente los pasos y criterios de inspección de un modelo existente.
+                  </p>
+                  {initStrategy === "CLONE" && (
+                    <div className="mt-2">
+                      <select
+                        value={cloneSource}
+                        onChange={e => setCloneSource(e.target.value)}
+                        className="w-full text-xs font-bold border border-indigo-300 rounded-lg p-2 bg-white text-indigo-900"
+                      >
+                        {existingModels.map(m => (
+                          <option key={m.name} value={m.name}>
+                            {m.name} ({m.step_count || 0} pasos)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              {/* Opción 3: En blanco */}
+              <label className={`flex items-start gap-3 p-3 rounded-xl border transition cursor-pointer ${
+                initStrategy === "EMPTY" ? "bg-amber-50/70 border-amber-400 shadow-xs" : "bg-white border-gray-200 hover:bg-gray-50"
+              }`}>
+                <input
+                  type="radio"
+                  name="initStrategy"
+                  value="EMPTY"
+                  checked={initStrategy === "EMPTY"}
+                  onChange={() => setInitStrategy("EMPTY")}
+                  className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                />
+                <div className="text-xs">
+                  <div className="font-bold text-gray-900">📄 Modelo en blanco (0 Pasos)</div>
+                  <p className="text-gray-500 text-[11px] mt-0.5">
+                    Crea el modelo vacío para cargar los pasos luego mediante archivo Excel o manualmente.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Footer buttons */}
+          <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !modelName.trim()}
+              className="px-5 py-2.5 bg-[#0078d4] hover:bg-[#106ebe] disabled:bg-gray-300 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 transition touch-target disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Creando Modelo...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Guardar Modelo</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -48,6 +48,8 @@ class QCOrder(Base):
     total_units = Column(Integer, nullable=False) # ej: 50
     total_stations = Column(Integer, nullable=False) # ej: 5
     status = Column(String(20), default="IN_PROGRESS") # IN_PROGRESS, COMPLETED, PAUSED
+    supervisor_id = Column(String(50), nullable=True) # ej: "SUP-01"
+    supervisor_name = Column(String(100), nullable=True) # ej: "Jhoan Supervisor"
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(String(100), default="Administrador")
 
@@ -63,6 +65,8 @@ class QCStationAssignment(Base):
     station_name = Column(String(100), nullable=True)
     user_id = Column(String(50), nullable=False)
     user_name = Column(String(100), nullable=False)
+    secondary_user_id = Column(String(50), nullable=True) # Segundo técnico / co-responsable asignado a la estación/pasos
+    secondary_user_name = Column(String(100), nullable=True)
     start_step = Column(Integer, nullable=False) # ej: 1
     end_step = Column(Integer, nullable=False)   # ej: 11
     step_numbers = Column(Text, nullable=True)   # Lista de números de pasos manuales ej: "1,2,5,8"
@@ -98,6 +102,7 @@ class QCStepLog(Base):
     user_name = Column(String(100), nullable=False)
     status = Column(String(20), nullable=False) # PASS, FAIL, REASSIGNED
     photo_url = Column(String(500), nullable=True) # Evidencia fotográfica del paso verificado
+    is_supervisor_verified = Column(Boolean, default=False) # True si la foto/verificación fue realizada por el supervisor
     notes = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
@@ -140,5 +145,6 @@ class QCSupervisorAudit(Base):
     supervisor_name = Column(String(100), nullable=False)
     status = Column(String(20), default="APPROVED") # APPROVED, OBSERVED, REJECTED
     checks_json = Column(Text, nullable=True) # JSON con los 5 puntos de control
+    photo_url = Column(String(500), nullable=True) # Foto de cumplimiento tomada por el supervisor
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

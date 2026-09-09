@@ -15,11 +15,11 @@ from .database import engine, Base, SessionLocal, get_db
 from .models import QCUser, QCModel, QCChecklistItem, QCOrder, QCStationAssignment, QCPCUnit, QCStepLog, QCIssue, QCStepStationOverride, QCSupervisorAudit
 from .schemas import (
     QCUserSchema, QCUserCreate, QCUserUpdate, AddUnitsRequest, ModelSchema, ChecklistItemSchema,
-    OrderCreateRequest, OrderDetailSchema, StationAssignmentCreate, StationAssignmentSchema,
+    OrderCreateRequest, OrderUpdateRequest, OrderDetailSchema, StationAssignmentCreate, StationAssignmentSchema,
     StepLogCreate, StepLogSchema, StepUncheckRequest,
     IssueCreate, IssueSchema,
     ReassignEmergencyRequest, TransferUnitRequest, StepReassignRequest,
-    SupervisorAuditCreate, SupervisorAuditSchema,
+    SupervisorAuditCreate, SupervisorAuditSchema, SupervisorStepPhotoVerify,
     AuthRegister, AuthLogin, TokenResponse
 )
 from .seed_data import seed_database, DEFAULT_USERS, PROWORK_52_STEPS
@@ -50,13 +50,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Directorio de subidas
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uploads")
+# Montar carpeta de uploads para fotos
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-def auto_migrate_schema():
-    """Migración automática de columnas para PostgreSQL / SQLite sin romper datos existentes"""
+# Migraciones automáticas seguras
+@app.on_event("startup")
+def startup_event():
+    Base.metadata.create_all(bind=engine)
     migrations = [
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS email VARCHAR(150);",
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);",
@@ -64,9 +66,15 @@ def auto_migrate_schema():
         "ALTER TABLE qc_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;",
         "ALTER TABLE qc_issues ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         "ALTER TABLE qc_step_logs ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
+        "ALTER TABLE qc_step_logs ADD COLUMN IF NOT EXISTS is_supervisor_verified BOOLEAN DEFAULT FALSE;",
         "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS is_cleaning_station BOOLEAN DEFAULT FALSE;",
         "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS station_type VARCHAR(50) DEFAULT 'ASSEMBLY';",
         "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS step_numbers TEXT;",
+        "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS secondary_user_id VARCHAR(50);",
+        "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS secondary_user_name VARCHAR(100);",
+        "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_id VARCHAR(50);",
+        "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_name VARCHAR(100);",
+        "ALTER TABLE qc_supervisor_audits ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         """CREATE TABLE IF NOT EXISTS qc_step_station_overrides (
             id SERIAL PRIMARY KEY,
             order_id VARCHAR(50) NOT NULL,
@@ -725,6 +733,8 @@ def list_orders(db: Session = Depends(get_db)):
             "total_units": total,
             "total_stations": o.total_stations,
             "status": o.status,
+            "supervisor_id": o.supervisor_id,
+            "supervisor_name": o.supervisor_name,
             "created_at": o.created_at,
             "created_by": o.created_by,
             "stats": {
@@ -762,6 +772,13 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
             detail=f"Regla de Calidad Obligatoria: La línea de producción debe incluir al menos 2 estaciones designadas para Limpieza (Intermedia y Final). Se detectaron {len(cleaning_stations)} de 2 requeridas."
         )
 
+    # Obtener nombre del supervisor si no fue enviado explícitamente
+    sup_name = req.supervisor_name
+    if req.supervisor_id and not sup_name:
+        sup_user = db.query(QCUser).filter(QCUser.id == req.supervisor_id).first()
+        if sup_user:
+            sup_name = sup_user.name
+
     order = QCOrder(
         order_id=req.order_id,
         model_name=req.model_name,
@@ -769,6 +786,8 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         total_units=req.total_units,
         total_stations=num_stations,
         status="IN_PROGRESS",
+        supervisor_id=req.supervisor_id,
+        supervisor_name=sup_name,
         created_by=req.created_by
     )
     db.add(order)
@@ -807,6 +826,8 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
                 station_name=st.station_name or f"Estación {s_idx}",
                 user_id=st.user_id,
                 user_name=st.user_name,
+                secondary_user_id=st.secondary_user_id,
+                secondary_user_name=st.secondary_user_name,
                 start_step=s_start,
                 end_step=s_end,
                 step_numbers=step_nums_str,
@@ -834,6 +855,8 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
                 station_name=st.station_name or f"Estación {s_idx}",
                 user_id=st.user_id,
                 user_name=st.user_name,
+                secondary_user_id=st.secondary_user_id,
+                secondary_user_name=st.secondary_user_name,
                 start_step=current_start,
                 end_step=current_end,
                 step_numbers=step_nums_str,
@@ -855,6 +878,119 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Orden y pipeline creados exitosamente", "order_id": req.order_id}
+
+@api_router.put("/orders/{order_id}")
+def update_order(order_id: str, req: OrderUpdateRequest, db: Session = Depends(get_db)):
+    """Actualiza una orden existente (modelo, part_number, estado, total_units, supervisor asignado y estaciones)."""
+    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    if req.model_name and req.model_name != order.model_name:
+        mod = db.query(QCModel).filter(QCModel.name == req.model_name).first()
+        if not mod:
+            raise HTTPException(status_code=400, detail=f"El modelo '{req.model_name}' no existe")
+        order.model_name = req.model_name
+
+    if req.part_number is not None:
+        order.part_number = req.part_number
+
+    if req.status is not None:
+        order.status = req.status
+
+    if req.supervisor_id is not None:
+        order.supervisor_id = req.supervisor_id
+        if req.supervisor_name:
+            order.supervisor_name = req.supervisor_name
+        else:
+            sup_u = db.query(QCUser).filter(QCUser.id == req.supervisor_id).first()
+            if sup_u:
+                order.supervisor_name = sup_u.name
+
+    # Ajuste de unidades si se modificó total_units
+    if req.total_units is not None and req.total_units > 0 and req.total_units != order.total_units:
+        current_count = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).count()
+        if req.total_units > current_count:
+            # Agregar nuevas PCs correlativas
+            for u_num in range(current_count + 1, req.total_units + 1):
+                db.add(QCPCUnit(
+                    order_id=order_id,
+                    unit_number=u_num,
+                    serial_number=f"KEN-{order.model_name[:3]}-{order.order_id[-4:]}-{u_num:03d}",
+                    current_station=1,
+                    overall_status="PENDING",
+                    current_step_progress=0
+                ))
+        elif req.total_units < current_count:
+            # Eliminar unidades sobrantes sólo si están en PENDING y progreso 0
+            excess_units = db.query(QCPCUnit).filter(
+                QCPCUnit.order_id == order_id,
+                QCPCUnit.unit_number > req.total_units,
+                QCPCUnit.overall_status == "PENDING",
+                QCPCUnit.current_step_progress == 0
+            ).all()
+            for eu in excess_units:
+                db.delete(eu)
+        order.total_units = req.total_units
+
+    # Actualizar estaciones si se enviaron
+    if req.stations:
+        cleaning_count = sum(1 for st in req.stations if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower())
+        if cleaning_count < 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla de Calidad Obligatoria: La línea debe incluir al menos 2 estaciones designadas para Limpieza. Actualmente: {cleaning_count}."
+            )
+
+        for st_in in req.stations:
+            asgn = db.query(QCStationAssignment).filter(
+                QCStationAssignment.order_id == order_id,
+                QCStationAssignment.station_number == st_in.station_number
+            ).first()
+            if asgn:
+                asgn.user_id = st_in.user_id
+                asgn.user_name = st_in.user_name
+                asgn.secondary_user_id = st_in.secondary_user_id
+                asgn.secondary_user_name = st_in.secondary_user_name
+                if st_in.station_name:
+                    asgn.station_name = st_in.station_name
+                if st_in.start_step is not None:
+                    asgn.start_step = st_in.start_step
+                if st_in.end_step is not None:
+                    asgn.end_step = st_in.end_step
+                if st_in.step_numbers is not None:
+                    if isinstance(st_in.step_numbers, list):
+                        asgn.step_numbers = ",".join(str(x) for x in sorted(st_in.step_numbers))
+                    else:
+                        asgn.step_numbers = str(st_in.step_numbers)
+                asgn.is_cleaning_station = bool(st_in.is_cleaning_station or st_in.station_type == "CLEANING" or "limpieza" in (st_in.station_name or "").lower())
+                asgn.station_type = st_in.station_type or ("CLEANING" if asgn.is_cleaning_station else "ASSEMBLY")
+            else:
+                step_nums_str = None
+                if st_in.step_numbers:
+                    if isinstance(st_in.step_numbers, list):
+                        step_nums_str = ",".join(str(x) for x in sorted(st_in.step_numbers))
+                    else:
+                        step_nums_str = str(st_in.step_numbers)
+                is_clean = bool(st_in.is_cleaning_station or st_in.station_type == "CLEANING" or "limpieza" in (st_in.station_name or "").lower())
+                db.add(QCStationAssignment(
+                    order_id=order_id,
+                    station_number=st_in.station_number,
+                    station_name=st_in.station_name or f"Estación {st_in.station_number}",
+                    user_id=st_in.user_id,
+                    user_name=st_in.user_name,
+                    secondary_user_id=st_in.secondary_user_id,
+                    secondary_user_name=st_in.secondary_user_name,
+                    start_step=st_in.start_step or 1,
+                    end_step=st_in.end_step or 1,
+                    step_numbers=step_nums_str,
+                    is_cleaning_station=is_clean,
+                    station_type=st_in.station_type or ("CLEANING" if is_clean else "ASSEMBLY")
+                ))
+
+    db.commit()
+    db.refresh(order)
+    return {"message": "Orden actualizada exitosamente", "order_id": order.order_id}
 
 @api_router.put("/orders/{order_id}/stations")
 def update_order_stations(order_id: str, stations_data: List[StationAssignmentCreate], db: Session = Depends(get_db)):
@@ -879,6 +1015,8 @@ def update_order_stations(order_id: str, stations_data: List[StationAssignmentCr
         if asgn:
             asgn.user_id = st_in.user_id
             asgn.user_name = st_in.user_name
+            asgn.secondary_user_id = st_in.secondary_user_id
+            asgn.secondary_user_name = st_in.secondary_user_name
             if st_in.station_name:
                 asgn.station_name = st_in.station_name
             if st_in.start_step is not None:
@@ -935,6 +1073,8 @@ def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
             "total_units": order.total_units,
             "total_stations": order.total_stations,
             "status": order.status,
+            "supervisor_id": order.supervisor_id,
+            "supervisor_name": order.supervisor_name,
         },
         "stations": stations,
         "units": units,
@@ -1180,12 +1320,59 @@ def get_operator_workspace(
         else (assignment.start_step <= num <= assignment.end_step)
     )
 
+    all_stations = db.query(QCStationAssignment).filter(
+        QCStationAssignment.order_id == order.order_id
+    ).order_by(QCStationAssignment.station_number).all()
+
+    # Mapeo de técnicos asignados a cada paso (soporte para 2 o más técnicos por estación o pasos compartidos)
+    step_techs_map = {}
+    for st in all_stations:
+        st_steps = []
+        if st.step_numbers:
+            try:
+                st_steps = [int(x.strip()) for x in st.step_numbers.split(",") if x.strip().isdigit()]
+            except Exception:
+                st_steps = []
+        if not st_steps and st.start_step and st.end_step:
+            st_steps = list(range(st.start_step, st.end_step + 1))
+        
+        for sn in st_steps:
+            if sn not in step_techs_map:
+                step_techs_map[sn] = []
+            if st.user_id and st.user_name:
+                if not any(t["id"] == st.user_id for t in step_techs_map[sn]):
+                    step_techs_map[sn].append({
+                        "id": st.user_id,
+                        "name": st.user_name,
+                        "station_number": st.station_number,
+                        "station_name": st.station_name,
+                        "is_secondary": False
+                    })
+            if st.secondary_user_id and st.secondary_user_name:
+                if not any(t["id"] == st.secondary_user_id for t in step_techs_map[sn]):
+                    step_techs_map[sn].append({
+                        "id": st.secondary_user_id,
+                        "name": st.secondary_user_name,
+                        "station_number": st.station_number,
+                        "station_name": st.station_name,
+                        "is_secondary": True
+                    })
+
     # Calcular la lista de pasos que esta estación debe ejecutar con DEDUPLICACIÓN ESTRICTA
     station_steps = []
     seen_station_step_nums = set()
     for s in all_steps:
         if s.step_number in seen_station_step_nums:
             continue
+
+        assigned_techs = step_techs_map.get(s.step_number, [])
+        if not assigned_techs:
+            assigned_techs = []
+            if assignment.user_name:
+                assigned_techs.append({"id": assignment.user_id, "name": assignment.user_name, "station_number": assignment.station_number, "is_secondary": False})
+            if assignment.secondary_user_name:
+                assigned_techs.append({"id": assignment.secondary_user_id, "name": assignment.secondary_user_name, "station_number": assignment.station_number, "is_secondary": True})
+
         if s.step_number in in_step_map:
             # Paso recibido de otra estación
             o = in_step_map[s.step_number]
@@ -1200,7 +1387,11 @@ def get_operator_workspace(
                 "media_type": s.media_type,
                 "is_delegated_in": True,
                 "delegated_from_station": o.from_station,
-                "delegated_reason": o.reason
+                "delegated_reason": o.reason,
+                "assigned_technicians": assigned_techs,
+                "has_two_technicians": len(assigned_techs) >= 2,
+                "primary_technician": assignment.user_name,
+                "secondary_technician": assignment.secondary_user_name
             })
             seen_station_step_nums.add(s.step_number)
         elif is_station_own_step(s.step_number) and s.step_number not in out_step_map:
@@ -1214,7 +1405,11 @@ def get_operator_workspace(
                 "qc_criteria": s.qc_criteria,
                 "media_url": s.media_url,
                 "media_type": s.media_type,
-                "is_delegated_in": False
+                "is_delegated_in": False,
+                "assigned_technicians": assigned_techs,
+                "has_two_technicians": len(assigned_techs) >= 2,
+                "primary_technician": assignment.user_name,
+                "secondary_technician": assignment.secondary_user_name
             })
             seen_station_step_nums.add(s.step_number)
 
@@ -1246,6 +1441,7 @@ def get_operator_workspace(
                 "step_number": l.step_number,
                 "photo_url": l.photo_url,
                 "user_name": l.user_name,
+                "is_supervisor_verified": bool(l.is_supervisor_verified),
                 "timestamp": l.timestamp.isoformat() if l.timestamp else None
             }
             for l in logs
@@ -1267,10 +1463,6 @@ def get_operator_workspace(
         QCPCUnit.order_id == order.order_id,
         QCPCUnit.current_station > assignment.station_number
     ).order_by(QCPCUnit.unit_number.desc()).limit(15).all()
-
-    all_stations = db.query(QCStationAssignment).filter(
-        QCStationAssignment.order_id == order.order_id
-    ).order_by(QCStationAssignment.station_number).all()
 
     # Consultar último visto bueno de auditoría de supervisión para la unidad activa
     supervisor_audit = None
@@ -1295,6 +1487,7 @@ def get_operator_workspace(
                 "supervisor_name": aud.supervisor_name,
                 "status": aud.status,
                 "checks": checks,
+                "photo_url": aud.photo_url,
                 "notes": aud.notes or "",
                 "created_at": aud.created_at.isoformat() if aud.created_at else None
             }
@@ -1303,6 +1496,8 @@ def get_operator_workspace(
         "active": True,
         "assignment": assignment,
         "order": order,
+        "supervisor_id": order.supervisor_id,
+        "supervisor_name": order.supervisor_name,
         "available_orders": available_orders_info,
         "station_steps": station_steps,
         "transferred_out_steps": transferred_out_steps,
@@ -1321,6 +1516,59 @@ def get_operator_workspace(
             "role": requesting_user.role if requesting_user else "OPERATOR"
         },
         "supervisor_audit": supervisor_audit
+    }
+
+@api_router.post("/supervisor/verify-step-photo")
+def supervisor_verify_step_photo(req: SupervisorStepPhotoVerify, db: Session = Depends(get_db)):
+    """El supervisor valida que un paso ya se cumplió tomando la foto de evidencia."""
+    unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == req.order_id,
+        QCPCUnit.unit_number == req.unit_number
+    ).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad de PC no encontrada")
+
+    # Eliminar log de PASS previo para este paso si existiese, para sustituirlo por la validación oficial del supervisor
+    db.query(QCStepLog).filter(
+        QCStepLog.order_id == req.order_id,
+        QCStepLog.unit_number == req.unit_number,
+        QCStepLog.step_number == req.step_number,
+        QCStepLog.status == "PASS"
+    ).delete()
+
+    supervisor_log = QCStepLog(
+        order_id=req.order_id,
+        unit_number=req.unit_number,
+        step_number=req.step_number,
+        station_number=req.station_number or unit.current_station,
+        user_id=req.supervisor_id,
+        user_name=f"{req.supervisor_name} (Supervisor)",
+        status="PASS",
+        photo_url=req.photo_url,
+        is_supervisor_verified=True,
+        notes=req.notes or "Cumplimiento verificado con foto por Supervisor de Calidad",
+        timestamp=datetime.utcnow()
+    )
+    db.add(supervisor_log)
+
+    if unit.overall_status == "PENDING":
+        unit.overall_status = "IN_PROGRESS"
+        unit.started_at = datetime.utcnow()
+    unit.current_step_progress = max(unit.current_step_progress, req.step_number)
+
+    db.commit()
+    db.refresh(supervisor_log)
+
+    return {
+        "message": f"Paso {req.step_number} verificado con foto por el supervisor {req.supervisor_name}",
+        "log": {
+            "id": supervisor_log.id,
+            "step_number": supervisor_log.step_number,
+            "photo_url": supervisor_log.photo_url,
+            "user_name": supervisor_log.user_name,
+            "is_supervisor_verified": True,
+            "timestamp": supervisor_log.timestamp.isoformat()
+        }
     }
 
 @api_router.post("/supervisor/approve-unit")
@@ -1343,6 +1591,7 @@ def approve_unit_supervisor(req: SupervisorAuditCreate, db: Session = Depends(ge
         supervisor_name=req.supervisor_name,
         status=req.status or "APPROVED",
         checks_json=checks_str,
+        photo_url=req.photo_url,
         notes=req.notes or ""
     )
     db.add(audit_record)
@@ -1356,6 +1605,8 @@ def approve_unit_supervisor(req: SupervisorAuditCreate, db: Session = Depends(ge
         user_id=req.supervisor_id,
         user_name=f"{req.supervisor_name} (Supervisor)",
         status="PASS" if req.status == "APPROVED" else "FAIL",
+        photo_url=req.photo_url,
+        is_supervisor_verified=True,
         notes=f"Auditoría Supervisor: {req.notes or 'Visto Bueno Conforme'}. Verificaciones: {', '.join(req.checks or [])}"
     )
     db.add(audit_log)
@@ -1378,6 +1629,7 @@ def approve_unit_supervisor(req: SupervisorAuditCreate, db: Session = Depends(ge
             "supervisor_name": audit_record.supervisor_name,
             "status": audit_record.status,
             "checks": req.checks or [],
+            "photo_url": audit_record.photo_url,
             "notes": audit_record.notes,
             "created_at": audit_record.created_at.isoformat() if audit_record.created_at else None
         }
@@ -1408,6 +1660,7 @@ def get_unit_supervisor_audit(order_id: str, unit_number: int, db: Session = Dep
             "supervisor_name": a.supervisor_name,
             "status": a.status,
             "checks": checks,
+            "photo_url": a.photo_url,
             "notes": a.notes,
             "created_at": a.created_at.isoformat() if a.created_at else None
         })

@@ -236,6 +236,7 @@ export default function App() {
   const [addUnitsModalOpen, setAddUnitsModalOpen] = useState(false);
   const [resetOrderModalOpen, setResetOrderModalOpen] = useState(false);
   const [deleteOrderModalOpen, setDeleteOrderModalOpen] = useState(false);
+  const [editOrderModalOpen, setEditOrderModalOpen] = useState(false);
   const [operatorStationFilter, setOperatorStationFilter] = useState(null);
 
   // ——— Auth: Check saved token on mount ———
@@ -551,12 +552,13 @@ export default function App() {
               onOpenAddUnits={() => setAddUnitsModalOpen(true)}
               onOpenResetOrder={() => setResetOrderModalOpen(true)}
               onOpenDeleteOrder={() => setDeleteOrderModalOpen(true)}
+              onOpenEditOrder={() => setEditOrderModalOpen(true)}
             />
           )}
           {activeTab === "create-order" && (
             <CreateOrderView
               models={models}
-              users={users.filter(u => u.role === "OPERATOR")}
+              users={users}
               onSuccess={(orderId) => {
                 notify("¡Orden y línea de producción creada exitosamente!");
                 loadInitialData();
@@ -695,6 +697,22 @@ export default function App() {
           }}
         />
       )}
+      {editOrderModalOpen && matrixData && (
+        <EditOrderModal
+          order={matrixData.order}
+          stations={matrixData.stations}
+          models={models}
+          users={users}
+          onClose={() => setEditOrderModalOpen(false)}
+          onSuccess={(msg) => {
+            notify(msg || "Orden actualizada exitosamente");
+            setEditOrderModalOpen(false);
+            loadInitialData();
+            loadMatrixData();
+          }}
+          notify={notify}
+        />
+      )}
       {selectedUnitDetail && matrixData && (
         <UnitDetailModal
           unit={selectedUnitDetail}
@@ -719,7 +737,7 @@ export default function App() {
 // =============================================
 // 1. MATRIZ DE PIPELINE
 // =============================================
-function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder }) {
+function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder, onOpenEditOrder }) {
   if (!matrixData || !matrixData.order) {
     return (
       <Card className="p-8 text-center mx-auto max-w-sm space-y-4">
@@ -757,8 +775,16 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
               <div className="flex flex-wrap items-center gap-1.5">
                 <h2 className="text-sm font-bold text-gray-900 truncate">{order.order_id}</h2>
                 <Badge variant="info">{order.model_name}</Badge>
+                {order.supervisor_name && (
+                  <Badge variant="purple" className="flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-purple-600" />
+                    <span>Supervisor: {order.supervisor_name}</span>
+                  </Badge>
+                )}
               </div>
-              <p className="text-xs text-gray-500 truncate">{order.total_units} PCs · {order.total_stations} Estaciones</p>
+              <p className="text-xs text-gray-500 truncate">
+                {order.total_units} PCs · {order.total_stations} Estaciones {order.supervisor_name ? `· Sup: ${order.supervisor_name}` : ''}
+              </p>
             </div>
           </div>
 
@@ -776,6 +802,14 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
                 ))}
               </select>
             )}
+            <button
+              onClick={onOpenEditOrder}
+              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition shadow-xs touch-target"
+              title="Editar parámetros de la orden, modelo, supervisor y estaciones"
+            >
+              <Edit className="w-4 h-4 text-indigo-600" />
+              <span>✏️ Editar Orden</span>
+            </button>
             <button
               onClick={onOpenAddUnits}
               className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 transition shadow-sm touch-target"
@@ -1251,6 +1285,8 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
   const [orderId, setOrderId] = useState(`ORD-2026-${Math.floor(1000 + Math.random() * 9000)}`);
   const [partNumber, setPartNumber] = useState("90MB0YZ0-M0EAY0");
   const [totalUnits, setTotalUnits] = useState(50);
+  const [supervisorId, setSupervisorId] = useState("");
+  const [supervisorName, setSupervisorName] = useState("");
   const [stationCount, setStationCount] = useState(5);
   const [selectedOperators, setSelectedOperators] = useState([]);
   const [modelSteps, setModelSteps] = useState([]);
@@ -1331,6 +1367,8 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
         station_number: i + 1,
         user_id: op.id,
         user_name: op.name,
+        secondary_user_id: "",
+        secondary_user_name: "",
         station_name: defaultNames[i] || `Estación ${i + 1}`,
         is_cleaning_station: isCleaning,
         station_type: isCleaning ? "CLEANING" : "ASSEMBLY",
@@ -1534,6 +1572,8 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
           station_number: st.station_number,
           user_id: st.user_id,
           user_name: st.user_name,
+          secondary_user_id: st.secondary_user_id || null,
+          secondary_user_name: st.secondary_user_name || null,
           station_name: st.station_name,
           is_cleaning_station: !!st.is_cleaning_station,
           station_type: st.station_type || (st.is_cleaning_station ? "CLEANING" : "ASSEMBLY"),
@@ -1551,6 +1591,8 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
           model_name: modelName,
           part_number: partNumber,
           total_units: parseInt(totalUnits, 10),
+          supervisor_id: supervisorId || null,
+          supervisor_name: supervisorName || null,
           assignment_mode: "MANUAL",
           stations: payloadStations,
           created_by: "Admin / Supervisor QC"
@@ -1635,6 +1677,34 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-gray-700 mb-1">N° de Parte</label>
                 <input type="text" value={partNumber} onChange={(e) => setPartNumber(e.target.value)} required className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-mono touch-target" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-purple-600" />
+                    <span>Supervisor de Calidad Asignado</span>
+                  </span>
+                  <span className="text-[10px] text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                    Rol: Validar y tomar fotos de cumplimiento
+                  </span>
+                </label>
+                <select
+                  value={supervisorId}
+                  onChange={(e) => {
+                    const sid = e.target.value;
+                    setSupervisorId(sid);
+                    const u = users.find(x => x.id === sid);
+                    setSupervisorName(u ? u.name : "");
+                  }}
+                  className="w-full text-xs border border-purple-200 rounded-lg p-2.5 bg-purple-50/40 font-medium text-purple-900 touch-target"
+                >
+                  <option value="">-- Sin supervisor específico asignado --</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.role === 'SUPERVISOR' ? '🛡️ ' : u.role === 'ADMIN' ? '👑 ' : '👤 '}{u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -1822,33 +1892,64 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
                       </span>
                     </div>
 
-                    {/* Fila 2: Selector de Técnico y Botones de acción */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex-1">
-                        <select
-                          value={st.user_id}
-                          onChange={(e) => {
-                            const copy = [...selectedOperators];
-                            const u = users.find(u => u.id === e.target.value);
-                            copy[idx].user_id = e.target.value;
-                            copy[idx].user_name = u ? u.name : e.target.value;
-                            setSelectedOperators(copy);
-                          }}
-                          className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
-                        >
-                          {users.map(u => (
-                            <option key={u.id} value={u.id}>
-                              {u.role === 'SUPERVISOR' ? '🛡️ ' : ''}{u.name} ({u.id})
-                            </option>
-                          ))}
-                        </select>
+                    {/* Fila 2: Selectores de 1er y 2do Técnico */}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                            1er Técnico (Titular)
+                          </label>
+                          <select
+                            value={st.user_id}
+                            onChange={(e) => {
+                              const copy = [...selectedOperators];
+                              const u = users.find(u => u.id === e.target.value);
+                              copy[idx].user_id = e.target.value;
+                              copy[idx].user_name = u ? u.name : e.target.value;
+                              setSelectedOperators(copy);
+                            }}
+                            className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
+                          >
+                            {users.map(u => (
+                              <option key={u.id} value={u.id}>
+                                {u.role === 'SUPERVISOR' ? '🛡️ ' : ''}{u.name} ({u.id})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5 flex items-center justify-between">
+                            <span>2do Técnico (Co-operario)</span>
+                            <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.2 rounded">Opcional</span>
+                          </label>
+                          <select
+                            value={st.secondary_user_id || ""}
+                            onChange={(e) => {
+                              const copy = [...selectedOperators];
+                              const val = e.target.value;
+                              const u = users.find(x => x.id === val);
+                              copy[idx].secondary_user_id = val || null;
+                              copy[idx].secondary_user_name = u ? u.name : null;
+                              setSelectedOperators(copy);
+                            }}
+                            className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
+                          >
+                            <option value="">-- Ninguno (1 solo técnico) --</option>
+                            {users.map(u => (
+                              <option key={u.id} value={u.id}>
+                                👥 {u.name} ({u.id})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center justify-end gap-1.5 pt-1">
                         <button
                           type="button"
                           onClick={() => setVisualPickerStation(idx)}
-                          className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
+                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
                         >
                           <Layers className="w-3.5 h-3.5" />
                           <span>📋 Selector Visual</span>
@@ -1856,7 +1957,7 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
                         <button
                           type="button"
                           onClick={() => handleClearStationSteps(idx)}
-                          className="p-2 bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 border border-gray-200 rounded-lg text-xs transition flex-shrink-0"
+                          className="p-1.5 bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 border border-gray-200 rounded-lg text-xs transition flex-shrink-0"
                           title="Quitar todos los pasos de esta estación"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2645,6 +2746,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [reassignStepModalData, setReassignStepModalData] = useState(null);
   const [photoStepModal, setPhotoStepModal] = useState(null);
+  const [supervisorPhotoStepModal, setSupervisorPhotoStepModal] = useState(null);
   const [requirePhotoVerification, setRequirePhotoVerification] = useState(true);
   const [supervisorAuditModalOpen, setSupervisorAuditModalOpen] = useState(false);
   const [activeSupervisorAudit, setActiveSupervisorAudit] = useState(supervisor_audit);
@@ -2688,7 +2790,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
   const totalStationSteps = uniqueStationSteps.length;
   const isStationComplete = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
 
-  const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN';
+  const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
   const isSupport = is_support_operator || currentUser.id === 'OP-106' || (currentUser.email || '').toLowerCase().includes('apoyo');
 
   const handleToggleStep = async (step) => {
@@ -2787,6 +2889,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
           step_number: step.step_number,
           photo_url: photoUrl,
           user_name: currentUser.name,
+          is_supervisor_verified: false,
           timestamp: new Date().toISOString()
         }
       }));
@@ -2794,6 +2897,50 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
       notify(`📸 ✓ Paso #${step.step_number} verificado con foto`);
       if (completedSteps.length + 1 >= totalStationSteps && confetti) {
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setSubmittingStep(null);
+    }
+  };
+
+  const handleSupervisorVerifyStepPhoto = async (step, photoUrl) => {
+    try {
+      setSubmittingStep(step.step_number);
+      const res = await fetch(`${API_BASE}/supervisor/verify-step-photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: order.order_id,
+          unit_number: active_unit.unit_number,
+          step_number: step.step_number,
+          station_number: assignment.station_number,
+          supervisor_id: currentUser.id,
+          supervisor_name: currentUser.name,
+          photo_url: photoUrl,
+          notes: `Cumplimiento verificado con foto por ${currentUser.name} (Supervisor de Calidad)`
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Error registrando foto de cumplimiento por supervisor");
+      }
+      setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
+      setStepLogsMap(prev => ({
+        ...prev,
+        [step.step_number]: {
+          step_number: step.step_number,
+          photo_url: photoUrl,
+          user_name: `${currentUser.name} (Supervisor)`,
+          is_supervisor_verified: true,
+          timestamp: new Date().toISOString()
+        }
+      }));
+      setSupervisorPhotoStepModal(null);
+      notify(`🛡️ 📸 Cumplimiento del Paso #${step.step_number} verificado con foto por el supervisor`);
+      if (completedSteps.length + 1 >= totalStationSteps && confetti) {
+        confetti({ particleCount: 70, spread: 70, origin: { y: 0.8 } });
       }
     } catch (err) {
       alert("Error: " + err.message);
@@ -3394,6 +3541,18 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                               </span>
                             )}
                           </p>
+
+                          {/* Indicador de 2 técnicos asignados */}
+                          {st.assigned_technicians && st.assigned_technicians.length > 1 && (
+                            <div className="flex items-center gap-1.5 flex-wrap my-1">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-md">
+                                <Users className="w-3 h-3 text-indigo-600" />
+                                <span>2 Técnicos:</span>
+                                <strong>{st.assigned_technicians.map(t => t.name).join(' & ')}</strong>
+                              </span>
+                            </div>
+                          )}
+
                           {st.description && (
                             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">{st.description}</p>
                           )}
@@ -3421,7 +3580,11 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                                   timestamp: stepLog.timestamp
                                 });
                               }}
-                              className="mt-2.5 inline-flex items-center gap-2 bg-emerald-100/90 hover:bg-emerald-200 border border-emerald-300 px-2.5 py-1.5 rounded-xl cursor-pointer transition group shadow-xs"
+                              className={`mt-2.5 inline-flex items-center gap-2 border px-2.5 py-1.5 rounded-xl cursor-pointer transition group shadow-xs ${
+                                stepLog.is_supervisor_verified
+                                  ? 'bg-amber-50/90 hover:bg-amber-100 border-amber-300'
+                                  : 'bg-emerald-100/90 hover:bg-emerald-200 border-emerald-300'
+                              }`}
                             >
                               <img 
                                 src={stepLog.photo_url} 
@@ -3429,12 +3592,48 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
                                 className="w-8 h-8 object-cover rounded-lg border border-emerald-400 group-hover:scale-105 transition"
                               />
                               <div className="text-left">
-                                <span className="text-[11px] font-bold text-emerald-950 flex items-center gap-1">
-                                  <Camera className="w-3.5 h-3.5 text-emerald-700" />
-                                  <span>Foto de Evidencia Guardada</span>
+                                <span className={`text-[11px] font-bold flex items-center gap-1 ${
+                                  stepLog.is_supervisor_verified ? 'text-amber-950' : 'text-emerald-950'
+                                }`}>
+                                  {stepLog.is_supervisor_verified ? (
+                                    <>
+                                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Foto de Cumplimiento (Supervisor)</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Camera className="w-3.5 h-3.5 text-emerald-700" />
+                                      <span>Foto de Evidencia Guardada</span>
+                                    </>
+                                  )}
                                 </span>
-                                <span className="text-[9px] text-emerald-700 block">🔍 Toca para ampliar foto</span>
+                                <span className={`text-[9px] block ${
+                                  stepLog.is_supervisor_verified ? 'text-amber-800' : 'text-emerald-700'
+                                }`}>
+                                  {stepLog.is_supervisor_verified ? `Por ${stepLog.user_name} · ` : ''}🔍 Toca para ampliar foto
+                                </span>
                               </div>
+                            </div>
+                          )}
+
+                          {/* Botón de Acción Directo de Supervisor para Tomar Foto de Cumplimiento */}
+                          {isSupervisorUser && (
+                            <div className="mt-2.5 pt-2 border-t border-amber-100 flex items-center gap-2 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSupervisorPhotoStepModal(st);
+                                }}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition touch-target"
+                                title="Supervisor: Tomar foto oficial evidenciando que ya se cumplió"
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>📸 Foto Cumplimiento (Supervisor)</span>
+                              </button>
+                              <span className="text-[10px] text-amber-800 font-medium">
+                                {isDone ? "Actualiza o valida cumplimiento" : "Valida con foto y aprueba paso"}
+                              </span>
                             </div>
                           )}
 
@@ -3452,7 +3651,22 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
 
                         {/* Botones de acción del paso */}
                         <div className="flex flex-col gap-1.5 ml-1 flex-shrink-0">
-                          {/* Botón de Cámara Directo */}
+                          {/* Botón de Cámara para Supervisor */}
+                          {isSupervisorUser && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSupervisorPhotoStepModal(st);
+                              }}
+                              className="w-8 h-8 rounded-xl bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center transition shadow-xs"
+                              title="Supervisor: Tomar foto de cumplimiento"
+                            >
+                              <Camera className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Botón de Cámara Directo para Operario */}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -3573,6 +3787,19 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
             handleVerifyStepWithPhoto(photoStepModal, photoUrl);
           }}
           onClose={() => setPhotoStepModal(null)}
+        />
+      )}
+
+      {/* Modal Captura de Foto de Cumplimiento (Supervisor) */}
+      {supervisorPhotoStepModal && active_unit && (
+        <CameraCaptureModal
+          title={`🛡️ FOTO DE CUMPLIMIENTO (SUPERVISOR) · PC #${active_unit.unit_number.toString().padStart(2, '0')}`}
+          subtitle={`Paso #${supervisorPhotoStepModal.step_number}: ${supervisorPhotoStepModal.operation}`}
+          prefix={`sup_${order.order_id}_pc${active_unit.unit_number}_p${supervisorPhotoStepModal.step_number}`}
+          onCapture={(photoUrl) => {
+            handleSupervisorVerifyStepPhoto(supervisorPhotoStepModal, photoUrl);
+          }}
+          onClose={() => setSupervisorPhotoStepModal(null)}
         />
       )}
 
@@ -5266,6 +5493,8 @@ function SupervisorAuditModal({ isOpen, onClose, orderId, unitNumber, serialNumb
   });
   const [status, setStatus] = useState("APPROVED");
   const [notes, setNotes] = useState("");
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -5292,6 +5521,7 @@ function SupervisorAuditModal({ isOpen, onClose, orderId, unitNumber, serialNumb
           supervisor_name: currentUser?.name || "Supervisor de Calidad",
           status: status,
           checks: selectedChecks,
+          photo_url: photoUrl,
           notes: notes || (status === "APPROVED" ? "Visto Bueno de Calidad Oficial Conforme" : "Observaciones en auditoría")
         })
       });
@@ -5435,9 +5665,48 @@ function SupervisorAuditModal({ isOpen, onClose, orderId, unitNumber, serialNumb
             </div>
           </div>
 
+          {/* Foto de Cumplimiento Opcional tomada por el Supervisor */}
+          <div>
+            <label className="block text-[11px] font-bold text-gray-800 mb-1.5">
+              3. Foto de Cumplimiento Tomada por el Supervisor:
+            </label>
+            {photoUrl ? (
+              <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-xl border border-amber-300">
+                <img src={photoUrl} alt="Foto cumplimiento" className="w-12 h-12 object-cover rounded-lg border border-amber-400" />
+                <div className="flex-1 min-w-0 text-xs">
+                  <span className="font-bold text-amber-950 block">📸 Foto de Cumplimiento Adjunta</span>
+                  <span className="text-[10px] text-amber-800">Se registrará como evidencia oficial del supervisor</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCameraOpen(true)}
+                  className="px-2 py-1 bg-white hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-[10px] font-bold"
+                >
+                  Cambiar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoUrl(null)}
+                  className="p-1 text-gray-400 hover:text-rose-600 rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCameraOpen(true)}
+                className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
+              >
+                <Camera className="w-4 h-4 text-amber-600" />
+                <span>📸 Tomar Foto de Cumplimiento (Supervisor)</span>
+              </button>
+            )}
+          </div>
+
           <div>
             <label className="block text-[11px] font-bold text-gray-700 mb-1">
-              3. Notas / Observaciones de Auditoría (Opcional):
+              4. Notas / Observaciones de Auditoría (Opcional):
             </label>
             <textarea
               rows="2"
@@ -5472,6 +5741,19 @@ function SupervisorAuditModal({ isOpen, onClose, orderId, unitNumber, serialNumb
             </button>
           </div>
         </form>
+
+        {cameraOpen && (
+          <CameraCaptureModal
+            title={`Foto de Cumplimiento · PC #${unitNumber}`}
+            subtitle="Evidencia para Dictamen del Supervisor"
+            prefix={`audit_${orderId}_pc${unitNumber}`}
+            onCapture={(url) => {
+              setPhotoUrl(url);
+              setCameraOpen(false);
+            }}
+            onClose={() => setCameraOpen(false)}
+          />
+        )}
       </div>
     </div>
   );
@@ -6021,6 +6303,710 @@ function DeleteOrderModal({ order, onClose, onSuccess }) {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// MODAL EDITAR ORDEN DE PRODUCCIÓN
+// Permite editar modelo, P/N, unidades, estado, supervisor y asignación dual de técnicos por estación/paso
+// =============================================
+function EditOrderModal({ order, stations: initialStations = [], models = [], users = [], onClose, onSuccess, notify }) {
+  const [modelName, setModelName] = useState(order?.model_name || "");
+  const [partNumber, setPartNumber] = useState(order?.part_number || "");
+  const [totalUnits, setTotalUnits] = useState(order?.total_units || 1);
+  const [status, setStatus] = useState(order?.status || "IN_PROGRESS");
+  const [supervisorId, setSupervisorId] = useState(order?.supervisor_id || "");
+  const [supervisorName, setSupervisorName] = useState(order?.supervisor_name || "");
+  const [loading, setLoading] = useState(false);
+  const [visualPickerStation, setVisualPickerStation] = useState(null);
+  const [modelSteps, setModelSteps] = useState([]);
+
+  // Cargar checklist del modelo seleccionado
+  const loadModelSteps = useCallback(async (model) => {
+    if (!model) return;
+    try {
+      const res = await fetch(`${API_BASE}/models/${model}/checklist`);
+      if (res.ok) {
+        const data = await res.json();
+        setModelSteps(data);
+      }
+    } catch (e) {
+      console.error("Error cargando pasos del modelo:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadModelSteps(modelName);
+  }, [modelName, loadModelSteps]);
+
+  // Sincronizar nombre de supervisor al cambiar supervisorId
+  const handleSupervisorChange = (newSupId) => {
+    setSupervisorId(newSupId);
+    if (!newSupId) {
+      setSupervisorName("");
+    } else {
+      const u = users.find(x => x.id === newSupId);
+      setSupervisorName(u ? u.name : "");
+    }
+  };
+
+  // Lista de estaciones inicializada desde initialStations
+  const [stationsList, setStationsList] = useState(() => {
+    if (!initialStations || initialStations.length === 0) return [];
+    return initialStations.map(st => {
+      let stepNums = [];
+      if (Array.isArray(st.step_numbers)) {
+        stepNums = st.step_numbers;
+      } else if (typeof st.step_numbers === "string" && st.step_numbers.trim()) {
+        stepNums = st.step_numbers.split(/[,;\s]+/).map(x => parseInt(x, 10)).filter(n => !isNaN(n) && n > 0);
+      } else if (st.start_step && st.end_step) {
+        for (let i = st.start_step; i <= st.end_step; i++) stepNums.push(i);
+      }
+      return {
+        station_number: st.station_number,
+        station_name: st.station_name || `Estación ${st.station_number}`,
+        user_id: st.user_id || "",
+        user_name: st.user_name || "",
+        secondary_user_id: st.secondary_user_id || "",
+        secondary_user_name: st.secondary_user_name || "",
+        is_cleaning_station: !!(st.is_cleaning_station || st.station_type === "CLEANING" || (st.station_name || "").toLowerCase().includes("limpieza")),
+        station_type: st.station_type || (st.is_cleaning_station ? "CLEANING" : "ASSEMBLY"),
+        step_numbers: stepNums,
+        rawStepsInput: stepNums.length > 0 ? stepNums.join(", ") : ""
+      };
+    });
+  });
+
+  // Conteo de estaciones de limpieza
+  const cleaningCount = useMemo(() => {
+    return stationsList.filter(
+      st => st.is_cleaning_station || st.station_type === "CLEANING" || (st.station_name || "").toLowerCase().includes("limpieza")
+    ).length;
+  }, [stationsList]);
+
+  // Handlers para técnicos
+  const handlePrimaryTechChange = (idx, newUserId) => {
+    const u = users.find(x => x.id === newUserId);
+    setStationsList(prev => prev.map((st, i) => {
+      if (i !== idx) return st;
+      return {
+        ...st,
+        user_id: newUserId,
+        user_name: u ? u.name : ""
+      };
+    }));
+  };
+
+  const handleSecondaryTechChange = (idx, newUserId) => {
+    const u = users.find(x => x.id === newUserId);
+    setStationsList(prev => prev.map((st, i) => {
+      if (i !== idx) return st;
+      return {
+        ...st,
+        secondary_user_id: newUserId || "",
+        secondary_user_name: u ? u.name : ""
+      };
+    }));
+  };
+
+  const handleToggleCleaning = (idx) => {
+    setStationsList(prev => prev.map((st, i) => {
+      if (i !== idx) return st;
+      const nextClean = !st.is_cleaning_station;
+      return {
+        ...st,
+        is_cleaning_station: nextClean,
+        station_type: nextClean ? "CLEANING" : "ASSEMBLY"
+      };
+    }));
+  };
+
+  const handleStationNameChange = (idx, name) => {
+    setStationsList(prev => prev.map((st, i) => {
+      if (i !== idx) return st;
+      return { ...st, station_name: name };
+    }));
+  };
+
+  const handleStepsInputChange = (idx, rawVal) => {
+    const parsed = parseStepNumbersInput(rawVal, modelSteps.length || 500);
+    setStationsList(prev => prev.map((st, i) => {
+      if (i !== idx) return st;
+      return {
+        ...st,
+        rawStepsInput: rawVal,
+        step_numbers: parsed
+      };
+    }));
+  };
+
+  const handleAutoDistribute = () => {
+    const totalSteps = modelSteps.length || 52;
+    const numStations = stationsList.length || 1;
+    const baseCount = Math.floor(totalSteps / numStations);
+    const remainder = totalSteps % numStations;
+    let currentStart = 1;
+
+    setStationsList(prev => prev.map((st, i) => {
+      const extra = i + 1 <= remainder ? 1 : 0;
+      const count = baseCount + extra;
+      const currentEnd = currentStart + count - 1;
+      const stSteps = [];
+      for (let s = currentStart; s <= currentEnd; s++) {
+        stSteps.push(s);
+      }
+      currentStart = currentEnd + 1;
+      return {
+        ...st,
+        step_numbers: stSteps,
+        rawStepsInput: stSteps.join(", ")
+      };
+    }));
+    notify?.("Pasos redistribuidos equitativamente entre las estaciones", "info");
+  };
+
+  const handleAddStation = () => {
+    const nextNum = stationsList.length + 1;
+    const op = users[(nextNum - 1) % users.length] || { id: `OP-${100 + nextNum}`, name: `Operario ${nextNum}` };
+    setStationsList(prev => [
+      ...prev,
+      {
+        station_number: nextNum,
+        station_name: `Estación ${nextNum}`,
+        user_id: op.id,
+        user_name: op.name,
+        secondary_user_id: "",
+        secondary_user_name: "",
+        is_cleaning_station: false,
+        station_type: "ASSEMBLY",
+        step_numbers: [],
+        rawStepsInput: ""
+      }
+    ]);
+  };
+
+  const handleRemoveStation = (idxToRemove) => {
+    if (stationsList.length <= 2) {
+      alert("Una orden de producción debe tener al menos 2 estaciones.");
+      return;
+    }
+    const filtered = stationsList.filter((_, idx) => idx !== idxToRemove);
+    const renumbered = filtered.map((st, idx) => ({
+      ...st,
+      station_number: idx + 1
+    }));
+    setStationsList(renumbered);
+  };
+
+  // Handlers para StepPickerModal
+  const handleToggleStep = (targetStationIdx, stepNum) => {
+    setStationsList(prev => prev.map((st, idx) => {
+      const current = new Set(st.step_numbers || []);
+      if (idx === targetStationIdx) {
+        if (current.has(stepNum)) current.delete(stepNum);
+        else current.add(stepNum);
+      } else {
+        current.delete(stepNum);
+      }
+      const updated = Array.from(current).sort((a, b) => a - b);
+      return {
+        ...st,
+        step_numbers: updated,
+        rawStepsInput: updated.join(", ")
+      };
+    }));
+  };
+
+  const handleAddStepRange = (targetStationIdx, from, to) => {
+    const min = Math.min(from, to);
+    const max = Math.max(from, to);
+    const toAdd = new Set();
+    for (let i = min; i <= max; i++) toAdd.add(i);
+
+    setStationsList(prev => prev.map((st, idx) => {
+      const current = new Set(st.step_numbers || []);
+      if (idx === targetStationIdx) {
+        toAdd.forEach(n => current.add(n));
+      } else {
+        toAdd.forEach(n => current.delete(n));
+      }
+      const updated = Array.from(current).sort((a, b) => a - b);
+      return {
+        ...st,
+        step_numbers: updated,
+        rawStepsInput: updated.join(", ")
+      };
+    }));
+  };
+
+  const handleClearStationSteps = (targetStationIdx) => {
+    setStationsList(prev => prev.map((st, idx) => {
+      if (idx !== targetStationIdx) return st;
+      return { ...st, step_numbers: [], rawStepsInput: "" };
+    }));
+  };
+
+  const handleClaimAllFreeSteps = (targetStationIdx) => {
+    const total = modelSteps.length || 52;
+    const allAssigned = new Set();
+    stationsList.forEach(st => {
+      (st.step_numbers || []).forEach(n => allAssigned.add(n));
+    });
+    const free = [];
+    for (let i = 1; i <= total; i++) {
+      if (!allAssigned.has(i)) free.push(i);
+    }
+    if (free.length === 0) return;
+
+    setStationsList(prev => prev.map((st, idx) => {
+      if (idx !== targetStationIdx) return st;
+      const current = new Set(st.step_numbers || []);
+      free.forEach(n => current.add(n));
+      const updated = Array.from(current).sort((a, b) => a - b);
+      return { ...st, step_numbers: updated, rawStepsInput: updated.join(", ") };
+    }));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (cleaningCount < 2) {
+      alert(`Regla de Calidad Obligatoria: La línea debe incluir al menos 2 estaciones designadas para Limpieza. Actualmente tienes ${cleaningCount}.`);
+      return;
+    }
+
+    for (const st of stationsList) {
+      if (!st.user_id) {
+        alert(`La Estación ${st.station_number} (${st.station_name}) requiere un 1er Técnico (titular) asignado.`);
+        return;
+      }
+    }
+
+    try {
+      setLoading(true);
+      const payload = {
+        model_name: modelName,
+        part_number: partNumber,
+        total_units: parseInt(totalUnits, 10),
+        status: status,
+        supervisor_id: supervisorId || null,
+        supervisor_name: supervisorName || null,
+        stations: stationsList.map(st => ({
+          station_number: st.station_number,
+          station_name: st.station_name,
+          user_id: st.user_id,
+          user_name: st.user_name,
+          secondary_user_id: st.secondary_user_id || null,
+          secondary_user_name: st.secondary_user_name || null,
+          step_numbers: st.step_numbers || [],
+          is_cleaning_station: !!st.is_cleaning_station,
+          station_type: st.is_cleaning_station ? "CLEANING" : (st.station_type || "ASSEMBLY")
+        }))
+      };
+
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Error al actualizar la orden");
+      }
+
+      onSuccess(data.message || "Orden actualizada exitosamente");
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-2 sm:p-4 fade-in overflow-y-auto">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto border border-gray-200">
+        
+        {/* Cabecera del Modal */}
+        <div className="bg-slate-900 text-white p-4 sm:p-5 flex justify-between items-center shadow">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm">
+              <Edit className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold">Editar Orden de Producción</h3>
+                <span className="bg-blue-500/30 text-blue-200 px-2 py-0.5 rounded text-xs font-mono font-bold">
+                  {order.order_id}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Ajusta parámetros, supervisor de calidad y asignaciones de los 2 técnicos por estación/paso
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-white/20 rounded-lg text-slate-300 hover:text-white transition touch-target flex items-center justify-center"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Formulario Principal */}
+        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs">
+          
+          {/* Tarjeta: Parámetros del Lote */}
+          <div className="bg-gray-50/70 border border-gray-200 rounded-2xl p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-gray-900 flex items-center gap-2 text-sm">
+                <Cpu className="w-4 h-4 text-blue-600" />
+                <span>Parámetros del Lote y Modelo</span>
+              </h4>
+              <Badge variant="info">Orden Activa</Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Modelo de PC */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Modelo de PC</label>
+                <select
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                  className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2.5 bg-white focus:border-blue-600 focus:outline-none"
+                >
+                  {models.map(m => (
+                    <option key={m.name} value={m.name}>
+                      {m.name} ({m.step_count || 52} pasos)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Número de Parte */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Nº de Parte (P/N)</label>
+                <input
+                  type="text"
+                  value={partNumber}
+                  onChange={(e) => setPartNumber(e.target.value)}
+                  placeholder="Ej: PN-PRO-01"
+                  className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2.5 bg-white focus:border-blue-600 focus:outline-none"
+                />
+              </div>
+
+              {/* Total Unidades */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Cantidad de PCs</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={totalUnits}
+                  onChange={(e) => setTotalUnits(parseInt(e.target.value, 10) || 1)}
+                  className="w-full text-xs font-bold border border-gray-300 rounded-xl p-2.5 bg-white focus:border-blue-600 focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Estado de la Orden */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Estado de la Orden</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full text-xs font-bold border border-gray-300 rounded-xl p-2.5 bg-white focus:border-blue-600 focus:outline-none"
+                >
+                  <option value="IN_PROGRESS">🟡 En Proceso (IN_PROGRESS)</option>
+                  <option value="PAUSED">⏸️ Pausada (PAUSED)</option>
+                  <option value="COMPLETED">🟢 Finalizada (COMPLETED)</option>
+                </select>
+              </div>
+            </div>
+
+            {totalUnits < (order.total_units || 0) && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-2.5 rounded-xl flex items-center gap-2 text-[11px]">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>
+                  <strong>Atención:</strong> Disminuir la cantidad de unidades eliminará únicamente aquellas PCs excedentes que sigan en estado PENDING y sin avance.
+                </span>
+              </div>
+            )}
+
+            {/* Asignación de Supervisor de Calidad */}
+            <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="font-bold text-purple-900 flex items-center gap-1.5 text-xs">
+                  <ShieldCheck className="w-4 h-4 text-purple-700" />
+                  <span>Supervisor de Calidad Asignado</span>
+                </label>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                  📸 Rol: Valida con Fotos de Cumplimiento
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <select
+                  value={supervisorId}
+                  onChange={(e) => handleSupervisorChange(e.target.value)}
+                  className="w-full text-xs font-semibold border border-purple-300 rounded-xl p-2.5 bg-white focus:border-purple-600 focus:outline-none"
+                >
+                  <option value="">-- Sin supervisor asignado --</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} {u.role === "SUPERVISOR" ? "⭐ (Supervisor Calidad)" : u.role === "ADMIN" ? "👑 (Administrador)" : `(${u.role})`}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-purple-800 leading-tight">
+                  El supervisor es el encargado de verificar el cumplimiento de los pasos y certificar la orden capturando fotos de evidencia directa.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tarjeta: Estaciones de Trabajo y Técnicos Duales */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-gray-200">
+              <div>
+                <h4 className="font-bold text-gray-900 flex items-center gap-2 text-sm">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  <span>Estaciones de Trabajo y Técnicos ({stationsList.length})</span>
+                </h4>
+                <p className="text-[11px] text-gray-500">
+                  Asigna hasta 2 técnicos por paso/estación (titular y co-operario de apoyo) y cumple la regla de limpieza.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {cleaningCount >= 2 ? (
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{cleaningCount} Estaciones Limpieza (Válido)</span>
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>{cleaningCount}/2 Estaciones Limpieza (Faltan {2 - cleaningCount})</span>
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleAutoDistribute}
+                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-lg transition text-[11px] flex items-center gap-1"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Distribuir Pasos</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAddStation}
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-lg transition text-[11px] flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Agregar Estación</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Listado de Estaciones */}
+            <div className="space-y-3">
+              {stationsList.map((st, idx) => (
+                <div
+                  key={st.station_number}
+                  className={`rounded-2xl border p-4 transition space-y-3 ${
+                    st.is_cleaning_station
+                      ? "bg-emerald-50/40 border-emerald-200 shadow-sm"
+                      : "bg-white border-gray-200 shadow-sm"
+                  }`}
+                >
+                  {/* Fila 1: Nombre de Estación y Limpieza */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1">
+                      <span className="font-bold text-xs px-2.5 py-1 rounded-lg bg-gray-900 text-white font-mono flex-shrink-0">
+                        Estación {st.station_number}
+                      </span>
+                      <input
+                        type="text"
+                        value={st.station_name}
+                        onChange={(e) => handleStationNameChange(idx, e.target.value)}
+                        placeholder="Nombre de estación (ej: Chasis y Montaje)..."
+                        className="flex-1 text-xs font-semibold border border-gray-300 rounded-lg p-1.5 bg-white focus:border-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCleaning(idx)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                          st.is_cleaning_station
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+                        }`}
+                      >
+                        <span>🧼 Estación Limpieza</span>
+                        {st.is_cleaning_station && <Check className="w-3.5 h-3.5" />}
+                      </button>
+
+                      {stationsList.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStation(idx)}
+                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          title="Eliminar estación"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Fila 2: Dos Técnicos Asignados */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {/* 1er Técnico (Titular) */}
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1 text-[11px]">
+                        1er Técnico (Titular) <span className="text-rose-600">*</span>
+                      </label>
+                      <select
+                        value={st.user_id}
+                        onChange={(e) => handlePrimaryTechChange(idx, e.target.value)}
+                        required
+                        className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2 bg-white focus:border-blue-600 focus:outline-none"
+                      >
+                        <option value="">-- Seleccionar Técnico Titular --</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.role})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 2do Técnico (Co-operario / Apoyo) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block font-semibold text-gray-700 text-[11px]">
+                          2do Técnico (Co-operario / Apoyo)
+                        </label>
+                        {st.secondary_user_id && (
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
+                            👥 2 Técnicos Activos
+                          </span>
+                        )}
+                      </div>
+                      <select
+                        value={st.secondary_user_id || ""}
+                        onChange={(e) => handleSecondaryTechChange(idx, e.target.value)}
+                        className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2 bg-white focus:border-blue-600 focus:outline-none"
+                      >
+                        <option value="">-- (Opcional) Sin 2do técnico --</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id} disabled={u.id === st.user_id}>
+                            {u.name} ({u.role}) {u.id === st.user_id ? "— (Ya es 1er técnico)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Fila 3: Pasos Asignados */}
+                  <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-200/80 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-800 text-[11px]">Pasos Asignados:</span>
+                        <span className="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px]">
+                          {st.step_numbers.length} pasos
+                        </span>
+                        <span className="text-gray-500 font-mono text-[11px]">
+                          {formatStepNumbersRange(st.step_numbers)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setVisualPickerStation(idx)}
+                          className="px-2.5 py-1 bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
+                        >
+                          <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Selector Visual</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleClearStationSteps(idx)}
+                          className="px-2 py-1 text-gray-400 hover:text-rose-600 rounded text-[11px] transition"
+                          title="Vaciar pasos"
+                        >
+                          Vaciar
+                        </button>
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={st.rawStepsInput}
+                      onChange={(e) => handleStepsInputChange(idx, e.target.value)}
+                      placeholder="Ej: 1-10, 15, 20-25"
+                      className="w-full text-xs font-mono border border-gray-300 rounded-lg p-1.5 bg-white focus:border-blue-600 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Footer de Acciones */}
+          <div className="pt-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky bottom-0 bg-white/95 backdrop-blur-sm p-2">
+            <div>
+              {cleaningCount < 2 ? (
+                <p className="text-rose-600 font-bold text-xs flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Requiere mínimo 2 estaciones de limpieza para poder guardar.</span>
+                </p>
+              ) : (
+                <p className="text-emerald-700 font-bold text-xs flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Cumple con las 2 estaciones de limpieza obligatorias.</span>
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="py-2.5 px-5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition touch-target"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading || cleaningCount < 2}
+                className="py-2.5 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition disabled:opacity-50 touch-target flex items-center gap-2"
+              >
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>{loading ? "Guardando Cambios..." : "Guardar Cambios"}</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {/* Modal Selector Visual de Pasos Reutilizable */}
+        {visualPickerStation !== null && stationsList[visualPickerStation] && (
+          <StepPickerModal
+            isOpen={true}
+            onClose={() => setVisualPickerStation(null)}
+            stationIdx={visualPickerStation}
+            station={stationsList[visualPickerStation]}
+            modelSteps={modelSteps}
+            allStations={stationsList}
+            onToggleStep={handleToggleStep}
+            onAddStepRange={handleAddStepRange}
+            onClearStationSteps={handleClearStationSteps}
+            onClaimAllFreeSteps={handleClaimAllFreeSteps}
+          />
+        )}
       </div>
     </div>
   );

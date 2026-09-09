@@ -78,6 +78,8 @@ class StationAssignmentCreate(BaseModel):
     station_number: int
     user_id: str
     user_name: str
+    secondary_user_id: Optional[str] = None
+    secondary_user_name: Optional[str] = None
     station_name: Optional[str] = ""
     start_step: Optional[int] = None
     end_step: Optional[int] = None
@@ -92,6 +94,8 @@ class StationAssignmentSchema(BaseModel):
     station_name: Optional[str] = ""
     user_id: str
     user_name: str
+    secondary_user_id: Optional[str] = None
+    secondary_user_name: Optional[str] = None
     start_step: int
     end_step: int
     step_numbers: Optional[str] = None
@@ -106,9 +110,21 @@ class OrderCreateRequest(BaseModel):
     model_name: str
     part_number: str
     total_units: int
+    supervisor_id: Optional[str] = None
+    supervisor_name: Optional[str] = None
     stations: List[StationAssignmentCreate]
     created_by: Optional[str] = "Administrador"
     assignment_mode: Optional[str] = "AUTO" # "AUTO" o "MANUAL"
+
+class OrderUpdateRequest(BaseModel):
+    model_name: Optional[str] = None
+    part_number: Optional[str] = None
+    total_units: Optional[int] = None
+    status: Optional[str] = None # IN_PROGRESS, COMPLETED, PAUSED
+    supervisor_id: Optional[str] = None
+    supervisor_name: Optional[str] = None
+    stations: Optional[List[StationAssignmentCreate]] = None
+    assignment_mode: Optional[str] = None
 
 class StepLogCreate(BaseModel):
     order_id: str
@@ -219,6 +235,8 @@ class OrderDetailSchema(BaseModel):
     total_units: int
     total_stations: int
     status: str
+    supervisor_id: Optional[str] = None
+    supervisor_name: Optional[str] = None
     created_at: datetime
     created_by: str
     stations: List[StationAssignmentSchema] = []
@@ -227,6 +245,16 @@ class OrderDetailSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class SupervisorStepPhotoVerify(BaseModel):
+    order_id: str
+    unit_number: int
+    step_number: int
+    station_number: Optional[int] = 1
+    supervisor_id: str
+    supervisor_name: str
+    photo_url: str
+    notes: Optional[str] = "Cumplimiento verificado con foto por Supervisor de Calidad"
+
 class SupervisorAuditCreate(BaseModel):
     order_id: str
     unit_number: int
@@ -234,6 +262,7 @@ class SupervisorAuditCreate(BaseModel):
     supervisor_name: str
     status: Optional[str] = "APPROVED" # APPROVED, OBSERVED, REJECTED
     checks: Optional[List[str]] = []
+    photo_url: Optional[str] = None
     notes: Optional[str] = ""
 
 class SupervisorAuditSchema(BaseModel):
@@ -244,6 +273,7 @@ class SupervisorAuditSchema(BaseModel):
     supervisor_name: str
     status: str
     checks_json: Optional[str] = None
+    photo_url: Optional[str] = None
     notes: Optional[str] = ""
     created_at: datetime
 

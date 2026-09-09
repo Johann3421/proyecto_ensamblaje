@@ -92,6 +92,57 @@ async function compressImageToOptimized(source, maxWidth = 1280, quality = 0.75)
 }
 
 // =============================================
+// HELPERS PARA GESTIÓN Y FORMATEO DE PASOS
+// =============================================
+function formatStepNumbersRange(nums) {
+  if (!nums) return "Sin pasos";
+  const clean = (Array.isArray(nums) ? nums : String(nums).split(/[,;\s]+/))
+    .map(x => parseInt(x, 10))
+    .filter(n => !isNaN(n) && n > 0);
+  if (clean.length === 0) return "Sin pasos";
+  const sorted = [...new Set(clean)].sort((a, b) => a - b);
+  const ranges = [];
+  let start = sorted[0];
+  let end = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === end + 1) {
+      end = sorted[i];
+    } else {
+      ranges.push(start === end ? `P${start}` : `P${start}–${end}`);
+      start = sorted[i];
+      end = sorted[i];
+    }
+  }
+  ranges.push(start === end ? `P${start}` : `P${start}–${end}`);
+  return ranges.join(", ");
+}
+
+function parseStepNumbersInput(inputStr, maxLimit = 500) {
+  if (!inputStr) return [];
+  const parts = String(inputStr).split(/[,;\s]+/);
+  const result = new Set();
+  parts.forEach(part => {
+    const trimmed = part.trim();
+    if (!trimmed) return;
+    const rangeMatch = trimmed.match(/^(\d+)(?:-|\.\.)(\d+)$/);
+    if (rangeMatch) {
+      const from = parseInt(rangeMatch[1], 10);
+      const to = parseInt(rangeMatch[2], 10);
+      const min = Math.min(from, to);
+      const max = Math.min(Math.max(from, to), maxLimit);
+      for (let i = min; i <= max; i++) {
+        if (i >= 1) result.add(i);
+      }
+    } else if (/^\d+$/.test(trimmed)) {
+      const n = parseInt(trimmed, 10);
+      if (n >= 1 && n <= maxLimit) result.add(n);
+    }
+  });
+  return Array.from(result).sort((a, b) => a - b);
+}
+
+// =============================================
 // MODAL LIGHTBOX / VISOR DE FOTO DE EVIDENCIA
 // =============================================
 function PhotoPreviewModal({ photo, onClose }) {
@@ -947,7 +998,248 @@ function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrde
 }
 
 // =============================================
-// 2. CREADOR DE ORDEN (CON ASIGNACIÓN MANUAL Y 2 ESTACIONES OBLIGATORIAS DE LIMPIEZA)
+// MODAL SELECTOR VISUAL DE PASOS (PICKER INTERACTIVO)
+// Permite agregar/quitar cualquier paso individual o rangos a voluntad
+// =============================================
+function StepPickerModal({
+  isOpen,
+  onClose,
+  stationIdx,
+  station,
+  modelSteps,
+  allStations,
+  onToggleStep,
+  onAddStepRange,
+  onClearStationSteps,
+  onClaimAllFreeSteps
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+
+  if (!isOpen || !station) return null;
+
+  const currentStepNumbers = new Set(station.step_numbers || []);
+  const totalSteps = modelSteps.length || 0;
+
+  // Mapa de pasos asignados a cada estación
+  const stepOwnerMap = {};
+  (allStations || []).forEach((st, idx) => {
+    (st.step_numbers || []).forEach(num => {
+      stepOwnerMap[num] = { stationIdx: idx, stationNumber: st.station_number, stationName: st.station_name };
+    });
+  });
+
+  const filteredSteps = (modelSteps || []).filter(s => {
+    const term = searchTerm.toLowerCase();
+    return s.step_number.toString().includes(term) ||
+           (s.operation && s.operation.toLowerCase().includes(term)) ||
+           (s.description && s.description.toLowerCase().includes(term));
+  });
+
+  const handleApplyRange = (e) => {
+    e.preventDefault();
+    const from = parseInt(rangeFrom, 10);
+    const to = parseInt(rangeTo, 10);
+    if (!isNaN(from) && !isNaN(to) && from >= 1 && to >= from) {
+      onAddStepRange(stationIdx, from, to);
+      setRangeFrom("");
+      setRangeTo("");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+        {/* Header del Modal */}
+        <div className="bg-[#0078d4] text-white p-4 flex justify-between items-center flex-shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm flex-shrink-0">
+              {station.station_number}
+            </div>
+            <div className="truncate">
+              <h3 className="text-sm font-bold truncate">
+                Asignar Pasos a Estación {station.station_number}: {station.station_name}
+              </h3>
+              <p className="text-[11px] text-blue-100 truncate">
+                Técnico: <strong>{station.user_name}</strong> · Asignados: <strong className="text-white">{currentStepNumbers.size} pasos</strong> ({formatStepNumbersRange(Array.from(currentStepNumbers))})
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg touch-target flex items-center justify-center flex-shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Herramientas de filtro y rangos */}
+        <div className="p-3 bg-gray-50 border-b border-gray-200 space-y-2.5 flex-shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
+            {/* Buscador */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filtrar por número o nombre de operación (ej: 9, pasta, BIOS)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500 shadow-2xs"
+              />
+            </div>
+
+            {/* Asignar Rango Rápido */}
+            <form onSubmit={handleApplyRange} className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-gray-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-gray-600 whitespace-nowrap">Rango:</span>
+              <span className="text-[10px] text-gray-400">De</span>
+              <input
+                type="number"
+                min="1"
+                max={totalSteps}
+                placeholder="17"
+                value={rangeFrom}
+                onChange={(e) => setRangeFrom(e.target.value)}
+                className="w-12 text-center p-1 text-xs font-bold border border-gray-200 rounded focus:border-blue-500"
+              />
+              <span className="text-[10px] text-gray-400">A</span>
+              <input
+                type="number"
+                min="1"
+                max={totalSteps}
+                placeholder="31"
+                value={rangeTo}
+                onChange={(e) => setRangeTo(e.target.value)}
+                className="w-12 text-center p-1 text-xs font-bold border border-gray-200 rounded focus:border-blue-500"
+              />
+              <button
+                type="submit"
+                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition flex-shrink-0"
+              >
+                + Asignar
+              </button>
+            </form>
+          </div>
+
+          {/* Acciones de selección masiva */}
+          <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
+            <span className="text-[11px] text-gray-500">
+              💡 Toca cualquier paso para <strong>asignarlo</strong> o <strong>quitarlo</strong>. Si pertenece a otra estación, se transferirá a esta.
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onClaimAllFreeSteps(stationIdx)}
+                className="text-[11px] text-blue-700 hover:underline font-bold"
+              >
+                + Asignar pasos libres
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                type="button"
+                onClick={() => onClearStationSteps(stationIdx)}
+                className="text-[11px] text-rose-600 hover:underline font-bold"
+              >
+                Vaciar estación
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista interactiva de pasos */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {filteredSteps.map(step => {
+            const isAssignedToThis = currentStepNumbers.has(step.step_number);
+            const otherOwner = !isAssignedToThis ? stepOwnerMap[step.step_number] : null;
+
+            return (
+              <div
+                key={step.step_number}
+                onClick={() => onToggleStep(stationIdx, step.step_number)}
+                className={`p-2.5 rounded-xl border transition cursor-pointer flex items-start gap-3 select-none ${
+                  isAssignedToThis
+                    ? "bg-blue-50/80 border-blue-400 shadow-xs hover:bg-blue-100/70"
+                    : otherOwner
+                      ? "bg-amber-50/40 border-amber-200 hover:bg-amber-100/40 opacity-85"
+                      : "bg-white border-gray-200 hover:border-blue-300 hover:bg-gray-50"
+                }`}
+              >
+                {/* Badge número */}
+                <div className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs ${
+                  isAssignedToThis
+                    ? "bg-blue-600 text-white"
+                    : otherOwner
+                      ? "bg-amber-500 text-white"
+                      : "bg-gray-100 text-gray-700 border border-gray-300"
+                }`}>
+                  #{step.step_number}
+                </div>
+
+                {/* Contenido */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className={`text-xs font-bold truncate ${isAssignedToThis ? "text-blue-950" : "text-gray-900"}`}>
+                      {step.operation}
+                    </h4>
+
+                    {/* Estado y Acción */}
+                    {isAssignedToThis ? (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Asignado a E{station.station_number}</span>
+                        <span className="text-rose-600 font-extrabold ml-1 hover:text-rose-800" title="Quitar">✕</span>
+                      </span>
+                    ) : otherOwner ? (
+                      <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0" title="Transferir a esta estación">
+                        <span>En E{otherOwner.stationNumber} ({otherOwner.stationName})</span>
+                        <span className="text-blue-600 font-extrabold ml-1">→ Mover aquí</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full flex-shrink-0 hover:bg-blue-100 hover:text-blue-700">
+                        + Asignar libre
+                      </span>
+                    )}
+                  </div>
+
+                  {step.description && (
+                    <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
+                      {step.description}
+                    </p>
+                  )}
+                  {step.qc_criteria && (
+                    <span className="text-[10px] text-emerald-700 font-medium block mt-0.5 truncate">
+                      Criterio QC: {step.qc_criteria}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {filteredSteps.length === 0 && (
+            <div className="p-8 text-center text-gray-500 text-xs">
+              No se encontraron pasos coincidentes con "{searchTerm}".
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-3 bg-gray-100 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
+          <div className="text-xs font-semibold text-gray-700">
+            Total en Estación {station.station_number}: <strong className="text-blue-700">{currentStepNumbers.size} pasos</strong>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 bg-[#0078d4] hover:bg-[#106ebe] text-white text-xs font-bold rounded-xl shadow-xs transition touch-target"
+          >
+            ✓ Guardar y Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================
+// 2. CREADOR DE ORDEN (CON SELECCIÓN Y GESTIÓN LIBRE DE PASOS)
 // =============================================
 function CreateOrderView({ models, users, onSuccess }) {
   const [modelName, setModelName] = useState(models[0]?.name || "PROWORK");
@@ -955,10 +1247,11 @@ function CreateOrderView({ models, users, onSuccess }) {
   const [partNumber, setPartNumber] = useState("90MB0YZ0-M0EAY0");
   const [totalUnits, setTotalUnits] = useState(50);
   const [stationCount, setStationCount] = useState(5);
-  const [assignmentMode, setAssignmentMode] = useState("AUTO"); // "AUTO" | "MANUAL"
   const [selectedOperators, setSelectedOperators] = useState([]);
   const [modelSteps, setModelSteps] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [quickInputs, setQuickInputs] = useState({});
+  const [visualPickerStation, setVisualPickerStation] = useState(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/models/${modelName}/checklist`)
@@ -967,21 +1260,29 @@ function CreateOrderView({ models, users, onSuccess }) {
       .catch(() => {});
   }, [modelName]);
 
-  const partitionPreview = useMemo(() => {
-    const totalSteps = modelSteps.length || 52;
-    const baseCount = Math.floor(totalSteps / stationCount);
-    const remainder = totalSteps % stationCount;
+  // Función para calcular la distribución equitativa de pasos
+  const calculateEqualDistribution = useCallback((numStations, stepsList) => {
+    const totalSteps = (stepsList || []).length || 52;
+    const baseCount = Math.floor(totalSteps / numStations);
+    const remainder = totalSteps % numStations;
     let currentStart = 1;
-    return Array.from({ length: stationCount }, (_, i) => {
+    const result = [];
+
+    for (let i = 0; i < numStations; i++) {
       const extra = i + 1 <= remainder ? 1 : 0;
       const count = baseCount + extra;
       const currentEnd = currentStart + count - 1;
-      const p = { station: i + 1, startStep: currentStart, endStep: currentEnd, stepCount: count, percentage: Math.round((count / totalSteps) * 100) };
+      const stSteps = [];
+      for (let s = currentStart; s <= currentEnd; s++) {
+        stSteps.push(s);
+      }
+      result.push(stSteps);
       currentStart = currentEnd + 1;
-      return p;
-    });
-  }, [modelSteps, stationCount]);
+    }
+    return result;
+  }, []);
 
+  // Inicializar estaciones cuando cambia la cantidad, usuarios o el modelo
   useEffect(() => {
     const defaultNames = [
       "Chasis, Montaje y Placas",
@@ -990,11 +1291,11 @@ function CreateOrderView({ models, users, onSuccess }) {
       "Personalización, Software y Serie",
       "Stickers, Limpieza Final y Embalaje"
     ];
+    const distribution = calculateEqualDistribution(stationCount, modelSteps);
+
     const initial = Array.from({ length: stationCount }, (_, i) => {
       const op = users[i % users.length] || { id: `OP-${101 + i}`, name: `Operario ${i + 1}` };
-      // Pre-configurar al menos 2 estaciones de limpieza obligatorias por defecto
       const isCleaning = stationCount >= 2 && (i === stationCount - 1 || i === Math.floor(stationCount / 2));
-      const p = partitionPreview[i] || { startStep: 1, endStep: 1 };
       return {
         station_number: i + 1,
         user_id: op.id,
@@ -1002,65 +1303,183 @@ function CreateOrderView({ models, users, onSuccess }) {
         station_name: defaultNames[i] || `Estación ${i + 1}`,
         is_cleaning_station: isCleaning,
         station_type: isCleaning ? "CLEANING" : "ASSEMBLY",
-        start_step: p.startStep,
-        end_step: p.endStep
+        step_numbers: distribution[i] || []
       };
     });
     setSelectedOperators(initial);
-  }, [stationCount, users]);
+  }, [stationCount, users, modelSteps, calculateEqualDistribution]);
 
-  // Si estamos en modo AUTO, mantener los rangos actualizados con partitionPreview
-  useEffect(() => {
-    if (assignmentMode === "AUTO" && partitionPreview.length > 0) {
-      setSelectedOperators(prev => prev.map((st, idx) => {
-        const p = partitionPreview[idx];
-        if (!p) return st;
+  // Manejador: Asignar / Quitar paso individual a una estación
+  const handleToggleStep = (targetStationIdx, stepNum) => {
+    setSelectedOperators(prev => {
+      return prev.map((st, idx) => {
+        const currentSteps = new Set(st.step_numbers || []);
+        if (idx === targetStationIdx) {
+          if (currentSteps.has(stepNum)) {
+            currentSteps.delete(stepNum);
+          } else {
+            currentSteps.add(stepNum);
+          }
+        } else {
+          // Si el paso fue asignado a la estación destino, removerlo de otras
+          currentSteps.delete(stepNum);
+        }
         return {
           ...st,
-          start_step: p.startStep,
-          end_step: p.endStep
+          step_numbers: Array.from(currentSteps).sort((a, b) => a - b)
         };
-      }));
-    }
-  }, [partitionPreview, assignmentMode]);
+      });
+    });
+  };
 
-  // Conteo de estaciones obligatorias de limpieza
+  // Manejador: Asignar rango rápido a una estación
+  const handleAddStepRange = (targetStationIdx, from, to) => {
+    const min = Math.min(from, to);
+    const max = Math.max(from, to);
+    const toAdd = new Set();
+    for (let i = min; i <= max; i++) toAdd.add(i);
+
+    setSelectedOperators(prev => {
+      return prev.map((st, idx) => {
+        const current = new Set(st.step_numbers || []);
+        if (idx === targetStationIdx) {
+          toAdd.forEach(n => current.add(n));
+        } else {
+          toAdd.forEach(n => current.delete(n));
+        }
+        return {
+          ...st,
+          step_numbers: Array.from(current).sort((a, b) => a - b)
+        };
+      });
+    });
+  };
+
+  // Manejador: Agregar pasos por texto rápido (ej: "9" o "17-31" o "9, 17-31")
+  const handleAddQuickSteps = (stationIdx) => {
+    const inputStr = quickInputs[stationIdx];
+    if (!inputStr) return;
+    const parsed = parseStepNumbersInput(inputStr, modelSteps.length || 200);
+    if (parsed.length === 0) return;
+
+    const toAdd = new Set(parsed);
+    setSelectedOperators(prev => {
+      return prev.map((st, idx) => {
+        const current = new Set(st.step_numbers || []);
+        if (idx === stationIdx) {
+          toAdd.forEach(n => current.add(n));
+        } else {
+          toAdd.forEach(n => current.delete(n));
+        }
+        return {
+          ...st,
+          step_numbers: Array.from(current).sort((a, b) => a - b)
+        };
+      });
+    });
+    setQuickInputs(prev => ({ ...prev, [stationIdx]: "" }));
+  };
+
+  // Manejador: Quitar un paso individual (desde las fichas de la tarjeta)
+  const handleRemoveStep = (stationIdx, stepNum) => {
+    setSelectedOperators(prev => {
+      return prev.map((st, idx) => {
+        if (idx !== stationIdx) return st;
+        return {
+          ...st,
+          step_numbers: (st.step_numbers || []).filter(n => n !== stepNum)
+        };
+      });
+    });
+  };
+
+  // Manejador: Vaciar todos los pasos de una estación
+  const handleClearStationSteps = (stationIdx) => {
+    setSelectedOperators(prev => {
+      return prev.map((st, idx) => {
+        if (idx !== stationIdx) return st;
+        return { ...st, step_numbers: [] };
+      });
+    });
+  };
+
+  // Manejador: Asignar todos los pasos libres a una estación
+  const handleClaimAllFreeSteps = (stationIdx) => {
+    const total = modelSteps.length || 52;
+    const allAssigned = new Set();
+    selectedOperators.forEach(st => {
+      (st.step_numbers || []).forEach(n => allAssigned.add(n));
+    });
+    const free = [];
+    for (let i = 1; i <= total; i++) {
+      if (!allAssigned.has(i)) free.push(i);
+    }
+    if (free.length === 0) return;
+
+    setSelectedOperators(prev => {
+      return prev.map((st, idx) => {
+        if (idx !== stationIdx) return st;
+        const current = new Set(st.step_numbers || []);
+        free.forEach(n => current.add(n));
+        return { ...st, step_numbers: Array.from(current).sort((a, b) => a - b) };
+      });
+    });
+  };
+
+  // Manejador: Auto-distribuir equitativamente con un solo clic
+  const handleDistributeAuto = () => {
+    const distribution = calculateEqualDistribution(stationCount, modelSteps);
+    setSelectedOperators(prev => {
+      return prev.map((st, idx) => ({
+        ...st,
+        step_numbers: distribution[idx] || []
+      }));
+    });
+  };
+
+  // Análisis de cobertura global
+  const coverageAnalysis = useMemo(() => {
+    const total = modelSteps.length || 52;
+    const stepToStation = {};
+    selectedOperators.forEach((st, idx) => {
+      (st.step_numbers || []).forEach(num => {
+        stepToStation[num] = { stationIdx: idx, stationNumber: st.station_number, stationName: st.station_name };
+      });
+    });
+
+    const missing = [];
+    for (let i = 1; i <= total; i++) {
+      if (!stepToStation[i]) missing.push(i);
+    }
+
+    const assignedCount = Object.keys(stepToStation).length;
+    const isComplete = missing.length === 0;
+
+    return {
+      total,
+      assignedCount,
+      missing,
+      isComplete,
+      stepToStation
+    };
+  }, [selectedOperators, modelSteps]);
+
+  // Conteo de estaciones de limpieza
   const cleaningCount = useMemo(() => {
     return (selectedOperators || []).filter(s => s.is_cleaning_station).length;
   }, [selectedOperators]);
   const hasEnoughCleaning = cleaningCount >= 2;
 
-  // Validación de cobertura de pasos en modo MANUAL
-  const manualCoverage = useMemo(() => {
-    const totalSteps = modelSteps.length || 52;
-    const covered = new Set();
-    const overlaps = new Set();
-
-    selectedOperators.forEach(st => {
-      const s = parseInt(st.start_step, 10);
-      const e = parseInt(st.end_step, 10);
-      if (!isNaN(s) && !isNaN(e) && s <= e) {
-        for (let i = s; i <= e; i++) {
-          if (covered.has(i)) overlaps.add(i);
-          covered.add(i);
-        }
-      }
-    });
-
-    const missing = [];
-    for (let i = 1; i <= totalSteps; i++) {
-      if (!covered.has(i)) missing.push(i);
-    }
-
-    const isValid = missing.length === 0 && overlaps.size === 0 && covered.size === totalSteps;
-    return {
-      coveredCount: covered.size,
-      totalSteps,
-      missing,
-      overlaps: Array.from(overlaps),
-      isValid
-    };
-  }, [selectedOperators, modelSteps]);
+  const STATION_COLORS = [
+    { bg: "bg-blue-600", text: "text-blue-700", border: "border-blue-400", light: "bg-blue-50" },
+    { bg: "bg-emerald-600", text: "text-emerald-700", border: "border-emerald-400", light: "bg-emerald-50" },
+    { bg: "bg-amber-600", text: "text-amber-700", border: "border-amber-400", light: "bg-amber-50" },
+    { bg: "bg-purple-600", text: "text-purple-700", border: "border-purple-400", light: "bg-purple-50" },
+    { bg: "bg-cyan-600", text: "text-cyan-700", border: "border-cyan-400", light: "bg-cyan-50" },
+    { bg: "bg-rose-600", text: "text-rose-700", border: "border-rose-400", light: "bg-rose-50" },
+    { bg: "bg-indigo-600", text: "text-indigo-700", border: "border-indigo-400", light: "bg-indigo-50" },
+    { bg: "bg-teal-600", text: "text-teal-700", border: "border-teal-400", light: "bg-teal-50" },
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1069,24 +1488,17 @@ function CreateOrderView({ models, users, onSuccess }) {
       return;
     }
 
-    if (assignmentMode === "MANUAL") {
-      for (let i = 0; i < selectedOperators.length; i++) {
-        const st = selectedOperators[i];
-        const s = parseInt(st.start_step, 10);
-        const end = parseInt(st.end_step, 10);
-        if (isNaN(s) || isNaN(end) || s < 1 || end < s) {
-          alert(`La Estación ${st.station_number} tiene un rango de pasos inválido (${s}–${end}).`);
-          return;
-        }
-      }
+    if (!coverageAnalysis.isComplete) {
+      alert(`⚠️ Faltan ${coverageAnalysis.missing.length} pasos por asignar en la línea (${coverageAnalysis.missing.slice(0, 10).join(', ')}...). Por favor, asigna todos los pasos antes de iniciar.`);
+      return;
     }
 
     try {
       setSubmitting(true);
-      const payloadStations = selectedOperators.map((st, idx) => {
-        const p = partitionPreview[idx] || {};
-        const sStart = assignmentMode === "MANUAL" ? parseInt(st.start_step, 10) : p.startStep;
-        const sEnd = assignmentMode === "MANUAL" ? parseInt(st.end_step, 10) : p.endStep;
+      const payloadStations = selectedOperators.map((st) => {
+        const nums = Array.from(new Set(st.step_numbers || [])).sort((a, b) => a - b);
+        const sStart = nums.length > 0 ? Math.min(...nums) : 1;
+        const sEnd = nums.length > 0 ? Math.max(...nums) : 1;
         return {
           station_number: st.station_number,
           user_id: st.user_id,
@@ -1095,7 +1507,8 @@ function CreateOrderView({ models, users, onSuccess }) {
           is_cleaning_station: !!st.is_cleaning_station,
           station_type: st.station_type || (st.is_cleaning_station ? "CLEANING" : "ASSEMBLY"),
           start_step: sStart,
-          end_step: sEnd
+          end_step: sEnd,
+          step_numbers: nums.join(",")
         };
       });
 
@@ -1107,7 +1520,7 @@ function CreateOrderView({ models, users, onSuccess }) {
           model_name: modelName,
           part_number: partNumber,
           total_units: parseInt(totalUnits, 10),
-          assignment_mode: assignmentMode,
+          assignment_mode: "MANUAL",
           stations: payloadStations,
           created_by: "Admin / Supervisor QC"
         })
@@ -1122,7 +1535,7 @@ function CreateOrderView({ models, users, onSuccess }) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 fade-in">
+    <div className="max-w-3xl mx-auto space-y-4 fade-in pb-8">
       <Card className="p-4">
         <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
           <PlusCircle className="w-5 h-5 text-blue-600" />
@@ -1130,7 +1543,7 @@ function CreateOrderView({ models, users, onSuccess }) {
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Parámetros */}
+          {/* Parámetros del Lote */}
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">Parámetros del Lote</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -1161,21 +1574,21 @@ function CreateOrderView({ models, users, onSuccess }) {
             </div>
           </div>
 
-          {/* Configuración de Estaciones */}
-          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
+          {/* Configuración y Asignación de Estaciones */}
+          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-3.5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600">Estaciones de Trabajo</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">Estaciones y Asignación de Pasos</h3>
                 <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200">
                   {modelSteps.length || 52} pasos totales
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500 font-semibold">Cantidad:</label>
+                <label className="text-xs text-gray-500 font-semibold">Cantidad de Puestos:</label>
                 <select
                   value={stationCount}
                   onChange={(e) => setStationCount(parseInt(e.target.value, 10))}
-                  className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white font-bold text-blue-600 touch-target"
+                  className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-bold text-blue-600 touch-target shadow-2xs"
                 >
                   {[2, 3, 4, 5, 6, 7, 8].map(n => (
                     <option key={n} value={n}>{n} estaciones</option>
@@ -1184,46 +1597,7 @@ function CreateOrderView({ models, users, onSuccess }) {
               </div>
             </div>
 
-            {/* Selector de Modo: Automático vs Manual */}
-            <div className="bg-white p-2.5 rounded-xl border border-gray-200 flex items-center justify-between gap-2">
-              <div>
-                <span className="text-xs font-bold text-gray-800 block">Modo de Asignación de Pasos:</span>
-                <span className="text-[10px] text-gray-500">Distribución balanceada o asignación personalizada</span>
-              </div>
-              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setAssignmentMode("AUTO")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1 ${
-                    assignmentMode === "AUTO" ? "bg-[#0078d4] text-white shadow-xs" : "text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  <span>⚖️ Automático</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Inicializar rangos manuales a partir de la partición actual
-                    setSelectedOperators(prev => prev.map((st, idx) => {
-                      const p = partitionPreview[idx];
-                      return {
-                        ...st,
-                        start_step: p ? p.startStep : st.start_step || 1,
-                        end_step: p ? p.endStep : st.end_step || 1
-                      };
-                    }));
-                    setAssignmentMode("MANUAL");
-                  }}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1 ${
-                    assignmentMode === "MANUAL" ? "bg-[#0078d4] text-white shadow-xs" : "text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  <span>✏️ Manual</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Regla Obligatoria: Mínimo 2 Estaciones de Limpieza */}
+            {/* Regla Obligatoria: 2 Estaciones de Limpieza */}
             {hasEnoughCleaning ? (
               <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-900 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -1241,7 +1615,7 @@ function CreateOrderView({ models, users, onSuccess }) {
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                   <span>
-                    <strong>Regla Obligatoria:</strong> Se requieren al menos <strong>2 estaciones de limpieza</strong>. Pulsa el botón <strong>"🧼 Limpieza"</strong> en las estaciones deseadas.
+                    <strong>Regla Obligatoria:</strong> Se requieren al menos <strong>2 estaciones de limpieza</strong>. Pulsa el botón <strong>"🧼 Limpieza"</strong> en las estaciones correspondientes.
                   </span>
                 </div>
                 <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md flex-shrink-0">
@@ -1250,43 +1624,95 @@ function CreateOrderView({ models, users, onSuccess }) {
               </div>
             )}
 
-            {/* Indicador de Cobertura en Modo Manual */}
-            {assignmentMode === "MANUAL" && (
-              <div className={`p-2.5 rounded-xl border text-xs ${
-                manualCoverage.isValid ? "bg-blue-50 border-blue-200 text-blue-900" : "bg-rose-50 border-rose-200 text-rose-900"
-              }`}>
-                <div className="flex items-center justify-between font-bold">
-                  <span>Cobertura de Pasos ({manualCoverage.coveredCount} / {manualCoverage.totalSteps}):</span>
-                  <span>{manualCoverage.isValid ? "✓ Asignación Completa" : "⚠️ Verifique rangos"}</span>
+            {/* MAPA VISUAL GLOBAL DE PASOS */}
+            <div className="bg-white p-3 rounded-xl border border-gray-200 space-y-2 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-gray-900 block">
+                    Mapa de Pasos ({coverageAnalysis.assignedCount} / {coverageAnalysis.total} asignados):
+                  </span>
+                  <span className="text-[10px] text-gray-500">
+                    Colores según estación. Haz clic en un paso para asignarlo o editarlo.
+                  </span>
                 </div>
-                {manualCoverage.missing.length > 0 && (
-                  <p className="text-[10px] mt-1 text-rose-700">
-                    Pasos faltantes sin asignar ({manualCoverage.missing.length}): {manualCoverage.missing.slice(0, 15).join(", ")}{manualCoverage.missing.length > 15 ? '...' : ''}
-                  </p>
-                )}
-                {manualCoverage.overlaps.length > 0 && (
-                  <p className="text-[10px] mt-0.5 text-rose-700 font-semibold">
-                    Pasos duplicados en múltiples estaciones: {manualCoverage.overlaps.join(", ")}
-                  </p>
-                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDistributeAuto}
+                    className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold px-2.5 py-1 rounded-lg border border-blue-200 transition flex items-center gap-1"
+                    title="Repartir todos los pasos equitativamente entre las estaciones"
+                  >
+                    <span>⚖️ Reparto Equitativo</span>
+                  </button>
+                </div>
               </div>
-            )}
 
-            {/* Tarjetas de Estaciones */}
-            <div className="space-y-2.5">
+              {/* Botones de pasos en la tira general */}
+              <div className="flex flex-wrap gap-1 p-2 bg-slate-50 rounded-xl border border-gray-200 max-h-36 overflow-y-auto">
+                {Array.from({ length: coverageAnalysis.total }, (_, i) => i + 1).map(stepNum => {
+                  const owner = coverageAnalysis.stepToStation[stepNum];
+                  const color = owner ? STATION_COLORS[(owner.stationNumber - 1) % STATION_COLORS.length] : null;
+                  const stepItem = modelSteps.find(s => s.step_number === stepNum);
+
+                  return (
+                    <button
+                      key={stepNum}
+                      type="button"
+                      onClick={() => {
+                        const targetIdx = owner ? owner.stationIdx : 0;
+                        setVisualPickerStation(targetIdx);
+                      }}
+                      title={stepItem ? `#${stepNum}: ${stepItem.operation} (${owner ? `Asignado a E${owner.stationNumber}` : 'LIBRE'})` : `#${stepNum}`}
+                      className={`w-7 h-7 rounded-lg font-bold text-[11px] flex items-center justify-center transition shadow-2xs ${
+                        owner
+                          ? `${color.bg} text-white hover:scale-110`
+                          : "bg-white text-rose-600 border-2 border-dashed border-rose-400 hover:bg-rose-50 animate-pulse font-extrabold"
+                      }`}
+                    >
+                      {stepNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Alerta de pasos sin asignar si existen */}
+              {!coverageAnalysis.isComplete && (
+                <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />
+                    <span className="truncate">
+                      <strong>Pasos sin asignar ({coverageAnalysis.missing.length}):</strong> {coverageAnalysis.missing.slice(0, 15).join(', ')}{coverageAnalysis.missing.length > 15 ? '...' : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleClaimAllFreeSteps(0)}
+                    className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-2 py-0.5 rounded flex-shrink-0"
+                  >
+                    Asignar a E1
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* TARJETAS DE ESTACIONES (SELECCIÓN Y RETIRO LIBRE DE PASOS) */}
+            <div className="space-y-3">
               {selectedOperators.map((st, idx) => {
-                const partition = partitionPreview[idx] || {};
-                const currentStart = assignmentMode === "MANUAL" ? (st.start_step || 1) : partition.startStep;
-                const currentEnd = assignmentMode === "MANUAL" ? (st.end_step || 1) : partition.endStep;
-                const stepCount = Math.max(0, currentEnd - currentStart + 1);
+                const color = STATION_COLORS[idx % STATION_COLORS.length];
+                const stepCount = (st.step_numbers || []).length;
+                const rangeSummary = formatStepNumbersRange(st.step_numbers);
 
                 return (
-                  <div key={idx} className={`p-3 rounded-xl border transition ${
-                    st.is_cleaning_station ? "bg-emerald-50/40 border-emerald-300" : "bg-white border-gray-200"
-                  } space-y-2.5`}>
+                  <div
+                    key={idx}
+                    className={`p-3.5 rounded-xl border transition ${
+                      st.is_cleaning_station ? "bg-emerald-50/40 border-emerald-300" : "bg-white border-gray-200"
+                    } space-y-3 shadow-xs`}
+                  >
+                    {/* Fila 1: Estación, Nombre, Limpieza toggle y Resumen */}
                     <div className="flex items-center gap-2">
                       <div className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 ${
-                        st.is_cleaning_station ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
+                        st.is_cleaning_station ? "bg-emerald-600 text-white" : `${color.bg} text-white`
                       }`}>
                         {st.station_number}
                       </div>
@@ -1304,7 +1730,7 @@ function CreateOrderView({ models, users, onSuccess }) {
                         />
                       </div>
 
-                      {/* Botón Toggle Limpieza */}
+                      {/* Toggle Limpieza */}
                       <button
                         type="button"
                         onClick={() => {
@@ -1325,16 +1751,15 @@ function CreateOrderView({ models, users, onSuccess }) {
                         <span>{st.is_cleaning_station ? "Limpieza OK" : "+ Limpieza"}</span>
                       </button>
 
-                      {/* Badge pasos */}
-                      <span className="text-[10px] font-bold text-blue-800 bg-blue-50 px-2 py-1.5 rounded-lg border border-blue-200 flex-shrink-0">
-                        {stepCount}p (P{currentStart}–{currentEnd})
+                      {/* Resumen de pasos asignados */}
+                      <span className="text-[10px] font-bold text-blue-900 bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 flex-shrink-0">
+                        {stepCount}p ({rangeSummary})
                       </span>
                     </div>
 
-                    {/* Selector de Operario Asignado */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-gray-500 font-bold block mb-1">Técnico / Operario:</label>
+                    {/* Fila 2: Selector de Técnico y Botones de acción */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex-1">
                         <select
                           value={st.user_id}
                           onChange={(e) => {
@@ -1354,68 +1779,93 @@ function CreateOrderView({ models, users, onSuccess }) {
                         </select>
                       </div>
 
-                      {/* Asignación Manual de Rangos o Info Automática */}
-                      {assignmentMode === "MANUAL" ? (
-                        <div>
-                          <label className="text-[10px] text-gray-500 font-bold block mb-1">Rango Manual de Pasos:</label>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-gray-500 font-bold">De:</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max={modelSteps.length || 100}
-                              value={st.start_step || 1}
-                              onChange={(e) => {
-                                const copy = [...selectedOperators];
-                                copy[idx].start_step = parseInt(e.target.value, 10) || 1;
-                                setSelectedOperators(copy);
-                              }}
-                              className="w-16 text-center py-1 px-1.5 font-bold text-blue-700 border border-gray-300 rounded-lg bg-white text-xs"
-                            />
-                            <span className="text-[10px] text-gray-500 font-bold">A:</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max={modelSteps.length || 100}
-                              value={st.end_step || 1}
-                              onChange={(e) => {
-                                const copy = [...selectedOperators];
-                                copy[idx].end_step = parseInt(e.target.value, 10) || 1;
-                                setSelectedOperators(copy);
-                              }}
-                              className="w-16 text-center py-1 px-1.5 font-bold text-blue-700 border border-gray-300 rounded-lg bg-white text-xs"
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="text-[10px] text-gray-500 font-bold block mb-1">Distribución Equitativa:</label>
-                          <div className="text-xs bg-gray-100 px-2.5 py-1.5 rounded-lg text-gray-700 font-medium border border-gray-200">
-                            Pasos #{currentStart} al #{currentEnd} ({stepCount} pasos)
-                          </div>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setVisualPickerStation(idx)}
+                          className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>📋 Selector Visual</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleClearStationSteps(idx)}
+                          className="p-2 bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 border border-gray-200 rounded-lg text-xs transition flex-shrink-0"
+                          title="Quitar todos los pasos de esta estación"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
 
-            {/* Barra visual de distribución */}
-            <div className="flex h-5 rounded-lg overflow-hidden border border-blue-200 shadow-inner">
-              {selectedOperators.map((st, i) => {
-                const colors = ["bg-blue-600", "bg-emerald-600", "bg-amber-600", "bg-purple-600", "bg-cyan-600", "bg-rose-600", "bg-indigo-600", "bg-teal-600"];
-                const total = modelSteps.length || 52;
-                const count = Math.max(1, (st.end_step || 1) - (st.start_step || 1) + 1);
-                const widthPct = Math.round((count / total) * 100);
-                return (
-                  <div
-                    key={i}
-                    style={{ width: `${widthPct}%` }}
-                    className={`${st.is_cleaning_station ? "bg-emerald-600" : colors[i % colors.length]} text-white text-[9px] font-bold flex items-center justify-center truncate px-0.5`}
-                    title={`E${st.station_number}: P${st.start_step}–${st.end_step} ${st.is_cleaning_station ? '(Limpieza)' : ''}`}
-                  >
-                    E{st.station_number}{st.is_cleaning_station ? '🧼' : ''}
+                    {/* Fila 3: Barra para agregar pasos por texto (ej: 9 o 17-31) */}
+                    <div className="flex items-center gap-1.5 bg-gray-50 p-2 rounded-xl border border-gray-200">
+                      <span className="text-[11px] font-bold text-gray-700 whitespace-nowrap hidden sm:inline">
+                        + Agregar paso(s):
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Escribe números o rangos, ej: 9 o 17-31 o 9, 17-31..."
+                        value={quickInputs[idx] || ""}
+                        onChange={(e) => setQuickInputs({ ...quickInputs, [idx]: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddQuickSteps(idx);
+                          }
+                        }}
+                        className="flex-1 text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-mono focus:border-blue-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddQuickSteps(idx)}
+                        className="px-3 py-1.5 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-lg text-xs font-bold transition flex-shrink-0"
+                      >
+                        + Añadir
+                      </button>
+                    </div>
+
+                    {/* Fila 4: Fichas / Chips interactivas de pasos (Quitar a voluntad con [✕]) */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-gray-500 px-0.5">
+                        <span>Pasos en esta estación ({stepCount}):</span>
+                        <span className="text-gray-400">Toca ✕ para quitar cualquier paso</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50/90 rounded-xl border border-dashed border-gray-300">
+                        {st.step_numbers && st.step_numbers.length > 0 ? (
+                          st.step_numbers.map(num => {
+                            const stepInfo = modelSteps.find(s => s.step_number === num);
+                            return (
+                              <span
+                                key={num}
+                                title={stepInfo ? `Paso #${num}: ${stepInfo.operation} · Clic en ✕ para quitar` : `Paso #${num}`}
+                                className="inline-flex items-center gap-1.5 bg-white hover:bg-rose-50 text-gray-800 hover:text-rose-700 pl-2 pr-1.5 py-1 rounded-lg text-xs font-bold border border-gray-200 hover:border-rose-300 shadow-2xs transition group"
+                              >
+                                <span className="text-blue-700 group-hover:text-rose-700">#{num}</span>
+                                {stepInfo && (
+                                  <span className="text-[10px] text-gray-500 group-hover:text-rose-600 max-w-[120px] truncate hidden sm:inline">
+                                    {stepInfo.operation}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStep(idx, num)}
+                                  className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-600 transition"
+                                  title={`Quitar paso #${num}`}
+                                >
+                                  ✕
+                                </button>
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-xs text-gray-400 italic py-1">
+                            Sin pasos asignados. Escribe arriba (ej: 9 o 17-31) o abre el selector visual.
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -1424,15 +1874,15 @@ function CreateOrderView({ models, users, onSuccess }) {
 
           <button
             type="submit"
-            disabled={submitting || !hasEnoughCleaning || (assignmentMode === "MANUAL" && !manualCoverage.isValid)}
+            disabled={submitting || !hasEnoughCleaning || !coverageAnalysis.isComplete}
             className="w-full py-3.5 bg-[#0078d4] hover:bg-[#106ebe] disabled:bg-gray-400 text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target disabled:cursor-not-allowed"
           >
             {submitting ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : !hasEnoughCleaning ? (
               <span>⚠️ Mínimo 2 estaciones de limpieza requeridas</span>
-            ) : (assignmentMode === "MANUAL" && !manualCoverage.isValid) ? (
-              <span>⚠️ Corrija los rangos de pasos para continuar</span>
+            ) : !coverageAnalysis.isComplete ? (
+              <span>⚠️ Faltan pasos por asignar ({coverageAnalysis.missing.length} libres)</span>
             ) : (
               <>
                 <Play className="w-5 h-5 fill-white" />
@@ -1442,6 +1892,22 @@ function CreateOrderView({ models, users, onSuccess }) {
           </button>
         </form>
       </Card>
+
+      {/* Modal Selector Visual de Pasos */}
+      {visualPickerStation !== null && selectedOperators[visualPickerStation] && (
+        <StepPickerModal
+          isOpen={true}
+          onClose={() => setVisualPickerStation(null)}
+          stationIdx={visualPickerStation}
+          station={selectedOperators[visualPickerStation]}
+          modelSteps={modelSteps}
+          allStations={selectedOperators}
+          onToggleStep={handleToggleStep}
+          onAddStepRange={handleAddStepRange}
+          onClearStationSteps={handleClearStationSteps}
+          onClaimAllFreeSteps={handleClaimAllFreeSteps}
+        />
+      )}
     </div>
   );
 }
@@ -2037,7 +2503,7 @@ function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssu
           </div>
           <div className="text-right flex-shrink-0">
             <span className="text-xs font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 block">
-              {assignment.step_numbers ? `P${assignment.step_numbers}` : `P${assignment.start_step}–${assignment.end_step}`}
+              {formatStepNumbersRange(assignment.step_numbers || (assignment.start_step ? `${assignment.start_step}-${assignment.end_step}` : ""))}
             </span>
             <span className="text-[10px] text-gray-400 block mt-1">
               Operario: <strong>{assignment.user_name}</strong>

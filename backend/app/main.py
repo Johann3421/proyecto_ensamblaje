@@ -75,6 +75,16 @@ def startup_event():
         "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_id VARCHAR(50);",
         "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_name VARCHAR(100);",
         "ALTER TABLE qc_supervisor_audits ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
+        "ALTER TABLE qc_checklist_items ADD COLUMN IF NOT EXISTS is_cleaning BOOLEAN DEFAULT FALSE;",
+        """UPDATE qc_checklist_items
+           SET is_cleaning = TRUE
+           WHERE LOWER(operation) LIKE '%limpieza%'
+              OR LOWER(operation) LIKE '%limpiar%'
+              OR LOWER(operation) LIKE '%película%'
+              OR LOWER(operation) LIKE '%pelicula%'
+              OR LOWER(description) LIKE '%limpieza%'
+              OR LOWER(description) LIKE '%microfibra%'
+              OR step_number IN (12, 13, 14, 43, 52);""",
         """CREATE TABLE IF NOT EXISTS qc_step_station_overrides (
             id SERIAL PRIMARY KEY,
             order_id VARCHAR(50) NOT NULL,
@@ -608,6 +618,7 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
             existing.qc_criteria = item.qc_criteria
             existing.media_url = item.media_url
             existing.media_type = item.media_type
+            existing.is_cleaning = bool(item.is_cleaning)
             db.commit()
             db.refresh(existing)
             return existing
@@ -619,7 +630,8 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
         description=item.description,
         qc_criteria=item.qc_criteria,
         media_url=item.media_url,
-        media_type=item.media_type
+        media_type=item.media_type,
+        is_cleaning=bool(item.is_cleaning)
     )
     db.add(new_item)
     db.commit()
@@ -835,19 +847,63 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
                 station_type=s_type
             ))
     else:
-        # Asignación automática equitativa
-        base_step_count = total_steps // num_stations
-        remainder = total_steps % num_stations
+        # Asignación automática inteligente:
+        # Separa los pasos de limpieza de los pasos de ensamblaje
+        cleaning_steps = [
+            s.step_number for s in steps
+            if getattr(s, 'is_cleaning', False)
+               or "limpieza" in (s.operation + " " + (s.description or "")).lower()
+               or "limpiar" in (s.operation or "").lower()
+               or "película" in (s.operation or "").lower()
+               or "pelicula" in (s.operation or "").lower()
+               or "microfibra" in (s.operation or "").lower()
+               or s.step_number in (12, 13, 14, 43, 52)
+        ]
+        cleaning_steps = sorted(list(set(cleaning_steps)))
+        assembly_steps = [s.step_number for s in steps if s.step_number not in cleaning_steps]
+        assembly_steps = sorted(list(set(assembly_steps)))
 
-        current_start = 1
+        # Clasificar estaciones recibidas
+        clean_sts = [st for st in req.stations if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower()]
+        asmb_sts = [st for st in req.stations if st not in clean_sts]
+
+        # Si no quedaron estaciones de ensamblaje (caso extremo), usar las no-limpieza
+        if not asmb_sts:
+            asmb_sts = req.stations[:-2] if len(req.stations) > 2 else req.stations
+
+        # Repartir assembly_steps ÚNICAMENTE entre asmb_sts (CERO pasos de limpieza a ensamble)
+        station_step_map = {}
+        if asmb_sts:
+            base_count = len(assembly_steps) // len(asmb_sts)
+            remainder = len(assembly_steps) % len(asmb_sts)
+            cur = 0
+            for i, st in enumerate(asmb_sts):
+                cnt = base_count + (1 if i < remainder else 0)
+                station_step_map[st.station_number] = assembly_steps[cur:cur + cnt]
+                cur += cnt
+
+        # Repartir cleaning_steps ÚNICAMENTE entre clean_sts
+        if clean_sts:
+            if len(clean_sts) == 2:
+                mid_cutoff = len(cleaning_steps) // 2 or 1
+                station_step_map[clean_sts[0].station_number] = cleaning_steps[:mid_cutoff]
+                station_step_map[clean_sts[1].station_number] = cleaning_steps[mid_cutoff:]
+            else:
+                c_base = len(cleaning_steps) // len(clean_sts)
+                c_rem = len(cleaning_steps) % len(clean_sts)
+                c_cur = 0
+                for i, st in enumerate(clean_sts):
+                    cnt = c_base + (1 if i < c_rem else 0)
+                    station_step_map[st.station_number] = cleaning_steps[c_cur:c_cur + cnt]
+                    c_cur += cnt
+
         for s_idx, st in enumerate(req.stations, start=1):
-            extra = 1 if s_idx <= remainder else 0
-            steps_for_station = base_step_count + extra
-            current_end = current_start + steps_for_station - 1
-
+            st_steps = station_step_map.get(st.station_number, [])
+            step_nums_str = ",".join(str(n) for n in st_steps) if st_steps else None
+            s_start = min(st_steps) if st_steps else 1
+            s_end = max(st_steps) if st_steps else 1
             is_clean = bool(st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower())
             s_type = st.station_type or ("CLEANING" if is_clean else "ASSEMBLY")
-            step_nums_str = ",".join(str(n) for n in range(current_start, current_end + 1))
 
             db.add(QCStationAssignment(
                 order_id=req.order_id,
@@ -857,13 +913,12 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
                 user_name=st.user_name,
                 secondary_user_id=st.secondary_user_id,
                 secondary_user_name=st.secondary_user_name,
-                start_step=current_start,
-                end_step=current_end,
+                start_step=s_start,
+                end_step=s_end,
                 step_numbers=step_nums_str,
                 is_cleaning_station=is_clean,
                 station_type=s_type
             ))
-            current_start = current_end + 1
     db.commit()
 
     for u_num in range(1, req.total_units + 1):

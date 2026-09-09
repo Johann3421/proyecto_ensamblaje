@@ -36,6 +36,7 @@ class QCChecklistItem(Base):
     qc_criteria = Column(Text, nullable=False)
     media_url = Column(String(500), nullable=True) # URL de imagen o GIF instructivo
     media_type = Column(String(20), default="gif") # gif, image, video
+    is_cleaning = Column(Boolean, default=False)
 
     model = relationship("QCModel", back_populates="checklists")
 

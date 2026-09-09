@@ -143,6 +143,137 @@ function parseStepNumbersInput(inputStr, maxLimit = 500) {
 }
 
 // =============================================
+// HELPERS PARA GESTIÓN EXCLUSIVA DE PASOS DE LIMPIEZA
+// Permite aislar pasos de limpieza y evitar que se mezclen en estaciones de ensamblaje
+// =============================================
+function isStepCleaning(step) {
+  if (!step) return false;
+  if (step.is_cleaning === true) return true;
+  const num = step.step_number;
+  if ([12, 13, 14, 43, 52].includes(num)) return true;
+  const text = `${step.operation || ''} ${step.description || ''} ${step.qc_criteria || ''}`.toLowerCase();
+  return (
+    text.includes('limpieza') ||
+    text.includes('limpiar') ||
+    text.includes('película') ||
+    text.includes('pelicula') ||
+    text.includes('microfibra') ||
+    text.includes('huellas') ||
+    text.includes('polvo') ||
+    text.includes('temporales del sistema')
+  );
+}
+
+function distributeStepsSeparatingCleaning(stations, modelSteps, customCleaningSet = null) {
+  if (!stations || stations.length === 0) return [];
+  let effectiveSteps = modelSteps || [];
+  if (effectiveSteps.length === 0) {
+    effectiveSteps = Array.from({ length: 52 }, (_, i) => ({
+      step_number: i + 1,
+      operation: `Paso ${i + 1}`,
+      is_cleaning: [12, 13, 14, 43, 52].includes(i + 1)
+    }));
+  }
+
+  // 1. Identificar números de paso de limpieza
+  let cleaningNums = [];
+  if (customCleaningSet && customCleaningSet instanceof Set) {
+    cleaningNums = Array.from(customCleaningSet).sort((a, b) => a - b);
+  } else if (Array.isArray(customCleaningSet)) {
+    cleaningNums = [...new Set(customCleaningSet)].sort((a, b) => a - b);
+  } else {
+    cleaningNums = effectiveSteps.filter(s => isStepCleaning(s)).map(s => s.step_number);
+    if (cleaningNums.length === 0) {
+      cleaningNums = [12, 13, 14, 43, 52].filter(n => effectiveSteps.some(s => s.step_number === n));
+    }
+  }
+  const cleanSet = new Set(cleaningNums);
+
+  // 2. Pasos de ensamblaje (excluye estrictamente todos los de limpieza)
+  const assemblyNums = effectiveSteps
+    .map(s => s.step_number)
+    .filter(n => !cleanSet.has(n))
+    .sort((a, b) => a - b);
+
+  // 3. Separar estaciones en ensamblaje y limpieza
+  let cleanIndices = [];
+  let asmbIndices = [];
+  stations.forEach((st, idx) => {
+    const isClean = Boolean(
+      st.is_cleaning_station ||
+      st.station_type === "CLEANING" ||
+      (st.station_name || "").toLowerCase().includes("limpieza")
+    );
+    if (isClean) {
+      cleanIndices.push(idx);
+    } else {
+      asmbIndices.push(idx);
+    }
+  });
+
+  // Si no hay al menos 2 estaciones de limpieza y la lista tiene >= 2 estaciones,
+  // asignar por defecto la estación intermedia y la última como limpieza
+  if (cleanIndices.length < 2 && stations.length >= 2) {
+    cleanIndices = [];
+    asmbIndices = [];
+    const midIdx = Math.floor(stations.length / 2);
+    const lastIdx = stations.length - 1;
+    stations.forEach((st, idx) => {
+      if (idx === midIdx || idx === lastIdx) {
+        cleanIndices.push(idx);
+      } else {
+        asmbIndices.push(idx);
+      }
+    });
+  }
+
+  // 4. Repartir assemblyNums ÚNICAMENTE entre asmbIndices (CERO pasos de limpieza a ensamble)
+  const resultStepMap = {};
+  if (asmbIndices.length > 0) {
+    const baseCount = Math.floor(assemblyNums.length / asmbIndices.length);
+    const remainder = assemblyNums.length % asmbIndices.length;
+    let cur = 0;
+    asmbIndices.forEach((stIdx, i) => {
+      const extra = i < remainder ? 1 : 0;
+      const count = baseCount + extra;
+      resultStepMap[stIdx] = assemblyNums.slice(cur, cur + count);
+      cur += count;
+    });
+  }
+
+  // 5. Repartir cleaningNums ÚNICAMENTE entre cleanIndices
+  if (cleanIndices.length === 2) {
+    // 1ra limpieza: desprotección/películas iniciales
+    // 2da limpieza: limpieza final/microfibra
+    const midCutoff = Math.max(1, Math.floor(cleaningNums.length / 2));
+    resultStepMap[cleanIndices[0]] = cleaningNums.slice(0, midCutoff);
+    resultStepMap[cleanIndices[1]] = cleaningNums.slice(midCutoff);
+  } else if (cleanIndices.length > 0) {
+    const baseClean = Math.floor(cleaningNums.length / cleanIndices.length);
+    const remClean = cleaningNums.length % cleanIndices.length;
+    let cCur = 0;
+    cleanIndices.forEach((stIdx, i) => {
+      const extra = i < remClean ? 1 : 0;
+      const count = baseClean + extra;
+      resultStepMap[stIdx] = cleaningNums.slice(cCur, cCur + count);
+      cCur += count;
+    });
+  }
+
+  return stations.map((st, idx) => {
+    const isClean = cleanIndices.includes(idx);
+    const assignedSteps = resultStepMap[idx] || [];
+    return {
+      ...st,
+      is_cleaning_station: isClean,
+      station_type: isClean ? "CLEANING" : "ASSEMBLY",
+      step_numbers: assignedSteps,
+      rawStepsInput: assignedSteps.join(", ")
+    };
+  });
+}
+
+// =============================================
 // MODAL LIGHTBOX / VISOR DE FOTO DE EVIDENCIA
 // =============================================
 function PhotoPreviewModal({ photo, onClose }) {
@@ -1327,56 +1458,86 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
     }
   };
 
-  // Función para calcular la distribución equitativa de pasos
-  const calculateEqualDistribution = useCallback((numStations, stepsList) => {
-    const totalSteps = (stepsList || []).length || 52;
-    const baseCount = Math.floor(totalSteps / numStations);
-    const remainder = totalSteps % numStations;
-    let currentStart = 1;
-    const result = [];
+  // Pool de pasos catalogados como limpieza
+  const [cleaningPool, setCleaningPool] = useState(() => new Set([12, 13, 14, 43, 52]));
+  const [newCleaningStepInput, setNewCleaningStepInput] = useState("");
 
-    for (let i = 0; i < numStations; i++) {
-      const extra = i + 1 <= remainder ? 1 : 0;
-      const count = baseCount + extra;
-      const currentEnd = currentStart + count - 1;
-      const stSteps = [];
-      for (let s = currentStart; s <= currentEnd; s++) {
-        stSteps.push(s);
-      }
-      result.push(stSteps);
-      currentStart = currentEnd + 1;
-    }
-    return result;
-  }, []);
-
-  // Inicializar estaciones cuando cambia la cantidad, usuarios o el modelo
+  // Auto-detectar pasos de limpieza al cargar pasos del modelo
   useEffect(() => {
-    const defaultNames = [
-      "Chasis, Montaje y Placas",
-      "Protecciones, Discos y GPU",
-      "Limpieza Intermedia y BIOS",
+    if (modelSteps && modelSteps.length > 0) {
+      const detected = modelSteps.filter(isStepCleaning).map(s => s.step_number);
+      if (detected.length > 0) {
+        const detectedSet = new Set(detected);
+        setCleaningPool(detectedSet);
+        setSelectedOperators(curr => distributeStepsSeparatingCleaning(curr, modelSteps, detectedSet));
+      }
+    }
+  }, [modelSteps]);
+
+  const handleToggleCleaningStepInPool = (stepNum) => {
+    setCleaningPool(prev => {
+      const next = new Set(prev);
+      if (next.has(stepNum)) next.delete(stepNum);
+      else next.add(stepNum);
+      setSelectedOperators(curr => distributeStepsSeparatingCleaning(curr, modelSteps, next));
+      return next;
+    });
+  };
+
+  const handleAddStepToCleaningPool = (val) => {
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num > 0) {
+      setCleaningPool(prev => {
+        const next = new Set([...prev, num]);
+        setSelectedOperators(curr => distributeStepsSeparatingCleaning(curr, modelSteps, next));
+        return next;
+      });
+      setNewCleaningStepInput("");
+    }
+  };
+
+  const handleResetCleaningPool = () => {
+    const detected = modelSteps.filter(isStepCleaning).map(s => s.step_number);
+    const next = new Set(detected.length > 0 ? detected : [12, 13, 14, 43, 52]);
+    setCleaningPool(next);
+    setSelectedOperators(curr => distributeStepsSeparatingCleaning(curr, modelSteps, next));
+    notify?.("Pool de limpieza restaurado con los pasos recomendados", "info");
+  };
+
+  // Inicializar estaciones cuando cambia la cantidad, usuarios o modelo
+  useEffect(() => {
+    const defaultAssemblyNames = [
+      "Chasis y Montaje de Fuente",
+      "Placas, Memorias y Tarjeta Gráfica",
+      "Configuración, BIOS y Pruebas",
       "Personalización, Software y Serie",
-      "Stickers, Limpieza Final y Embalaje"
+      "Pruebas Finales y Control Técnico"
     ];
-    const distribution = calculateEqualDistribution(stationCount, modelSteps);
 
     const initial = Array.from({ length: stationCount }, (_, i) => {
       const op = users[i % users.length] || { id: `OP-${101 + i}`, name: `Operario ${i + 1}` };
-      const isCleaning = stationCount >= 2 && (i === stationCount - 1 || i === Math.floor(stationCount / 2));
+      const isCleaning = stationCount >= 2 && (i === stationCount - 1 || i === stationCount - 2 || i === Math.floor(stationCount / 2));
+      let defaultName = defaultAssemblyNames[i] || `Estación ${i + 1}`;
+      if (isCleaning) {
+        if (i === stationCount - 1) defaultName = "Limpieza Final y Embalaje";
+        else defaultName = "Limpieza Intermedia y Desprotección";
+      }
       return {
         station_number: i + 1,
         user_id: op.id,
         user_name: op.name,
         secondary_user_id: "",
         secondary_user_name: "",
-        station_name: defaultNames[i] || `Estación ${i + 1}`,
+        station_name: defaultName,
         is_cleaning_station: isCleaning,
         station_type: isCleaning ? "CLEANING" : "ASSEMBLY",
-        step_numbers: distribution[i] || []
+        step_numbers: []
       };
     });
-    setSelectedOperators(initial);
-  }, [stationCount, users, modelSteps, calculateEqualDistribution]);
+
+    const distributed = distributeStepsSeparatingCleaning(initial, modelSteps, cleaningPool);
+    setSelectedOperators(distributed);
+  }, [stationCount, users, modelSteps]);
 
   // Manejador: Asignar / Quitar paso individual a una estación
   const handleToggleStep = (targetStationIdx, stepNum) => {
@@ -1495,15 +1656,10 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
     });
   };
 
-  // Manejador: Auto-distribuir equitativamente con un solo clic
+  // Manejador: Auto-distribuir equitativamente separando limpieza de ensamble
   const handleDistributeAuto = () => {
-    const distribution = calculateEqualDistribution(stationCount, modelSteps);
-    setSelectedOperators(prev => {
-      return prev.map((st, idx) => ({
-        ...st,
-        step_numbers: distribution[idx] || []
-      }));
-    });
+    setSelectedOperators(prev => distributeStepsSeparatingCleaning(prev, modelSteps, cleaningPool));
+    notify?.("Pasos distribuidos: Las estaciones de ensamblaje NO contienen pasos de limpieza.", "success");
   };
 
   // Análisis de cobertura global
@@ -1605,6 +1761,211 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const renderStationCard = (st, idx) => {
+    const color = STATION_COLORS[idx % STATION_COLORS.length];
+    const stepCount = (st.step_numbers || []).length;
+    const rangeSummary = formatStepNumbersRange(st.step_numbers);
+    const isCleaning = Boolean(st.is_cleaning_station);
+
+    return (
+      <div
+        key={idx}
+        className={`p-3.5 rounded-xl border transition ${
+          isCleaning ? "bg-emerald-50/50 border-emerald-300 shadow-xs" : "bg-white border-gray-200 shadow-xs"
+        } space-y-3`}
+      >
+        {/* Fila 1: Estación, Nombre, Limpieza toggle y Resumen */}
+        <div className="flex items-center gap-2">
+          <div className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 ${
+            isCleaning ? "bg-emerald-600 text-white" : `${color.bg} text-white`
+          }`}>
+            {st.station_number}
+          </div>
+          <div className="flex-1 min-w-0">
+            <input
+              type="text"
+              value={st.station_name}
+              onChange={(e) => {
+                const copy = [...selectedOperators];
+                copy[idx].station_name = e.target.value;
+                setSelectedOperators(copy);
+              }}
+              placeholder="Nombre de estación"
+              className="w-full text-xs border border-gray-300 rounded-lg p-2 touch-target bg-white font-medium"
+            />
+          </div>
+
+          {/* Toggle Limpieza */}
+          <button
+            type="button"
+            onClick={() => {
+              const copy = [...selectedOperators];
+              const nextCleaning = !copy[idx].is_cleaning_station;
+              copy[idx].is_cleaning_station = nextCleaning;
+              copy[idx].station_type = nextCleaning ? "CLEANING" : "ASSEMBLY";
+              setSelectedOperators(copy);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1 flex-shrink-0 ${
+              isCleaning
+                ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
+                : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-emerald-50 hover:text-emerald-700"
+            }`}
+            title={isCleaning ? "Estación de limpieza activa. Clic para cambiar a ensamblaje." : "Marcar como estación de limpieza"}
+          >
+            <span>🧼</span>
+            <span>{isCleaning ? "Limpieza OK" : "+ Limpieza"}</span>
+          </button>
+
+          {/* Resumen de pasos asignados */}
+          <span className="text-[10px] font-bold text-blue-900 bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 flex-shrink-0">
+            {stepCount}p ({rangeSummary})
+          </span>
+        </div>
+
+        {/* Fila 2: Selectores de 1er y 2do Técnico */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
+                1er Técnico (Titular)
+              </label>
+              <select
+                value={st.user_id}
+                onChange={(e) => {
+                  const copy = [...selectedOperators];
+                  const u = users.find(u => u.id === e.target.value);
+                  copy[idx].user_id = e.target.value;
+                  copy[idx].user_name = u ? u.name : e.target.value;
+                  setSelectedOperators(copy);
+                }}
+                className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
+              >
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.role === 'SUPERVISOR' ? '🛡️ ' : ''}{u.name} ({u.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-600 mb-0.5 flex items-center justify-between">
+                <span>2do Técnico (Co-operario)</span>
+                <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.2 rounded">Opcional</span>
+              </label>
+              <select
+                value={st.secondary_user_id || ""}
+                onChange={(e) => {
+                  const copy = [...selectedOperators];
+                  const val = e.target.value;
+                  const u = users.find(x => x.id === val);
+                  copy[idx].secondary_user_id = val || null;
+                  copy[idx].secondary_user_name = u ? u.name : null;
+                  setSelectedOperators(copy);
+                }}
+                className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
+              >
+                <option value="">-- Ninguno (1 solo técnico) --</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    👥 {u.name} ({u.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setVisualPickerStation(idx)}
+              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>📋 Selector Visual</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleClearStationSteps(idx)}
+              className="p-1.5 bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 border border-gray-200 rounded-lg text-xs transition flex-shrink-0"
+              title="Quitar todos los pasos de esta estación"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Fila 3: Barra para agregar pasos por texto (ej: 9 o 17-31) */}
+        <div className="flex items-center gap-1.5 bg-gray-50 p-2 rounded-xl border border-gray-200">
+          <span className="text-[11px] font-bold text-gray-700 whitespace-nowrap hidden sm:inline">
+            + Agregar paso(s):
+          </span>
+          <input
+            type="text"
+            placeholder="Escribe números o rangos, ej: 9 o 17-31 o 9, 17-31..."
+            value={quickInputs[idx] || ""}
+            onChange={(e) => setQuickInputs({ ...quickInputs, [idx]: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddQuickSteps(idx);
+              }
+            }}
+            className="flex-1 text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-mono focus:border-blue-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => handleAddQuickSteps(idx)}
+            className="px-3 py-1.5 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-lg text-xs font-bold transition flex-shrink-0"
+          >
+            + Añadir
+          </button>
+        </div>
+
+        {/* Fila 4: Fichas / Chips interactivas de pasos (Quitar a voluntad con [✕]) */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[10px] text-gray-500 px-0.5">
+            <span>Pasos en esta estación ({stepCount}):</span>
+            <span className="text-gray-400">Toca ✕ para quitar cualquier paso</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50/90 rounded-xl border border-dashed border-gray-300">
+            {st.step_numbers && st.step_numbers.length > 0 ? (
+              st.step_numbers.map(num => {
+                const stepInfo = modelSteps.find(s => s.step_number === num);
+                return (
+                  <span
+                    key={num}
+                    title={stepInfo ? `Paso #${num}: ${stepInfo.operation} · Clic en ✕ para quitar` : `Paso #${num}`}
+                    className="inline-flex items-center gap-1.5 bg-white hover:bg-rose-50 text-gray-800 hover:text-rose-700 pl-2 pr-1.5 py-1 rounded-lg text-xs font-bold border border-gray-200 hover:border-rose-300 shadow-2xs transition group"
+                  >
+                    <span className={isCleaning ? "text-emerald-700 group-hover:text-rose-700" : "text-blue-700 group-hover:text-rose-700"}>#{num}</span>
+                    {stepInfo && (
+                      <span className="text-[10px] text-gray-500 group-hover:text-rose-600 max-w-[120px] truncate hidden sm:inline">
+                        {stepInfo.operation}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveStep(idx, num)}
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-600 transition"
+                      title={`Quitar paso #${num}`}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                );
+              })
+            ) : (
+              <span className="text-xs text-gray-400 italic py-1">
+                Sin pasos asignados. Escribe arriba (ej: 9 o 17-31) o abre el selector visual.
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -1830,211 +2191,192 @@ function CreateOrderView({ models, users, onSuccess, onRefreshModels, notify }) 
               )}
             </div>
 
-            {/* TARJETAS DE ESTACIONES (SELECCIÓN Y RETIRO LIBRE DE PASOS) */}
-            <div className="space-y-3">
-              {selectedOperators.map((st, idx) => {
-                const color = STATION_COLORS[idx % STATION_COLORS.length];
-                const stepCount = (st.step_numbers || []).length;
-                const rangeSummary = formatStepNumbersRange(st.step_numbers);
+            {/* SEPARACIÓN EN DOS BLOQUES EXCLUSIVOS: 1) ENSAMBLAJE  2) LIMPIEZA OBLIGATORIA */}
+            <div className="space-y-6">
 
-                return (
-                  <div
-                    key={idx}
-                    className={`p-3.5 rounded-xl border transition ${
-                      st.is_cleaning_station ? "bg-emerald-50/40 border-emerald-300" : "bg-white border-gray-200"
-                    } space-y-3 shadow-xs`}
-                  >
-                    {/* Fila 1: Estación, Nombre, Limpieza toggle y Resumen */}
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 ${
-                        st.is_cleaning_station ? "bg-emerald-600 text-white" : `${color.bg} text-white`
-                      }`}>
-                        {st.station_number}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <input
-                          type="text"
-                          value={st.station_name}
-                          onChange={(e) => {
-                            const copy = [...selectedOperators];
-                            copy[idx].station_name = e.target.value;
-                            setSelectedOperators(copy);
-                          }}
-                          placeholder="Nombre de estación"
-                          className="w-full text-xs border border-gray-300 rounded-lg p-2 touch-target bg-white font-medium"
-                        />
-                      </div>
-
-                      {/* Toggle Limpieza */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const copy = [...selectedOperators];
-                          const nextCleaning = !copy[idx].is_cleaning_station;
-                          copy[idx].is_cleaning_station = nextCleaning;
-                          copy[idx].station_type = nextCleaning ? "CLEANING" : "ASSEMBLY";
-                          setSelectedOperators(copy);
-                        }}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1 flex-shrink-0 ${
-                          st.is_cleaning_station
-                            ? "bg-emerald-600 text-white border-emerald-700 shadow-xs"
-                            : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-emerald-50 hover:text-emerald-700"
-                        }`}
-                        title="Marcar como estación obligatoria de limpieza"
-                      >
-                        <span>🧼</span>
-                        <span>{st.is_cleaning_station ? "Limpieza OK" : "+ Limpieza"}</span>
-                      </button>
-
-                      {/* Resumen de pasos asignados */}
-                      <span className="text-[10px] font-bold text-blue-900 bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 flex-shrink-0">
-                        {stepCount}p ({rangeSummary})
-                      </span>
+              {/* BLOQUE 1: ESTACIONES DE ENSAMBLAJE (LÍNEA PRINCIPAL) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-2xs">
+                      <Wrench className="w-3.5 h-3.5" />
                     </div>
-
-                    {/* Fila 2: Selectores de 1er y 2do Técnico */}
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5">
-                            1er Técnico (Titular)
-                          </label>
-                          <select
-                            value={st.user_id}
-                            onChange={(e) => {
-                              const copy = [...selectedOperators];
-                              const u = users.find(u => u.id === e.target.value);
-                              copy[idx].user_id = e.target.value;
-                              copy[idx].user_name = u ? u.name : e.target.value;
-                              setSelectedOperators(copy);
-                            }}
-                            className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
-                          >
-                            {users.map(u => (
-                              <option key={u.id} value={u.id}>
-                                {u.role === 'SUPERVISOR' ? '🛡️ ' : ''}{u.name} ({u.id})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-gray-600 mb-0.5 flex items-center justify-between">
-                            <span>2do Técnico (Co-operario)</span>
-                            <span className="text-[9px] text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.2 rounded">Opcional</span>
-                          </label>
-                          <select
-                            value={st.secondary_user_id || ""}
-                            onChange={(e) => {
-                              const copy = [...selectedOperators];
-                              const val = e.target.value;
-                              const u = users.find(x => x.id === val);
-                              copy[idx].secondary_user_id = val || null;
-                              copy[idx].secondary_user_name = u ? u.name : null;
-                              setSelectedOperators(copy);
-                            }}
-                            className="w-full text-xs border border-gray-300 rounded-lg p-2 bg-white touch-target font-medium"
-                          >
-                            <option value="">-- Ninguno (1 solo técnico) --</option>
-                            {users.map(u => (
-                              <option key={u.id} value={u.id}>
-                                👥 {u.name} ({u.id})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-1.5 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setVisualPickerStation(idx)}
-                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
-                        >
-                          <Layers className="w-3.5 h-3.5" />
-                          <span>📋 Selector Visual</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleClearStationSteps(idx)}
-                          className="p-1.5 bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 border border-gray-200 rounded-lg text-xs transition flex-shrink-0"
-                          title="Quitar todos los pasos de esta estación"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Fila 3: Barra para agregar pasos por texto (ej: 9 o 17-31) */}
-                    <div className="flex items-center gap-1.5 bg-gray-50 p-2 rounded-xl border border-gray-200">
-                      <span className="text-[11px] font-bold text-gray-700 whitespace-nowrap hidden sm:inline">
-                        + Agregar paso(s):
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="Escribe números o rangos, ej: 9 o 17-31 o 9, 17-31..."
-                        value={quickInputs[idx] || ""}
-                        onChange={(e) => setQuickInputs({ ...quickInputs, [idx]: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddQuickSteps(idx);
-                          }
-                        }}
-                        className="flex-1 text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-mono focus:border-blue-500 focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleAddQuickSteps(idx)}
-                        className="px-3 py-1.5 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-lg text-xs font-bold transition flex-shrink-0"
-                      >
-                        + Añadir
-                      </button>
-                    </div>
-
-                    {/* Fila 4: Fichas / Chips interactivas de pasos (Quitar a voluntad con [✕]) */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px] text-gray-500 px-0.5">
-                        <span>Pasos en esta estación ({stepCount}):</span>
-                        <span className="text-gray-400">Toca ✕ para quitar cualquier paso</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50/90 rounded-xl border border-dashed border-gray-300">
-                        {st.step_numbers && st.step_numbers.length > 0 ? (
-                          st.step_numbers.map(num => {
-                            const stepInfo = modelSteps.find(s => s.step_number === num);
-                            return (
-                              <span
-                                key={num}
-                                title={stepInfo ? `Paso #${num}: ${stepInfo.operation} · Clic en ✕ para quitar` : `Paso #${num}`}
-                                className="inline-flex items-center gap-1.5 bg-white hover:bg-rose-50 text-gray-800 hover:text-rose-700 pl-2 pr-1.5 py-1 rounded-lg text-xs font-bold border border-gray-200 hover:border-rose-300 shadow-2xs transition group"
-                              >
-                                <span className="text-blue-700 group-hover:text-rose-700">#{num}</span>
-                                {stepInfo && (
-                                  <span className="text-[10px] text-gray-500 group-hover:text-rose-600 max-w-[120px] truncate hidden sm:inline">
-                                    {stepInfo.operation}
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveStep(idx, num)}
-                                  className="w-4 h-4 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-rose-600 transition"
-                                  title={`Quitar paso #${num}`}
-                                >
-                                  ✕
-                                </button>
-                              </span>
-                            );
-                          })
-                        ) : (
-                          <span className="text-xs text-gray-400 italic py-1">
-                            Sin pasos asignados. Escribe arriba (ej: 9 o 17-31) o abre el selector visual.
-                          </span>
-                        )}
-                      </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                        <span>Línea Principal de Ensamblaje ({selectedOperators.filter(s => !s.is_cleaning_station).length} estaciones)</span>
+                        <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                          Sin Limpieza
+                        </span>
+                      </h4>
+                      <p className="text-[10px] text-gray-500">
+                        Pasos de ensamble de chasis, componentes, cableado y configuración (aislados de pasos de limpieza).
+                      </p>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+
+                <div className="space-y-3">
+                  {selectedOperators
+                    .map((st, idx) => ({ st, idx }))
+                    .filter(item => !item.st.is_cleaning_station)
+                    .map(({ st, idx }) => renderStationCard(st, idx))}
+                </div>
+              </div>
+
+              {/* BLOQUE 2: BLOQUE EXCLUSIVO DE LIMPIEZA (OBLIGATORIO QC) */}
+              <div className="bg-gradient-to-br from-emerald-50/70 via-teal-50/40 to-slate-50 p-4 rounded-2xl border-2 border-emerald-300 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-emerald-200/80">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs sm:text-sm font-extrabold text-emerald-950">
+                          Bloque Exclusivo de Limpieza
+                        </h4>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full border border-emerald-300">
+                          Obligatorio QC
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-800">
+                        Estaciones dedicadas a desprotección de acrílicos, remoción de polvo, huellas y limpieza final con microfibra.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-900 bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-300">
+                      🧼 {cleaningCount} Estaciones Asignadas
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-bloque: Gestor del Pool de Pasos de Limpieza */}
+                <div className="bg-white p-3 rounded-xl border border-emerald-200 shadow-2xs space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-gray-900">
+                        Pool de Pasos de Limpieza ({Array.from(cleaningPool).length} pasos aislados):
+                      </span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-semibold border border-emerald-200">
+                        Auto-excluidos de ensamble
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResetCleaningPool}
+                      className="text-[11px] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold px-2 py-1 rounded-lg border border-emerald-300 transition flex items-center gap-1 self-start sm:self-auto"
+                      title="Restablecer pasos recomendados según el checklist del modelo"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>🔄 Auto-detectar pasos</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-gray-500">
+                    Cualquier paso marcado aquí se asignará <strong>únicamente</strong> a las estaciones de este bloque y <strong>jamás</strong> caerá en las estaciones de ensamblaje al distribuir de forma automática.
+                  </p>
+
+                  {/* Fichas de pasos de limpieza en el pool */}
+                  <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 rounded-xl border border-gray-200 min-h-[42px] items-center">
+                    {Array.from(cleaningPool).sort((a, b) => a - b).map(stepNum => {
+                      const stepItem = modelSteps.find(s => s.step_number === stepNum);
+                      return (
+                        <span
+                          key={stepNum}
+                          className="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-1 rounded-lg text-xs font-bold shadow-2xs group"
+                          title={stepItem ? `#${stepNum}: ${stepItem.operation}` : `Paso #${stepNum}`}
+                        >
+                          <span>🧼 #{stepNum}</span>
+                          {stepItem && (
+                            <span className="text-[10px] text-emerald-800 max-w-[130px] truncate hidden sm:inline font-medium">
+                              {stepItem.operation}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCleaningStepInPool(stepNum)}
+                            className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-emerald-600 hover:text-white hover:bg-rose-600 transition"
+                            title={`Remover paso #${stepNum} del pool de limpieza`}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      );
+                    })}
+                    {cleaningPool.size === 0 && (
+                      <span className="text-[11px] text-gray-400 italic">
+                        No hay pasos en el pool de limpieza. Pulsa "Auto-detectar" o escribe un número abajo.
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Input rápido para añadir paso al pool de limpieza */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[11px] font-bold text-gray-700 whitespace-nowrap">
+                      + Aislar otro paso a Limpieza:
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      max={modelSteps.length || 500}
+                      placeholder="N° de paso"
+                      value={newCleaningStepInput}
+                      onChange={(e) => setNewCleaningStepInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddStepToCleaningPool(newCleaningStepInput);
+                        }
+                      }}
+                      className="w-24 text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddStepToCleaningPool(newCleaningStepInput)}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex-shrink-0"
+                    >
+                      + Agregar al Pool
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tarjetas de Estaciones de Limpieza */}
+                <div className="space-y-3">
+                  {selectedOperators
+                    .map((st, idx) => ({ st, idx }))
+                    .filter(item => item.st.is_cleaning_station)
+                    .map(({ st, idx }) => renderStationCard(st, idx))}
+                </div>
+
+                {cleaningCount < 2 && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                      <span>Se requieren al menos 2 estaciones en este bloque de limpieza para cumplir la regla QC.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const copy = [...selectedOperators];
+                        for (let i = copy.length - 1; i >= 0; i--) {
+                          if (!copy[i].is_cleaning_station) {
+                            copy[i].is_cleaning_station = true;
+                            copy[i].station_type = "CLEANING";
+                            copy[i].station_name = "Limpieza Intermedia";
+                            break;
+                          }
+                        }
+                        setSelectedOperators(distributeStepsSeparatingCleaning(copy, modelSteps, cleaningPool));
+                      }}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-lg shadow-2xs flex-shrink-0"
+                    >
+                      + Convertir Estación a Limpieza
+                    </button>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
 
@@ -6444,28 +6786,14 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
   };
 
   const handleAutoDistribute = () => {
-    const totalSteps = modelSteps.length || 52;
-    const numStations = stationsList.length || 1;
-    const baseCount = Math.floor(totalSteps / numStations);
-    const remainder = totalSteps % numStations;
-    let currentStart = 1;
-
-    setStationsList(prev => prev.map((st, i) => {
-      const extra = i + 1 <= remainder ? 1 : 0;
-      const count = baseCount + extra;
-      const currentEnd = currentStart + count - 1;
-      const stSteps = [];
-      for (let s = currentStart; s <= currentEnd; s++) {
-        stSteps.push(s);
-      }
-      currentStart = currentEnd + 1;
-      return {
+    setStationsList(prev => {
+      const distributed = distributeStepsSeparatingCleaning(prev, modelSteps);
+      return distributed.map(st => ({
         ...st,
-        step_numbers: stSteps,
-        rawStepsInput: stSteps.join(", ")
-      };
-    }));
-    notify?.("Pasos redistribuidos equitativamente entre las estaciones", "info");
+        rawStepsInput: (st.step_numbers || []).join(", ")
+      }));
+    });
+    notify?.("Pasos redistribuidos: Las estaciones de ensamblaje NO contienen pasos de limpieza.", "success");
   };
 
   const handleAddStation = () => {
@@ -6622,6 +6950,156 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderModalStationCard = (st, idx) => {
+    const isClean = Boolean(st.is_cleaning_station);
+    return (
+      <div
+        key={st.station_number}
+        className={`rounded-2xl border p-4 transition space-y-3 ${
+          isClean
+            ? "bg-emerald-50/50 border-emerald-300 shadow-xs"
+            : "bg-white border-gray-200 shadow-xs"
+        }`}
+      >
+        {/* Fila 1: Nombre de Estación y Limpieza */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-1">
+            <span className={`font-bold text-xs px-2.5 py-1 rounded-lg font-mono flex-shrink-0 ${
+              isClean ? "bg-emerald-700 text-white" : "bg-gray-900 text-white"
+            }`}>
+              Estación {st.station_number}
+            </span>
+            <input
+              type="text"
+              value={st.station_name}
+              onChange={(e) => handleStationNameChange(idx, e.target.value)}
+              placeholder="Nombre de estación (ej: Chasis y Montaje)..."
+              className="flex-1 text-xs font-semibold border border-gray-300 rounded-lg p-1.5 bg-white focus:border-blue-600 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleToggleCleaning(idx)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                isClean
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+              }`}
+            >
+              <span>🧼 Estación Limpieza</span>
+              {isClean && <Check className="w-3.5 h-3.5" />}
+            </button>
+
+            {stationsList.length > 2 && (
+              <button
+                type="button"
+                onClick={() => handleRemoveStation(idx)}
+                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                title="Eliminar estación"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Fila 2: Dos Técnicos Asignados */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {/* 1er Técnico (Titular) */}
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1 text-[11px]">
+              1er Técnico (Titular) <span className="text-rose-600">*</span>
+            </label>
+            <select
+              value={st.user_id}
+              onChange={(e) => handlePrimaryTechChange(idx, e.target.value)}
+              required
+              className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2 bg-white focus:border-blue-600 focus:outline-none"
+            >
+              <option value="">-- Seleccionar Técnico Titular --</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.role})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 2do Técnico (Co-operario / Apoyo) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-semibold text-gray-700 text-[11px]">
+                2do Técnico (Co-operario / Apoyo)
+              </label>
+              {st.secondary_user_id && (
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
+                  👥 2 Técnicos Activos
+                </span>
+              )}
+            </div>
+            <select
+              value={st.secondary_user_id || ""}
+              onChange={(e) => handleSecondaryTechChange(idx, e.target.value)}
+              className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2 bg-white focus:border-blue-600 focus:outline-none"
+            >
+              <option value="">-- (Opcional) Sin 2do técnico --</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id} disabled={u.id === st.user_id}>
+                  {u.name} ({u.role}) {u.id === st.user_id ? "— (Ya es 1er técnico)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Fila 3: Pasos Asignados */}
+        <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-200/80 space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-800 text-[11px]">Pasos Asignados:</span>
+              <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                isClean ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
+              }`}>
+                {(st.step_numbers || []).length} pasos
+              </span>
+              <span className="text-gray-500 font-mono text-[11px]">
+                {formatStepNumbersRange(st.step_numbers)}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setVisualPickerStation(idx)}
+                className="px-2.5 py-1 bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
+                <span>Selector Visual</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleClearStationSteps(idx)}
+                className="px-2 py-1 text-gray-400 hover:text-rose-600 rounded text-[11px] transition"
+                title="Vaciar pasos"
+              >
+                Vaciar
+              </button>
+            </div>
+          </div>
+
+          <input
+            type="text"
+            value={st.rawStepsInput}
+            onChange={(e) => handleStepsInputChange(idx, e.target.value)}
+            placeholder="Ej: 1-10, 15, 20-25"
+            className="w-full text-xs font-mono border border-gray-300 rounded-lg p-1.5 bg-white focus:border-blue-600 focus:outline-none"
+          />
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -6810,150 +7288,64 @@ function EditOrderModal({ order, stations: initialStations = [], models = [], us
               </div>
             </div>
 
-            {/* Listado de Estaciones */}
-            <div className="space-y-3">
-              {stationsList.map((st, idx) => (
-                <div
-                  key={st.station_number}
-                  className={`rounded-2xl border p-4 transition space-y-3 ${
-                    st.is_cleaning_station
-                      ? "bg-emerald-50/40 border-emerald-200 shadow-sm"
-                      : "bg-white border-gray-200 shadow-sm"
-                  }`}
-                >
-                  {/* Fila 1: Nombre de Estación y Limpieza */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="font-bold text-xs px-2.5 py-1 rounded-lg bg-gray-900 text-white font-mono flex-shrink-0">
-                        Estación {st.station_number}
-                      </span>
-                      <input
-                        type="text"
-                        value={st.station_name}
-                        onChange={(e) => handleStationNameChange(idx, e.target.value)}
-                        placeholder="Nombre de estación (ej: Chasis y Montaje)..."
-                        className="flex-1 text-xs font-semibold border border-gray-300 rounded-lg p-1.5 bg-white focus:border-blue-600 focus:outline-none"
-                      />
+            {/* SEPARACIÓN EN DOS BLOQUES: ENSAMBLAJE Y LIMPIEZA */}
+            <div className="space-y-6">
+
+              {/* BLOQUE 1: LÍNEA PRINCIPAL DE ENSAMBLAJE */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-2xs">
+                      <Wrench className="w-3.5 h-3.5" />
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleCleaning(idx)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                          st.is_cleaning_station
-                            ? "bg-emerald-600 text-white shadow-sm"
-                            : "bg-gray-100 hover:bg-gray-200 text-gray-600"
-                        }`}
-                      >
-                        <span>🧼 Estación Limpieza</span>
-                        {st.is_cleaning_station && <Check className="w-3.5 h-3.5" />}
-                      </button>
-
-                      {stationsList.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveStation(idx)}
-                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                          title="Eliminar estación"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Fila 2: Dos Técnicos Asignados */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {/* 1er Técnico (Titular) */}
                     <div>
-                      <label className="block font-semibold text-gray-700 mb-1 text-[11px]">
-                        1er Técnico (Titular) <span className="text-rose-600">*</span>
-                      </label>
-                      <select
-                        value={st.user_id}
-                        onChange={(e) => handlePrimaryTechChange(idx, e.target.value)}
-                        required
-                        className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2 bg-white focus:border-blue-600 focus:outline-none"
-                      >
-                        <option value="">-- Seleccionar Técnico Titular --</option>
-                        {users.map(u => (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({u.role})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* 2do Técnico (Co-operario / Apoyo) */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block font-semibold text-gray-700 text-[11px]">
-                          2do Técnico (Co-operario / Apoyo)
-                        </label>
-                        {st.secondary_user_id && (
-                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
-                            👥 2 Técnicos Activos
-                          </span>
-                        )}
-                      </div>
-                      <select
-                        value={st.secondary_user_id || ""}
-                        onChange={(e) => handleSecondaryTechChange(idx, e.target.value)}
-                        className="w-full text-xs font-semibold border border-gray-300 rounded-xl p-2 bg-white focus:border-blue-600 focus:outline-none"
-                      >
-                        <option value="">-- (Opcional) Sin 2do técnico --</option>
-                        {users.map(u => (
-                          <option key={u.id} value={u.id} disabled={u.id === st.user_id}>
-                            {u.name} ({u.role}) {u.id === st.user_id ? "— (Ya es 1er técnico)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Fila 3: Pasos Asignados */}
-                  <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-200/80 space-y-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-800 text-[11px]">Pasos Asignados:</span>
-                        <span className="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px]">
-                          {st.step_numbers.length} pasos
+                      <h5 className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                        <span>Línea Principal de Ensamblaje ({stationsList.filter(s => !s.is_cleaning_station).length} estaciones)</span>
+                        <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                          Sin Pasos Limpieza
                         </span>
-                        <span className="text-gray-500 font-mono text-[11px]">
-                          {formatStepNumbersRange(st.step_numbers)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setVisualPickerStation(idx)}
-                          className="px-2.5 py-1 bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
-                        >
-                          <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Selector Visual</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleClearStationSteps(idx)}
-                          className="px-2 py-1 text-gray-400 hover:text-rose-600 rounded text-[11px] transition"
-                          title="Vaciar pasos"
-                        >
-                          Vaciar
-                        </button>
-                      </div>
+                      </h5>
                     </div>
-
-                    <input
-                      type="text"
-                      value={st.rawStepsInput}
-                      onChange={(e) => handleStepsInputChange(idx, e.target.value)}
-                      placeholder="Ej: 1-10, 15, 20-25"
-                      className="w-full text-xs font-mono border border-gray-300 rounded-lg p-1.5 bg-white focus:border-blue-600 focus:outline-none"
-                    />
                   </div>
                 </div>
-              ))}
+
+                <div className="space-y-3">
+                  {stationsList
+                    .map((st, idx) => ({ st, idx }))
+                    .filter(item => !item.st.is_cleaning_station)
+                    .map(({ st, idx }) => renderModalStationCard(st, idx))}
+                </div>
+              </div>
+
+              {/* BLOQUE 2: BLOQUE EXCLUSIVO DE LIMPIEZA */}
+              <div className="bg-gradient-to-br from-emerald-50/60 via-teal-50/30 to-slate-50 p-4 rounded-2xl border-2 border-emerald-300 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-emerald-200/80">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-emerald-950 flex items-center gap-2">
+                        <span>Bloque Exclusivo de Limpieza ({cleaningCount} estaciones)</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full border border-emerald-300">
+                          Obligatorio QC
+                        </span>
+                      </h5>
+                      <p className="text-[10px] text-emerald-800">
+                        Pasos de desprotección, retiro de películas, polvo y limpieza microfibra aislados aquí.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {stationsList
+                    .map((st, idx) => ({ st, idx }))
+                    .filter(item => item.st.is_cleaning_station)
+                    .map(({ st, idx }) => renderModalStationCard(st, idx))}
+                </div>
+              </div>
+
             </div>
           </div>
 

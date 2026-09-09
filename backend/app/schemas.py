@@ -60,6 +60,7 @@ class ChecklistItemSchema(BaseModel):
     qc_criteria: str
     media_url: Optional[str] = ""
     media_type: Optional[str] = "gif"
+    is_cleaning: Optional[bool] = False
 
     class Config:
         from_attributes = True

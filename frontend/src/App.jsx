@@ -5454,6 +5454,7 @@ function ChecklistStepModal({ item, onClose, onSave, onDelete }) {
                   onClick={() => onDelete(formData.id)}
                   className="px-4 py-3 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition touch-target flex items-center justify-center gap-1"
                   title="Eliminar este paso"
+                >
                   <Trash2 className="w-4 h-4" />
                   <span>Eliminar</span>
                 </button>

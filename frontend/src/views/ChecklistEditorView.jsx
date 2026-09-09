@@ -17,9 +17,15 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importCategory, setImportCategory] = useState("ALL"); // "ALL" | "ASSEMBLY" | "CLEANING"
   const [createModelModalOpen, setCreateModelModalOpen] = useState(false);
   const [diagnostics, setDiagnostics] = useState(null);
   const [processingAction, setProcessingAction] = useState(null);
+
+  const openImportModal = (category = "ALL") => {
+    setImportCategory(category);
+    setImportModalOpen(true);
+  };
 
   const loadDiagnostics = useCallback((mName) => {
     fetch(`${API_BASE}/models/${mName}/diagnostics`)
@@ -407,37 +413,52 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
 
             {/* Botón Descargar Plantilla Excel */}
             <button
-              onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}`, "_blank")}
-              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              onClick={() => {
+                const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
+                window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=${targetCat}`, "_blank");
+              }}
+              className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target"
               title="Descargar plantilla Excel oficial con ejemplos e instrucciones para importar"
             >
               <Download className="w-4 h-4 text-indigo-600" />
-              <span>Plantilla para Importar</span>
+              <span>
+                {filterType === "CLEANING" ? "Plantilla Limpieza" : filterType === "ASSEMBLY" ? "Plantilla Ensamblaje" : "Plantilla para Importar"}
+              </span>
             </button>
 
             {/* Botón Importar Pasos */}
             <button
-              onClick={() => setImportModalOpen(true)}
-              className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target"
+              onClick={() => {
+                const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
+                openImportModal(targetCat);
+              }}
+              className="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target"
               title="Subir archivo Excel o CSV usando la plantilla para cargar pasos"
             >
               <Upload className="w-4 h-4 text-emerald-600" />
-              <span>Importar Pasos</span>
+              <span>
+                {filterType === "CLEANING" ? "Importar Limpieza" : filterType === "ASSEMBLY" ? "Importar Ensamblaje" : "Importar Pasos"}
+              </span>
             </button>
 
             {/* Exportar Excel */}
             <button
-              onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel`, "_blank")}
+              onClick={() => {
+                const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
+                window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=${targetCat}`, "_blank");
+              }}
               disabled={steps.length === 0}
-              className={`text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition touch-target ${
+              className={`text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target ${
                 steps.length === 0
                   ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
                   : "bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300"
               }`}
-              title="Exportar pasos actuales a Excel con indicador de limpieza"
+              title="Exportar pasos actuales a Excel con indicador de tipo de paso"
             >
               <FileText className="w-4 h-4 text-emerald-600" />
-              <span>Exportar Excel</span>
+              <span>
+                {filterType === "CLEANING" ? "Exportar Limpieza" : filterType === "ASSEMBLY" ? "Exportar Ensamblaje" : "Exportar Excel"}
+              </span>
             </button>
           </div>
 
@@ -704,22 +725,47 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditingItem({
-                  model_name: selectedModel,
-                  step_number: steps.length + 1,
-                  operation: "",
-                  description: "",
-                  qc_criteria: "",
-                  media_url: "",
-                  is_cleaning: false
-                })}
-                className="text-xs bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition self-start sm:self-center"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Paso Ensamblaje</span>
-              </button>
+              <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem({
+                    model_name: selectedModel,
+                    step_number: steps.length + 1,
+                    operation: "",
+                    description: "",
+                    qc_criteria: "",
+                    media_url: "",
+                    is_cleaning: false
+                  })}
+                  className="text-xs bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Paso Ensamblaje</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openImportModal("ASSEMBLY")}
+                  className="text-xs bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition"
+                  title="Importar exclusivamente pasos de ensamblaje desde archivo Excel"
+                >
+                  <Upload className="w-3.5 h-3.5 text-stone-600" />
+                  <span>Importar Ensamblaje</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=ASSEMBLY`, "_blank")}
+                  disabled={filteredAssembly.length === 0}
+                  className={`text-xs border font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition ${
+                    filteredAssembly.length === 0
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                      : "bg-white hover:bg-stone-100 text-stone-800 border-stone-300"
+                  }`}
+                  title="Exportar pasos de ensamblaje a Excel"
+                >
+                  <Download className="w-3.5 h-3.5 text-stone-600" />
+                  <span>Exportar</span>
+                </button>
+              </div>
             </div>
 
             {filteredAssembly.length === 0 ? (
@@ -756,7 +802,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-center">
+              <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-center">
                 <button
                   type="button"
                   onClick={() => setEditingItem({
@@ -773,6 +819,38 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
                   <Plus className="w-4 h-4" />
                   <span>+ Nuevo Paso Limpieza</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => openImportModal("CLEANING")}
+                  className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
+                  title="Importar pasos exclusivamente al bloque de Limpieza desde Excel"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Importar Limpieza</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=CLEANING`, "_blank")}
+                  disabled={filteredCleaning.length === 0}
+                  className={`text-xs border font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition ${
+                    filteredCleaning.length === 0
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                      : "bg-white hover:bg-emerald-50 text-emerald-900 border-emerald-300"
+                  }`}
+                  title="Exportar pasos de limpieza a Excel"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Exportar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=CLEANING`, "_blank")}
+                  className="text-xs bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition"
+                  title="Descargar plantilla Excel exclusiva para pasos de limpieza"
+                >
+                  <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Plantilla</span>
+                </button>
               </div>
             </div>
 
@@ -783,17 +861,35 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
                 </div>
                 <p className="text-xs font-bold text-gray-800">Aún no hay pasos de limpieza en este modelo</p>
                 <p className="text-[11px] text-gray-500 max-w-sm mx-auto mt-1 mb-3">
-                  Puedes agregar un paso exclusivo de limpieza o pulsar auto-clasificar para detectar pasos de microfibra, película o limpieza.
+                  Puedes importar pasos de limpieza desde Excel, agregar un paso manual o detectar palabras clave.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleAutoClassifyCleaning}
-                  disabled={processingAction === "classify-cleaning"}
-                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-xs transition"
-                >
-                  {processingAction === "classify-cleaning" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  <span>✨ Detectar y Clasificar Pasos de Limpieza</span>
-                </button>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => openImportModal("CLEANING")}
+                    className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-xs transition"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>📥 Importar Pasos de Limpieza (Excel)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAutoClassifyCleaning}
+                    disabled={processingAction === "classify-cleaning"}
+                    className="text-xs bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition"
+                  >
+                    {processingAction === "classify-cleaning" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-emerald-600" />}
+                    <span>Auto-detectar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=CLEANING`, "_blank")}
+                    className="text-xs bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 font-semibold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-2xs transition"
+                  >
+                    <Download className="w-3.5 h-3.5 text-stone-600" />
+                    <span>Descargar Plantilla</span>
+                  </button>
+                </div>
               </Card>
             ) : (
               <div className="space-y-2">
@@ -805,19 +901,83 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
       ) : (
         <div className="space-y-2">
           {filterType === "ASSEMBLY" && (
-            <div className="p-2.5 bg-stone-100 border border-stone-200 rounded-xl text-xs font-bold text-stone-900 flex items-center justify-between">
-              <span>Mostrando únicamente Pasos de Ensamblaje ({filteredAssembly.length})</span>
-              <button onClick={() => setFilterType("GROUPED")} className="text-[11px] text-primary hover:underline">
-                Ver vista dividida por bloques →
-              </button>
+            <div className="p-3 bg-stone-100 border border-stone-200 rounded-xl text-xs font-bold text-stone-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-primary" />
+                <span>Apartado de Ensamblaje ({filteredAssembly.length} pasos)</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => openImportModal("ASSEMBLY")}
+                  className="px-2.5 py-1 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Importar Ensamblaje</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=ASSEMBLY`, "_blank")}
+                  disabled={filteredAssembly.length === 0}
+                  className={`px-2.5 py-1 bg-white border border-stone-300 text-stone-800 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1 transition ${
+                    filteredAssembly.length === 0 ? "opacity-50 cursor-not-allowed" : "hover:bg-stone-200"
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5 text-stone-700" />
+                  <span>Exportar Ensamblaje</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=ASSEMBLY`, "_blank")}
+                  className="px-2.5 py-1 bg-white border border-stone-300 text-stone-800 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1 hover:bg-stone-200 transition"
+                >
+                  <FileText className="w-3.5 h-3.5 text-stone-700" />
+                  <span>Plantilla</span>
+                </button>
+                <button onClick={() => setFilterType("GROUPED")} className="text-[11px] text-primary hover:underline ml-1">
+                  Ver bloques →
+                </button>
+              </div>
             </div>
           )}
           {filterType === "CLEANING" && (
-            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex items-center justify-between">
-              <span>Mostrando únicamente Pasos Exclusivos de Limpieza QC ({filteredCleaning.length})</span>
-              <button onClick={() => setFilterType("GROUPED")} className="text-[11px] text-emerald-700 hover:underline">
-                Ver vista dividida por bloques →
-              </button>
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>Apartado de Limpieza QC ({filteredCleaning.length} pasos)</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => openImportModal("CLEANING")}
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Importar Limpieza</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=CLEANING`, "_blank")}
+                  disabled={filteredCleaning.length === 0}
+                  className={`px-2.5 py-1 bg-white border border-emerald-300 text-emerald-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1 transition ${
+                    filteredCleaning.length === 0 ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-100"
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Exportar Limpieza</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=CLEANING`, "_blank")}
+                  className="px-2.5 py-1 bg-white border border-emerald-300 text-emerald-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1 hover:bg-emerald-100 transition"
+                >
+                  <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Plantilla</span>
+                </button>
+                <button onClick={() => setFilterType("GROUPED")} className="text-[11px] text-emerald-700 hover:underline ml-1">
+                  Ver bloques →
+                </button>
+              </div>
             </div>
           )}
           {filteredStepsToRender.map((st, idx) => {
@@ -891,6 +1051,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
       {importModalOpen && (
         <ImportChecklistModal
           modelName={selectedModel}
+          category={importCategory}
           onClose={() => setImportModalOpen(false)}
           onSuccess={() => {
             loadSteps();

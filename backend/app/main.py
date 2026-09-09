@@ -4,7 +4,7 @@ import time
 import re
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Response, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Response, Request, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -704,10 +704,16 @@ def delete_all_model_checklist(model_name: str, db: Session = Depends(get_db)):
     }
 
 @api_router.get("/checklist/template")
-def download_checklist_template(model_name: Optional[str] = None):
-    """Descarga la plantilla Excel oficial (.xlsx) para importar pasos de checklist"""
-    template_bytes = generate_checklist_template(model_name or "")
-    filename = f"Plantilla_Importacion_Checklist_{model_name.upper() if model_name else 'QC_KENYA'}.xlsx"
+def download_checklist_template(model_name: Optional[str] = None, category: str = "ALL"):
+    """Descarga la plantilla Excel oficial (.xlsx) para importar pasos por sección o completa"""
+    cat_upper = (category or "ALL").upper()
+    template_bytes = generate_checklist_template(model_name or "", category=cat_upper)
+    prefix = (
+        "Plantilla_Importacion_Limpieza" if cat_upper == "CLEANING"
+        else "Plantilla_Importacion_Ensamblaje" if cat_upper == "ASSEMBLY"
+        else "Plantilla_Importacion_Checklist"
+    )
+    filename = f"{prefix}_{model_name.upper() if model_name else 'QC_KENYA'}.xlsx"
     return Response(
         content=template_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -715,12 +721,12 @@ def download_checklist_template(model_name: Optional[str] = None):
     )
 
 @api_router.get("/models/{model_name}/template")
-def download_model_checklist_template(model_name: str):
+def download_model_checklist_template(model_name: str, category: str = "ALL"):
     """Alias para descargar la plantilla con el nombre del modelo preconfigurado"""
-    return download_checklist_template(model_name=model_name)
+    return download_checklist_template(model_name=model_name, category=category)
 
 @api_router.get("/models/{model_name}/export-excel")
-def export_model_excel(model_name: str, db: Session = Depends(get_db)):
+def export_model_excel(model_name: str, category: str = "ALL", db: Session = Depends(get_db)):
     items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number).all()
     items_data = [
         {
@@ -733,8 +739,14 @@ def export_model_excel(model_name: str, db: Session = Depends(get_db)):
         }
         for it in items
     ]
-    excel_bytes = generate_checklist_excel(model_name, items_data)
-    filename = f"Checklist_QC_KENYA_{model_name}.xlsx"
+    cat_upper = (category or "ALL").upper()
+    excel_bytes = generate_checklist_excel(model_name, items_data, category=cat_upper)
+    prefix = (
+        "Checklist_Limpieza_QC_KENYA" if cat_upper == "CLEANING"
+        else "Checklist_Ensamblaje_QC_KENYA" if cat_upper == "ASSEMBLY"
+        else "Checklist_QC_KENYA"
+    )
+    filename = f"{prefix}_{model_name}.xlsx"
     return Response(
         content=excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -742,9 +754,16 @@ def export_model_excel(model_name: str, db: Session = Depends(get_db)):
     )
 
 @api_router.post("/models/{model_name}/import-excel")
-async def import_model_excel(model_name: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_model_excel(
+    model_name: str,
+    category: str = Query("ALL", description="ALL, ASSEMBLY, or CLEANING"),
+    mode: str = Query("REPLACE_SECTION", description="REPLACE_SECTION or APPEND"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     content = await file.read()
-    parsed_items = parse_checklist_excel(content)
+    cat_upper = (category or "ALL").upper()
+    parsed_items = parse_checklist_excel(content, target_category=cat_upper)
     
     if not parsed_items:
         raise HTTPException(
@@ -752,28 +771,105 @@ async def import_model_excel(model_name: str, file: UploadFile = File(...), db: 
             detail="No se encontraron filas de pasos válidas en el archivo. Verifique que contenga columnas 'Operacion' y 'Criterio_Control_Calidad', o utilice la Plantilla Oficial descargable."
         )
     
-    # Reemplazar pasos del modelo existente
-    db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
-    for it in parsed_items:
-        op_text = (it.get("operation") or "") + " " + (it.get("description") or "")
-        is_clean = it.get("is_cleaning")
-        if is_clean is None:
-            is_clean = any(k in op_text.lower() for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"]) or it["step_number"] in (12, 13, 14, 43, 52)
-        db.add(QCChecklistItem(
-            model_name=model_name,
-            step_number=it["step_number"],
-            operation=it["operation"],
-            description=it.get("description", ""),
-            qc_criteria=it["qc_criteria"],
-            media_url=it.get("media_url", ""),
-            media_type=it.get("media_type", "image"),
-            is_cleaning=bool(is_clean)
-        ))
-    db.commit()
-    return {
-        "message": f"Se importaron {len(parsed_items)} pasos correctamente para el modelo {model_name}",
-        "count": len(parsed_items)
-    }
+    if cat_upper == "CLEANING":
+        # Apartado de limpieza: No tocar pasos de ensamblaje
+        if mode != "APPEND":
+            db.query(QCChecklistItem).filter(
+                QCChecklistItem.model_name == model_name,
+                QCChecklistItem.is_cleaning == True
+            ).delete()
+            db.flush()
+        
+        # Encontrar paso de inicio después de los pasos de ensamblaje existentes
+        existing_assembly = db.query(QCChecklistItem).filter(
+            QCChecklistItem.model_name == model_name,
+            QCChecklistItem.is_cleaning == False
+        ).all()
+        max_assembly_step = max((s.step_number for s in existing_assembly), default=0)
+        
+        for idx, it in enumerate(parsed_items, start=1):
+            db.add(QCChecklistItem(
+                model_name=model_name,
+                step_number=max_assembly_step + idx,
+                operation=it["operation"],
+                description=it.get("description", ""),
+                qc_criteria=it["qc_criteria"],
+                media_url=it.get("media_url", ""),
+                media_type=it.get("media_type", "image"),
+                is_cleaning=True
+            ))
+        db.commit()
+        return {
+            "message": f"Se importaron {len(parsed_items)} pasos de limpieza exitosamente en el apartado de Limpieza para el modelo {model_name}",
+            "count": len(parsed_items),
+            "category": "CLEANING"
+        }
+
+    elif cat_upper == "ASSEMBLY":
+        # Apartado de ensamblaje: No tocar pasos de limpieza existentes
+        if mode != "APPEND":
+            db.query(QCChecklistItem).filter(
+                QCChecklistItem.model_name == model_name,
+                QCChecklistItem.is_cleaning == False
+            ).delete()
+            db.flush()
+        
+        # Guardar pasos de limpieza existentes para reubicarlos al final de la secuencia
+        existing_cleaning = db.query(QCChecklistItem).filter(
+            QCChecklistItem.model_name == model_name,
+            QCChecklistItem.is_cleaning == True
+        ).order_by(QCChecklistItem.step_number).all()
+
+        # Insertar pasos de ensamblaje correlativos (1, 2, 3...)
+        for idx, it in enumerate(parsed_items, start=1):
+            db.add(QCChecklistItem(
+                model_name=model_name,
+                step_number=idx,
+                operation=it["operation"],
+                description=it.get("description", ""),
+                qc_criteria=it["qc_criteria"],
+                media_url=it.get("media_url", ""),
+                media_type=it.get("media_type", "image"),
+                is_cleaning=False
+            ))
+        db.flush()
+
+        # Re-secuenciar pasos de limpieza al final
+        total_assembly = len(parsed_items)
+        for c_idx, clean_step in enumerate(existing_cleaning, start=1):
+            clean_step.step_number = total_assembly + c_idx
+
+        db.commit()
+        return {
+            "message": f"Se importaron {len(parsed_items)} pasos de ensamblaje exitosamente en el apartado de Ensamblaje para el modelo {model_name}",
+            "count": len(parsed_items),
+            "category": "ASSEMBLY"
+        }
+
+    else:
+        # Importación completa de todo el modelo (reemplazo general)
+        db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
+        for idx, it in enumerate(parsed_items, start=1):
+            op_text = (it.get("operation") or "") + " " + (it.get("description") or "")
+            is_clean = it.get("is_cleaning")
+            if is_clean is None:
+                is_clean = any(k in op_text.lower() for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"])
+            db.add(QCChecklistItem(
+                model_name=model_name,
+                step_number=idx,
+                operation=it["operation"],
+                description=it.get("description", ""),
+                qc_criteria=it["qc_criteria"],
+                media_url=it.get("media_url", ""),
+                media_type=it.get("media_type", "image"),
+                is_cleaning=bool(is_clean)
+            ))
+        db.commit()
+        return {
+            "message": f"Se importaron {len(parsed_items)} pasos correctamente para el modelo {model_name}",
+            "count": len(parsed_items),
+            "category": "ALL"
+        }
 
 @api_router.get("/orders")
 def list_orders(db: Session = Depends(get_db)):

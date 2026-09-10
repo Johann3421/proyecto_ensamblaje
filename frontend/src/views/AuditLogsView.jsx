@@ -4,10 +4,16 @@ import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
 
-export default function AuditLogsView({ selectedOrder, orders = [], onPreviewPhoto }) {
+export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrder, onPreviewPhoto }) {
   const [logs, setLogs] = useState([]);
   const [activeOrderId, setActiveOrderId] = useState(selectedOrder || orders[0]?.order_id || "");
   const [filterUser, setFilterUser] = useState("");
+
+  useEffect(() => {
+    if (selectedOrder && selectedOrder !== activeOrderId) {
+      setActiveOrderId(selectedOrder);
+    }
+  }, [selectedOrder]);
 
   useEffect(() => {
     if (activeOrderId) {
@@ -33,7 +39,10 @@ export default function AuditLogsView({ selectedOrder, orders = [], onPreviewPho
           {orders.length > 0 && (
             <select
               value={activeOrderId || ""}
-              onChange={(e) => setActiveOrderId(e.target.value)}
+              onChange={(e) => {
+                setActiveOrderId(e.target.value);
+                onSelectOrder?.(e.target.value);
+              }}
               className="text-xs border border-gray-300 rounded-lg px-3 py-2.5 bg-gray-50 font-semibold touch-target"
             >
               {orders.map(o => <option key={o.order_id} value={o.order_id}>{o.order_id}</option>)}

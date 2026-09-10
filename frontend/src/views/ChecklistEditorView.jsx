@@ -7,9 +7,19 @@ import ImportChecklistModal from '../modals/ImportChecklistModal';
 import CreateModelModal from '../modals/CreateModelModal';
 import ChecklistStepModal from '../modals/ChecklistStepModal';
 import { isStepCleaning } from '../utils/steps';
+import { getRouteParams, updateBrowserRoute } from '../utils/router';
 
-export default function ChecklistEditorView({ models, notify, onRefreshModels }) {
-  const [selectedModel, setSelectedModel] = useState(models[0]?.name || "PROWORK");
+export default function ChecklistEditorView({ models = [], notify, onRefreshModels }) {
+  const initialParams = useRef(getRouteParams()).current;
+  const [selectedModel, setSelectedModel] = useState(() => {
+    if (initialParams.model && models?.some(m => m.name === initialParams.model)) {
+      return initialParams.model;
+    }
+    return initialParams.model || models[0]?.name || "PROWORK";
+  });
+  const [filterType, setFilterType] = useState(() => {
+    return initialParams.section || "GROUPED";
+  });
   const [steps, setSteps] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingItem, setEditingItem] = useState(null);
@@ -23,6 +33,48 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
   const [processingAction, setProcessingAction] = useState(null);
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
   const toolsMenuRef = useRef(null);
+
+  const handleSelectModel = (modelName) => {
+    setSelectedModel(modelName);
+    updateBrowserRoute('checklists', { model: modelName, section: filterType }, false);
+  };
+
+  const handleSelectFilterType = (type) => {
+    setFilterType(type);
+    updateBrowserRoute('checklists', { model: selectedModel, section: type }, false);
+  };
+
+  // Sincronizar ruta en cambios del historial (Atrás / Adelante del navegador)
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = getRouteParams();
+      if (params.section) {
+        setFilterType(params.section);
+      } else {
+        setFilterType("GROUPED");
+      }
+      if (params.model) {
+        setSelectedModel(params.model);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Mantener modelo sincronizado cuando cargue la lista de modelos
+  useEffect(() => {
+    const params = getRouteParams();
+    if (params.model && models?.some(m => m.name === params.model)) {
+      if (selectedModel !== params.model) setSelectedModel(params.model);
+    } else if (models?.length > 0 && !models.some(m => m.name === selectedModel)) {
+      setSelectedModel(models[0].name);
+    }
+  }, [models]);
+
+  // Asegurar que la URL del navegador refleje la sección y modelo activos
+  useEffect(() => {
+    updateBrowserRoute('checklists', { model: selectedModel, section: filterType }, true);
+  }, [selectedModel, filterType]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -110,7 +162,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
       onRefreshModels?.();
       const remaining = models.filter(m => m.name !== selectedModel);
       if (remaining.length > 0) {
-        setSelectedModel(remaining[0].name);
+        handleSelectModel(remaining[0].name);
       }
     } catch (err) {
       notify?.("Error: " + err.message, "danger");
@@ -153,8 +205,6 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
       notify("Error: " + err.message);
     }
   };
-
-  const [filterType, setFilterType] = useState("GROUPED"); // "GROUPED" | "ALL" | "ASSEMBLY" | "CLEANING"
 
   // Quick toggle cleaning endpoint
   const handleToggleStepCleaning = async (st) => {
@@ -326,7 +376,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
             <span className="text-xs font-semibold text-gray-500">Modelo:</span>
             <select
               value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
+              onChange={(e) => handleSelectModel(e.target.value)}
               className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-white text-stone-800 touch-target focus:ring-2 focus:ring-primary/20 focus:outline-none shadow-2xs"
             >
               {models.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
@@ -430,7 +480,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
           <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl flex-shrink-0 overflow-x-auto">
             <button
               type="button"
-              onClick={() => setFilterType("GROUPED")}
+              onClick={() => handleSelectFilterType("GROUPED")}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
                 filterType === "GROUPED"
                   ? "bg-white text-stone-900 shadow-2xs"
@@ -442,7 +492,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
             </button>
             <button
               type="button"
-              onClick={() => setFilterType("ALL")}
+              onClick={() => handleSelectFilterType("ALL")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 whitespace-nowrap ${
                 filterType === "ALL"
                   ? "bg-white text-stone-900 shadow-2xs"
@@ -454,7 +504,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
             </button>
             <button
               type="button"
-              onClick={() => setFilterType("ASSEMBLY")}
+              onClick={() => handleSelectFilterType("ASSEMBLY")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 whitespace-nowrap ${
                 filterType === "ASSEMBLY"
                   ? "bg-white text-stone-900 shadow-2xs"
@@ -466,7 +516,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
             </button>
             <button
               type="button"
-              onClick={() => setFilterType("CLEANING")}
+              onClick={() => handleSelectFilterType("CLEANING")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 whitespace-nowrap ${
                 filterType === "CLEANING"
                   ? "bg-white text-emerald-900 shadow-2xs"
@@ -756,6 +806,14 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
                       Pasos Normales de Ensamblaje
                     </h3>
                     <Badge variant="info">{filteredAssembly.length} pasos</Badge>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectFilterType("ASSEMBLY")}
+                      className="text-[11px] font-semibold text-primary hover:underline ml-1"
+                      title="Abrir vista exclusiva de Ensamblaje con su propia ruta (/checklists/ensamblaje)"
+                    >
+                      Aislar apartado →
+                    </button>
                   </div>
                   <p className="text-[11px] text-gray-600 mt-0.5">
                     Pasos de armado físico, cableado y configuración asignados a las estaciones de trabajo de los técnicos.
@@ -841,6 +899,14 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
                       </span>
                     </h3>
                     <Badge variant="success">{filteredCleaning.length} pasos de limpieza</Badge>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectFilterType("CLEANING")}
+                      className="text-[11px] font-semibold text-emerald-800 hover:underline ml-1"
+                      title="Abrir vista exclusiva de Limpieza QC con su propia ruta (/checklists/limpieza)"
+                    >
+                      Aislar apartado →
+                    </button>
                   </div>
                   <p className="text-[11px] text-emerald-800 mt-0.5">
                     Pasos reservados exclusivamente para limpieza profunda, microfibra, soplado y desprotección. <strong>NO</strong> se mezclan en las estaciones de ensamblaje.
@@ -1118,7 +1184,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
         onClose={() => setCreateModelModalOpen(false)}
         onSuccess={(newModelName) => {
           onRefreshModels?.();
-          setSelectedModel(newModelName);
+          handleSelectModel(newModelName);
         }}
         existingModels={models}
         notify={notify}

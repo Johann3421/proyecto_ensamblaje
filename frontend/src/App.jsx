@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LoginPage from './LoginPage';
 import { API_BASE } from './utils/api';
+import { getCurrentRouteTab, updateBrowserRoute, getRouteParams } from './utils/router';
 import Badge from './components/Badge';
 import Card from './components/Card';
 
@@ -36,8 +37,8 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState({ id: '', name: '', role: '', avatar: '' });
 
-  // App State
-  const [activeTab, setActiveTab] = useState('matrix');
+  // App State - Inicializar pestaña desde la ruta de la URL actual
+  const [activeTab, setActiveTab] = useState(() => getCurrentRouteTab());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [models, setModels] = useState([]);
@@ -59,6 +60,20 @@ export default function App() {
   const [deleteOrderModalOpen, setDeleteOrderModalOpen] = useState(false);
   const [editOrderModalOpen, setEditOrderModalOpen] = useState(false);
 
+  // Sincronizar ruta en cambios del historial del navegador (Atrás / Adelante)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const targetTab = getCurrentRouteTab(currentUser?.role || 'ADMIN');
+      setActiveTab(targetTab);
+    };
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, [currentUser]);
+
   // Auth: Check saved token
   useEffect(() => {
     const savedToken = localStorage.getItem('qc_token');
@@ -72,7 +87,10 @@ export default function App() {
           setAuthToken(savedToken);
           setCurrentUser(user);
           setIsAuthenticated(true);
-          setActiveTab(user.role === 'OPERATOR' ? 'operator' : 'matrix');
+          const initialTab = getCurrentRouteTab(user.role);
+          setActiveTab(initialTab);
+          const currentParams = getRouteParams();
+          updateBrowserRoute(initialTab, currentParams, true);
         })
         .catch(() => {
           localStorage.removeItem('qc_token');
@@ -88,7 +106,10 @@ export default function App() {
     setAuthToken(token);
     setCurrentUser(user);
     setIsAuthenticated(true);
-    setActiveTab(user.role === 'OPERATOR' ? 'operator' : 'matrix');
+    const initialTab = getCurrentRouteTab(user.role);
+    setActiveTab(initialTab);
+    const currentParams = getRouteParams();
+    updateBrowserRoute(initialTab, currentParams);
   };
 
   const handleLogout = () => {
@@ -125,7 +146,10 @@ export default function App() {
       if (Array.isArray(resModels)) setModels(resModels);
       if (Array.isArray(resOrders) && resOrders.length > 0) {
         setOrders(resOrders);
-        if (!selectedOrder || !resOrders.some(o => o.order_id === selectedOrder)) {
+        const urlParams = getRouteParams();
+        if (urlParams.order && resOrders.some(o => o.order_id === urlParams.order)) {
+          setSelectedOrder(urlParams.order);
+        } else if (!selectedOrder || !resOrders.some(o => o.order_id === selectedOrder)) {
           setSelectedOrder(resOrders[0].order_id);
         }
       }
@@ -173,7 +197,22 @@ export default function App() {
     }
   }, [activeTab, currentUser, selectedOrder]);
 
-  const navigate = (tab) => { setActiveTab(tab); setMobileMenuOpen(false); };
+  const handleSelectOrder = (orderId) => {
+    setSelectedOrder(orderId);
+    if (activeTab === 'matrix' || activeTab === 'audit' || activeTab === 'operator') {
+      updateBrowserRoute(activeTab, { order: orderId }, true);
+    }
+  };
+
+  const navigate = (tab, subParams = {}) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+    const params = { ...subParams };
+    if ((tab === 'matrix' || tab === 'audit') && selectedOrder && !params.order) {
+      params.order = selectedOrder;
+    }
+    updateBrowserRoute(tab, params);
+  };
 
   const isSupportUser = currentUser?.id === 'OP-106' || (currentUser?.email || '').includes('apoyo');
 
@@ -303,7 +342,7 @@ export default function App() {
           {activeTab === 'matrix' && (
             <PipelineMatrixView
               matrixData={matrixData} orders={orders} selectedOrder={selectedOrder}
-              setSelectedOrder={setSelectedOrder}
+              setSelectedOrder={handleSelectOrder}
               onOpenEmergency={() => setEmergencyModalOpen(true)}
               onSelectUnit={(unit) => setSelectedUnitDetail(unit)}
               onRefresh={() => { loadInitialData(); loadMatrixData(); }}
@@ -316,7 +355,7 @@ export default function App() {
           {activeTab === 'create-order' && (
             <CreateOrderView
               models={models} users={users}
-              onSuccess={(orderId) => { notify('¡Orden creada!'); loadInitialData(); setSelectedOrder(orderId); navigate('matrix'); }}
+              onSuccess={(orderId) => { notify('¡Orden creada!'); loadInitialData(); handleSelectOrder(orderId); navigate('matrix', { order: orderId }); }}
               onRefreshModels={loadInitialData} notify={notify}
             />
           )}
@@ -331,7 +370,7 @@ export default function App() {
             <ChecklistEditorView models={models} notify={notify} onRefreshModels={loadInitialData} />
           )}
           {activeTab === 'audit' && (
-            <AuditLogsView selectedOrder={selectedOrder} orders={orders} onPreviewPhoto={(p) => setActivePhotoPreview(p)} />
+            <AuditLogsView selectedOrder={selectedOrder} orders={orders} onSelectOrder={handleSelectOrder} onPreviewPhoto={(p) => setActivePhotoPreview(p)} />
           )}
           {activeTab === 'operator' && (
             <OperatorWorkspaceView
@@ -340,7 +379,7 @@ export default function App() {
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
               onPreviewPhoto={(p) => setActivePhotoPreview(p)}
               onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, operatorStationFilter)}
-              onSelectOrder={(ordId) => { setSelectedOrder(ordId); loadOperatorWorkspace(null, ordId, operatorStationFilter); }}
+              onSelectOrder={(ordId) => { handleSelectOrder(ordId); loadOperatorWorkspace(null, ordId, operatorStationFilter); }}
               onSelectStation={(stNum) => { setOperatorStationFilter(stNum); loadOperatorWorkspace(null, selectedOrder, stNum); }}
               onRefresh={() => loadOperatorWorkspace(null, selectedOrder, operatorStationFilter)}
               notify={notify}

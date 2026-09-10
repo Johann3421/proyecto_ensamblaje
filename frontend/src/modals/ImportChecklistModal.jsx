@@ -17,11 +17,11 @@ export default function ImportChecklistModal({ modelName, category = "ALL", onCl
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       const lower = file.name.toLowerCase();
-      if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".csv")) {
+      if (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".csv") || lower.endsWith(".tsv") || lower.endsWith(".txt")) {
         setSelectedFile(file);
         setErrorMessage("");
       } else {
-        setErrorMessage("Por favor selecciona un archivo Excel (.xlsx, .xls) o CSV (.csv)");
+        setErrorMessage("Por favor selecciona un archivo Excel (.xlsx, .xls), CSV (.csv) o texto (.txt, .tsv)");
       }
     }
   };
@@ -147,7 +147,7 @@ export default function ImportChecklistModal({ modelName, category = "ALL", onCl
               <input
                 id="checklist-file-input"
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.xls,.csv,.tsv,.txt"
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -166,10 +166,10 @@ export default function ImportChecklistModal({ modelName, category = "ALL", onCl
                     <Upload className="w-5 h-5" />
                   </div>
                   <p className="text-xs font-semibold text-gray-800">
-                    Arrastra aquí tu archivo Excel o CSV
+                    Arrastra aquí tu archivo Excel, CSV o TXT
                   </p>
                   <p className="text-[11px] text-gray-500">o haz clic para buscar en tu dispositivo</p>
-                  <p className="text-[10px] text-gray-400">Archivos soportados: .xlsx, .xls, .csv</p>
+                  <p className="text-[10px] text-gray-400">Archivos soportados: .xlsx, .xls, .csv, .tsv, .txt</p>
                 </div>
               )}
             </div>

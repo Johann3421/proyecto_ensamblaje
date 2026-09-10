@@ -1,8 +1,9 @@
 import io
 import csv
 import openpyxl
+import unicodedata
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from typing import List, Dict
+from typing import List, Dict, Tuple, Optional, Any
 
 def generate_checklist_excel(model_name: str, items: List[Dict], category: str = "ALL") -> bytes:
     """Genera un archivo Excel (.xlsx) estilizado con el formato oficial de QC KENYA por sección o completo"""
@@ -316,140 +317,391 @@ def generate_checklist_template(model_name: str = "", category: str = "ALL") -> 
     output.seek(0)
     return output.getvalue()
 
-def _is_header_or_instruction_row(op_val: str, step_val: str, crit_val: str) -> bool:
-    """Detecta si una fila corresponde a un título, banner de instrucciones o encabezado de columna"""
-    combined = f"{str(op_val or '')} {str(step_val or '')} {str(crit_val or '')}".lower().strip()
-    if not combined:
-        return True
-    
-    keywords = [
-        "plantilla", "checklist", "instruccion", "instrucción",
-        "paso_nro", "operacion", "operación", "descripcion_detallada",
-        "criterio_control", "criterio_calidad", "multimedia_url", "tipo_paso"
-    ]
-    return any(k in combined for k in keywords)
+def _normalize_text(val: Any) -> str:
+    """Normaliza texto removiendo tildes, signos y convirtiendo a minúsculas"""
+    if val is None:
+        return ""
+    s = str(val).strip()
+    n = unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('utf-8')
+    return n.lower()
 
-def parse_checklist_excel(file_bytes: bytes, target_category: str = "ALL") -> List[Dict]:
-    """Parsea un archivo Excel (.xlsx, .xls) o CSV subido y extrae la lista de pasos limpiando títulos y cabeceras"""
+COLUMN_SYNONYMS = {
+    "step_number": [
+        "paso", "paso_nro", "paso nro", "paso num", "nro", "num", "no", "n", "item", "orden", 
+        "pos", "posicion", "id", "#", "step", "step_number"
+    ],
+    "operation": [
+        "operacion", "operacion_tarea", "operacion / tarea", "tarea", "actividad", 
+        "accion", "nombre", "titulo", "paso_nombre", "item_nombre", "trabajo", "nombre_paso",
+        "operation", "task", "activity"
+    ],
+    "description": [
+        "descripcion", "descripcion_detallada", "detalle", "procedimiento", "instruccion", 
+        "instrucciones", "especificacion", "especificaciones", "explicacion", "contenido",
+        "description", "details", "procedure"
+    ],
+    "qc_criteria": [
+        "criterio", "criterio_control_calidad", "criterio_control", "criterio_calidad", 
+        "revision", "revision_control_calidad", "revision de control de calidad",
+        "control", "control_calidad", "calidad", "qc", "qc_criteria", "validacion", 
+        "inspeccion", "esperado", "conformidad", "resultado", "check"
+    ],
+    "media_url": [
+        "multimedia", "multimedia_url", "multimedia_url_o_nombre", "url", "media", 
+        "foto", "imagen", "video", "recurso", "adjunto", "link", "image"
+    ],
+    "is_cleaning": [
+        "tipo", "tipo_paso", "categoria", "apartado", "seccion", "area", "fase", 
+        "etapa", "bloque", "modulo", "limpieza", "type", "category"
+    ]
+}
+
+def _match_column_header(header_cell_str: str) -> Optional[str]:
+    """Determina si el encabezado de celda corresponde a alguna columna conocida"""
+    norm = _normalize_text(header_cell_str)
+    if not norm or len(norm) > 40:
+        return None
+    
+    for col_key, synonyms in COLUMN_SYNONYMS.items():
+        for syn in synonyms:
+            if norm == syn or norm.startswith(syn + " ") or norm.endswith(" " + syn) or f"_{syn}" in norm:
+                return col_key
+            
+    if "criterio" in norm or "calidad" in norm or "qc" in norm or "revision" in norm:
+        return "qc_criteria"
+    if "operac" in norm or "tarea" in norm or "activid" in norm:
+        return "operation"
+    if "descrip" in norm or "detall" in norm or "procedim" in norm:
+        return "description"
+    if "paso" in norm or "item" in norm or norm in ("n", "no", "#"):
+        return "step_number"
+    if "tipo" in norm or "seccion" in norm or "apartad" in norm or "categ" in norm:
+        return "is_cleaning"
+    if "foto" in norm or "imagen" in norm or "multimed" in norm:
+        return "media_url"
+        
+    return None
+
+def _is_cleaning_text(text: str) -> bool:
+    """Detecta si el texto de la operación o descripción corresponde a una tarea de limpieza"""
+    t = _normalize_text(text)
+    cleaning_keywords = [
+        "limpieza", "limpiar", "desproteccion", "pelicula protectora", "plastico protector",
+        "adhesivo", "microfibra", "alcohol", "isopropilico", "huellas", "polvo", "viruta",
+        "soplado", "estetica", "empaque", "embalaje", "caja", "sellado", "sello qc"
+    ]
+    return any(k in t for k in cleaning_keywords)
+
+def _find_header_and_colmap(rows_data: List[List[Any]]) -> Tuple[Optional[int], Dict[str, int]]:
+    """
+    Analiza las primeras 15 filas para identificar la fila de encabezados y mapear columnas.
+    Retorna (header_row_index, col_map) donde col_map es ej: {'operation': 1, 'qc_criteria': 3, ...}
+    """
+    best_row_idx = None
+    best_score = 0
+    best_colmap = {}
+
+    max_check = min(15, len(rows_data))
+    for r_idx in range(max_check):
+        row = rows_data[r_idx]
+        colmap = {}
+        score = 0
+        for c_idx, cell in enumerate(row):
+            val_str = str(cell or "").strip()
+            if not val_str:
+                continue
+            matched_key = _match_column_header(val_str)
+            if matched_key and matched_key not in colmap:
+                colmap[matched_key] = c_idx
+                if matched_key in ("operation", "qc_criteria"):
+                    score += 3
+                elif matched_key in ("step_number", "description"):
+                    score += 2
+                else:
+                    score += 1
+        
+        if score > best_score and ("operation" in colmap or "qc_criteria" in colmap or "description" in colmap):
+            best_score = score
+            best_row_idx = r_idx
+            best_colmap = colmap
+
+    if best_score >= 3:
+        return best_row_idx, best_colmap
+
+    return None, {}
+
+def _build_fallback_colmap(first_data_row: List[Any], total_cols: int) -> Dict[str, int]:
+    """Crea un mapa de columnas por posición e inferencia cuando no hay cabecera explícita"""
+    colmap = {}
+    if not first_data_row or total_cols <= 0:
+        return {"operation": 0, "qc_criteria": 1}
+    
+    first_cell = str(first_data_row[0] or "").strip()
+    is_first_num = False
+    try:
+        int(float(first_cell))
+        is_first_num = True
+    except (ValueError, TypeError):
+        pass
+
+    if is_first_num:
+        colmap["step_number"] = 0
+        if total_cols == 2:
+            colmap["operation"] = 1
+        elif total_cols == 3:
+            colmap["operation"] = 1
+            colmap["qc_criteria"] = 2
+        elif total_cols == 4:
+            colmap["operation"] = 1
+            colmap["description"] = 2
+            colmap["qc_criteria"] = 3
+        elif total_cols == 5:
+            colmap["operation"] = 1
+            colmap["description"] = 2
+            colmap["qc_criteria"] = 3
+            colmap["media_url"] = 4
+        else:
+            colmap["operation"] = 1
+            colmap["description"] = 2
+            colmap["qc_criteria"] = 3
+            colmap["media_url"] = 4
+            colmap["is_cleaning"] = 5
+    else:
+        if total_cols == 1:
+            colmap["operation"] = 0
+        elif total_cols == 2:
+            colmap["operation"] = 0
+            colmap["qc_criteria"] = 1
+        elif total_cols == 3:
+            colmap["operation"] = 0
+            colmap["description"] = 1
+            colmap["qc_criteria"] = 2
+        elif total_cols == 4:
+            colmap["operation"] = 0
+            colmap["description"] = 1
+            colmap["qc_criteria"] = 2
+            colmap["media_url"] = 3
+        else:
+            colmap["operation"] = 0
+            colmap["description"] = 1
+            colmap["qc_criteria"] = 2
+            colmap["media_url"] = 3
+            colmap["is_cleaning"] = 4
+
+    return colmap
+
+def _extract_items_from_table(
+    rows_data: List[List[Any]], 
+    header_idx: Optional[int], 
+    colmap: Dict[str, int], 
+    target_category: str = "ALL"
+) -> List[Dict]:
+    """Extrae la lista de pasos a partir de la matriz de filas y el mapa de columnas resuelto"""
     items = []
     target_category_upper = (target_category or "ALL").upper()
-    
-    # 1. Intentar cargar como archivo Excel
-    try:
-        wb = openpyxl.load_workbook(filename=io.BytesIO(file_bytes), data_only=True)
-        ws = wb.active
-        
-        for r in range(1, ws.max_row + 1):
-            step_num_val = ws.cell(row=r, column=1).value
-            operation_val = ws.cell(row=r, column=2).value
-            desc_val = ws.cell(row=r, column=3).value
-            criteria_val = ws.cell(row=r, column=4).value
-            media_val = ws.cell(row=r, column=5).value
-            type_val = ws.cell(row=r, column=6).value
+    start_row = (header_idx + 1) if header_idx is not None else 0
 
-            # Si es fila de encabezados, instrucciones o está vacía, omitir
-            if _is_header_or_instruction_row(operation_val, step_num_val, criteria_val):
+    for r_idx in range(start_row, len(rows_data)):
+        row = rows_data[r_idx]
+        if not row:
+            continue
+
+        # Verificar si la fila completa está vacía
+        row_str = " ".join(str(c or "").strip() for c in row).strip()
+        if not row_str:
+            continue
+
+        # Si por casualidad se repite la fila de encabezados exactamente (salto de página o tabla repetida)
+        if header_idx is not None and r_idx != header_idx:
+            cell_vals = [str(c or "").strip() for c in row if str(c or "").strip()]
+            matched_keys = set()
+            for c in cell_vals:
+                if len(c) <= 35:
+                    m = _match_column_header(c)
+                    if m:
+                        matched_keys.add(m)
+            if len(matched_keys) >= 3 and ("operation" in matched_keys or "qc_criteria" in matched_keys):
                 continue
 
-            op_str = str(operation_val or "").strip()
-            crit_str = str(criteria_val or "").strip()
-            desc_str = str(desc_val or "").strip()
-            type_str = str(type_val or "").strip().upper()
+        # Extraer campos según mapa
+        def get_col(key: str) -> str:
+            idx = colmap.get(key)
+            if idx is not None and idx < len(row):
+                v = row[idx]
+                return str(v or "").strip() if v is not None else ""
+            return ""
 
-            if not op_str and not desc_str:
-                continue
+        step_val = get_col("step_number")
+        op_val = get_col("operation")
+        desc_val = get_col("description")
+        crit_val = get_col("qc_criteria")
+        media_val = get_col("media_url")
+        type_val = get_col("is_cleaning")
 
-            # Extraer número de paso
-            try:
-                step_num = int(step_num_val) if step_num_val is not None else len(items) + 1
-            except (ValueError, TypeError):
-                step_num = len(items) + 1
+        # Si no hay ni operación ni descripción ni criterio, omitir fila
+        if not op_val and not desc_val and not crit_val:
+            continue
 
-            # Determinar si es limpieza
-            if target_category_upper == "CLEANING":
+        # Si no hay operación pero hay descripción, usar descripción como operación
+        if not op_val:
+            op_val = desc_val[:60]
+            desc_val = desc_val[60:].strip() if len(desc_val) > 60 else ""
+
+        # Número de paso
+        try:
+            step_num = int(float(step_val)) if step_val else len(items) + 1
+        except (ValueError, TypeError):
+            step_num = len(items) + 1
+
+        # Criterio de calidad por defecto si está vacío
+        if not crit_val:
+            crit_val = desc_val if (desc_val and "qc_criteria" not in colmap) else "Verificación correcta según especificación técnica"
+
+        # Categoría Limpieza vs Ensamblaje
+        if target_category_upper == "CLEANING":
+            is_clean = True
+        elif target_category_upper == "ASSEMBLY":
+            is_clean = False
+        else:
+            type_upper = type_val.upper()
+            if "LIMP" in type_upper or "CLEAN" in type_upper:
                 is_clean = True
-            elif target_category_upper == "ASSEMBLY":
+            elif "ENSAM" in type_upper or "ARMAD" in type_upper or "ASSEM" in type_upper:
                 is_clean = False
             else:
-                if "LIMP" in type_str:
-                    is_clean = True
-                elif "ENSAM" in type_str or "ARMAD" in type_str:
-                    is_clean = False
-                else:
-                    op_text = (op_str + " " + desc_str).lower()
-                    is_clean = any(k in op_text for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"])
+                combined_text = f"{op_val} {desc_val} {crit_val}"
+                is_clean = _is_cleaning_text(combined_text)
 
-            items.append({
-                "step_number": step_num,
-                "operation": op_str or desc_str[:50],
-                "description": desc_str,
-                "qc_criteria": crit_str or "Verificación correcta según especificación técnica",
-                "media_url": str(media_val or "").strip(),
-                "media_type": "gif" if "gif" in str(media_val or "").lower() else "image",
-                "is_cleaning": is_clean
-            })
-            
-    except Exception:
-        # 2. Fallback: Intentar como CSV (con delimitador coma o punto y coma)
-        try:
-            text_content = file_bytes.decode("utf-8-sig", errors="replace")
-            delimiter = ";" if text_content.count(";") > text_content.count(",") else ","
-            reader = csv.reader(io.StringIO(text_content), delimiter=delimiter)
-            
-            for row in reader:
-                if not row or len(row) < 2:
-                    continue
-                step_num_val = row[0] if len(row) > 0 else ""
-                operation_val = row[1] if len(row) > 1 else ""
-                desc_val = row[2] if len(row) > 2 else ""
-                criteria_val = row[3] if len(row) > 3 else ""
-                media_val = row[4] if len(row) > 4 else ""
-                type_val = row[5] if len(row) > 5 else ""
+        items.append({
+            "step_number": step_num,
+            "operation": op_val,
+            "description": desc_val,
+            "qc_criteria": crit_val,
+            "media_url": media_val,
+            "media_type": "gif" if "gif" in media_val.lower() else "image",
+            "is_cleaning": is_clean
+        })
 
-                if _is_header_or_instruction_row(operation_val, step_num_val, criteria_val):
-                    continue
-
-                op_str = str(operation_val or "").strip()
-                desc_str = str(desc_val or "").strip()
-                crit_str = str(criteria_val or "").strip()
-                type_str = str(type_val or "").strip().upper()
-
-                if not op_str and not desc_str:
-                    continue
-
-                try:
-                    step_num = int(step_num_val) if step_num_val and step_num_val.strip().isdigit() else len(items) + 1
-                except (ValueError, TypeError):
-                    step_num = len(items) + 1
-
-                if target_category_upper == "CLEANING":
-                    is_clean = True
-                elif target_category_upper == "ASSEMBLY":
-                    is_clean = False
-                else:
-                    if "LIMP" in type_str:
-                        is_clean = True
-                    elif "ENSAM" in type_str:
-                        is_clean = False
-                    else:
-                        op_text = (op_str + " " + desc_str).lower()
-                        is_clean = any(k in op_text for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"])
-
-                items.append({
-                    "step_number": step_num,
-                    "operation": op_str or desc_str[:50],
-                    "description": desc_str,
-                    "qc_criteria": crit_str or "Verificación correcta según especificación técnica",
-                    "media_url": str(media_val or "").strip(),
-                    "media_type": "gif" if "gif" in str(media_val or "").lower() else "image",
-                    "is_cleaning": is_clean
-                })
-        except Exception as csv_err:
-            print(f"Error parseando archivo checklist: {csv_err}")
-
-    # Re-secuenciar pasos si no hay categoría específica y se parte de 1
-    if target_category_upper != "CLEANING" and target_category_upper != "ASSEMBLY":
-        for idx, item in enumerate(items, start=1):
-            item["step_number"] = idx
+    # Resecuenciar pasos correlativamente
+    for idx, item in enumerate(items, start=1):
+        item["step_number"] = idx
 
     return items
+
+def _detect_delimiter(text: str) -> str:
+    """Detecta inteligentemente si el texto está separado por pipe, punto y coma, tab o coma"""
+    sample_lines = [l for l in text.splitlines() if l.strip()][:15]
+    if not sample_lines:
+        return ","
+
+    candidates = ["|", ";", "\t", ","]
+    counts = {c: [] for c in candidates}
+
+    for line in sample_lines:
+        for c in candidates:
+            counts[c].append(line.count(c))
+
+    best_candidate = ","
+    max_consistent_count = 0
+
+    for c in candidates:
+        valid_lines = [cnt for cnt in counts[c] if cnt > 0]
+        if len(valid_lines) >= len(sample_lines) * 0.6:
+            min_c = min(valid_lines)
+            if min_c > max_consistent_count:
+                max_consistent_count = min_c
+                best_candidate = c
+
+    first_line = sample_lines[0] if sample_lines else ""
+    if "|" in first_line and counts["|"] and sum(counts["|"]) > 3:
+        return "|"
+    if "\t" in first_line and counts["\t"] and sum(counts["\t"]) > 3:
+        return "\t"
+    if ";" in first_line and counts[";"] and sum(counts[";"]) > 3:
+        return ";"
+
+    return best_candidate
+
+def parse_checklist_excel(file_bytes: bytes, target_category: str = "ALL") -> List[Dict]:
+    """
+    Parsea de forma inteligente y ultra-robusta cualquier archivo Excel (.xlsx, .xls) o texto (.csv, .txt, .tsv).
+    Detecta automáticamente encabezados, orden de columnas, delimitadores y codificaciones de caracteres.
+    """
+    target_category_upper = (target_category or "ALL").upper()
+
+    # 1. Intentar cargar como Excel openpyxl
+    try:
+        wb = openpyxl.load_workbook(filename=io.BytesIO(file_bytes), data_only=True)
+        
+        # Encontrar la mejor hoja si hay múltiples hojas en el archivo
+        candidate_sheets = []
+        for sheet in wb.worksheets:
+            sheet_rows = []
+            for r in range(1, min(sheet.max_row + 1, 30)):
+                row_vals = [sheet.cell(row=r, column=c).value for c in range(1, min(sheet.max_column + 1, 15))]
+                sheet_rows.append(row_vals)
+            h_idx, cmap = _find_header_and_colmap(sheet_rows)
+            score = len(cmap)
+            if any(k in sheet.title.lower() for k in ["qc", "checklist", "paso", "control", "limp", "ensam"]):
+                score += 2
+            candidate_sheets.append((score, sheet))
+
+        candidate_sheets.sort(key=lambda x: x[0], reverse=True)
+        chosen_sheet = candidate_sheets[0][1] if candidate_sheets else wb.active
+
+        # Extraer todas las filas de la hoja seleccionada
+        all_rows = []
+        for r in range(1, chosen_sheet.max_row + 1):
+            row_vals = [chosen_sheet.cell(row=r, column=c).value for c in range(1, min(chosen_sheet.max_column + 1, 20))]
+            all_rows.append(row_vals)
+
+        h_idx, colmap = _find_header_and_colmap(all_rows)
+        if not colmap:
+            non_empty_row = next((r for r in all_rows if any(r)), [])
+            colmap = _build_fallback_colmap(non_empty_row, len(non_empty_row))
+
+        items = _extract_items_from_table(all_rows, h_idx, colmap, target_category=target_category_upper)
+        if items:
+            return items
+    except Exception:
+        pass
+
+    # 2. Fallback: Formatos de texto / CSV / TSV / Pipe delimitado
+    encodings_to_try = ["utf-8-sig", "utf-8", "cp1252", "latin-1", "iso-8859-1"]
+    decoded_text = ""
+    for enc in encodings_to_try:
+        try:
+            decoded_text = file_bytes.decode(enc)
+            if "\ufffd" not in decoded_text:
+                break
+        except Exception:
+            continue
+
+    if not decoded_text:
+        try:
+            decoded_text = file_bytes.decode("utf-8-sig", errors="replace")
+        except Exception:
+            return []
+
+    delimiter = _detect_delimiter(decoded_text)
+    
+    rows_data = []
+    try:
+        reader = csv.reader(io.StringIO(decoded_text), delimiter=delimiter)
+        for row in reader:
+            rows_data.append([c.strip() for c in row])
+    except Exception:
+        for line in decoded_text.splitlines():
+            if line.strip():
+                rows_data.append([c.strip() for c in line.split(delimiter)])
+
+    if not rows_data:
+        return []
+
+    h_idx, colmap = _find_header_and_colmap(rows_data)
+    if not colmap:
+        non_empty_row = next((r for r in rows_data if any(r)), [])
+        colmap = _build_fallback_colmap(non_empty_row, len(non_empty_row))
+
+    return _extract_items_from_table(rows_data, h_idx, colmap, target_category=target_category_upper)
+

@@ -382,15 +382,60 @@ def _match_column_header(header_cell_str: str) -> Optional[str]:
         
     return None
 
-def _is_cleaning_text(text: str) -> bool:
-    """Detecta si el texto de la operación o descripción corresponde a una tarea de limpieza"""
-    t = _normalize_text(text)
-    cleaning_keywords = [
-        "limpieza", "limpiar", "desproteccion", "pelicula protectora", "plastico protector",
-        "adhesivo", "microfibra", "alcohol", "isopropilico", "huellas", "polvo", "viruta",
-        "soplado", "estetica", "empaque", "embalaje", "caja", "sellado", "sello qc"
-    ]
-    return any(k in t for k in cleaning_keywords)
+# Términos que identifican inequívocamente hardware, montaje, componentes o configuración de software
+ASSEMBLY_HARDWARE_TERMS = [
+    "bomba", "cooler", "disipador", "socket", "procesador", "cpu", "ram", "memoria",
+    "placa base", "placa madre", "motherboard", "fuente de", "fuente alimentacion", "fuente poder",
+    "psu", "tarjeta grafica", "tarjeta de video", "gpu", "tarjeta wi-fi", "tarjeta wifi", "bluetooth",
+    "disco", "almacenamiento", "ssd", "m.2", "nvme", "hdd",
+    "gabinete", "frontis", "puertos frontales", "puerto usb", "puerto hdmi", "puerto jack",
+    "ventilacion interna", "cooler de chasis", "refrigeracion liquida", "ventilador",
+    "cable", "cableado", "conector", "atx", "pcie", "tornillo", "perno", "agitar",
+    "bios", "uefi", "boot logo", "rgb", "windows", "sistema operativo", "driver", "controlador",
+    "windows update", "administrador de dispositivos", "temperatura", "bench", "post correcto",
+    "office", "oem", "nombre del pc", "archivos temporales", "cookies", "cache",
+    "punto de restauracion", "activacion", "teclado y mouse", "apagado", "reinicio", "suspension",
+    "software kenya", "registro fotografico", "fotografias de la pc", "etiquetas internas", "sticker de intel",
+    "sticker kenya en cooler", "sticker de serie interno", "sticker de serie externo", "numero de serie",
+    "cambio de fuente", "estado fisico de componentes"
+]
+
+# Términos que identifican genuinamente la estación de limpieza estética y empaque/despacho
+CLEANING_TERMS = [
+    "limpieza exterior", "limpieza final", "limpieza del equipo", "limpieza de chasis",
+    "limpieza y embalaje", "microfibra y alcohol", "pano de microfibra", "alcohol isopropilico",
+    "huellas dactilares", "manchas de grasa", "sin huellas", "sin manchas", "suciedad antes del embalaje",
+    "soplado y remocion de polvo", "soplado final", "virutas metalicas", "polvo de embalaje",
+    "inspeccion de estetica", "estetica general", "sello de seguridad de control de calidad",
+    "sellos qc", "sello de garantia adherido firmemente en la union", "empaquetado correcto",
+    "embalaje utilizando espuma", "embalaje final", "armar caja del case", "armar caja del teclado",
+    "embalar la caja", "caja del teclado", "caja del case", "preparar y embalar"
+]
+
+def is_step_cleaning(op: str, desc: str = "", crit: str = "", explicit_type: str = "") -> bool:
+    """Clasifica de manera precisa si un paso es de LIMPIEZA / EMBALAJE o de ENSAMBLAJE"""
+    t_type = _normalize_text(explicit_type)
+    if "ensam" in t_type or "armad" in t_type or "assem" in t_type or "hardw" in t_type:
+        return False
+    if "limp" in t_type or "clean" in t_type or "embal" in t_type or "empaq" in t_type:
+        return True
+
+    combined = f"{_normalize_text(op)} {_normalize_text(desc)} {_normalize_text(crit)}"
+    op_norm = _normalize_text(op)
+
+    # 1. Si el paso describe hardware, montaje o configuración de Windows/software, es ENSAMBLAJE
+    has_assembly = any(term in combined for term in ASSEMBLY_HARDWARE_TERMS)
+    has_cleaning = any(term in combined for term in CLEANING_TERMS)
+
+    # Solo es limpieza si es un paso final de limpieza externa o embalaje
+    if has_assembly and not ("limpieza final" in op_norm or "limpieza exterior" in op_norm or "embalaje" in op_norm or "armar caja" in op_norm):
+        return False
+
+    # 2. Si contiene términos inequívocos de limpieza estética o empaque/caja
+    if has_cleaning:
+        return True
+
+    return False
 
 def _find_header_and_colmap(rows_data: List[List[Any]]) -> Tuple[Optional[int], Dict[str, int]]:
     """
@@ -563,14 +608,7 @@ def _extract_items_from_table(
         elif target_category_upper == "ASSEMBLY":
             is_clean = False
         else:
-            type_upper = type_val.upper()
-            if "LIMP" in type_upper or "CLEAN" in type_upper:
-                is_clean = True
-            elif "ENSAM" in type_upper or "ARMAD" in type_upper or "ASSEM" in type_upper:
-                is_clean = False
-            else:
-                combined_text = f"{op_val} {desc_val} {crit_val}"
-                is_clean = _is_cleaning_text(combined_text)
+            is_clean = is_step_cleaning(op_val, desc_val, crit_val, explicit_type=type_val)
 
         items.append({
             "step_number": step_num,

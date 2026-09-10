@@ -77,14 +77,20 @@ def auto_migrate_schema():
         "ALTER TABLE qc_supervisor_audits ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         "ALTER TABLE qc_checklist_items ADD COLUMN IF NOT EXISTS is_cleaning BOOLEAN DEFAULT FALSE;",
         """UPDATE qc_checklist_items
-           SET is_cleaning = TRUE
-           WHERE LOWER(operation) LIKE '%limpieza%'
-              OR LOWER(operation) LIKE '%limpiar%'
-              OR LOWER(operation) LIKE '%película%'
-              OR LOWER(operation) LIKE '%pelicula%'
-              OR LOWER(description) LIKE '%limpieza%'
-              OR LOWER(description) LIKE '%microfibra%'
-              OR step_number IN (12, 13, 14, 43, 52);""",
+           SET is_cleaning = FALSE
+           WHERE is_cleaning = TRUE
+             AND (
+                 step_number IN (12, 13, 14, 35, 39, 43)
+                 OR LOWER(operation) LIKE '%bomba%'
+                 OR LOWER(operation) LIKE '%cooler%'
+                 OR LOWER(operation) LIKE '%video%'
+                 OR LOWER(operation) LIKE '%tarjeta%'
+                 OR LOWER(operation) LIKE '%película protectora%'
+                 OR LOWER(operation) LIKE '%pelicula protectora%'
+                 OR LOWER(operation) LIKE '%temporales%'
+                 OR LOWER(operation) LIKE '%fotogr%'
+                 OR LOWER(operation) LIKE '%limpieza del sistema%'
+             );""",
         """CREATE TABLE IF NOT EXISTS qc_step_station_overrides (
             id SERIAL PRIMARY KEY,
             order_id VARCHAR(50) NOT NULL,
@@ -850,10 +856,6 @@ async def import_model_excel(
         # Importación completa de todo el modelo (reemplazo general)
         db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
         for idx, it in enumerate(parsed_items, start=1):
-            op_text = (it.get("operation") or "") + " " + (it.get("description") or "")
-            is_clean = it.get("is_cleaning")
-            if is_clean is None:
-                is_clean = any(k in op_text.lower() for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"])
             db.add(QCChecklistItem(
                 model_name=model_name,
                 step_number=idx,
@@ -862,7 +864,7 @@ async def import_model_excel(
                 qc_criteria=it["qc_criteria"],
                 media_url=it.get("media_url", ""),
                 media_type=it.get("media_type", "image"),
-                is_cleaning=bool(is_clean)
+                is_cleaning=bool(it.get("is_cleaning", False))
             ))
         db.commit()
         return {

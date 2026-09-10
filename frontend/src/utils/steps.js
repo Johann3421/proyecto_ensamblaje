@@ -48,20 +48,15 @@ export function parseStepNumbersInput(inputStr, maxLimit = 500) {
 
 export function isStepCleaning(step) {
   if (!step) return false;
-  if (step.is_cleaning === true) return true;
-  const num = step.step_number;
-  if ([12, 13, 14, 43, 52].includes(num)) return true;
-  const text = `${step.operation || ''} ${step.description || ''} ${step.qc_criteria || ''}`.toLowerCase();
-  return (
-    text.includes('limpieza') ||
-    text.includes('limpiar') ||
-    text.includes('película') ||
-    text.includes('pelicula') ||
-    text.includes('microfibra') ||
-    text.includes('huellas') ||
-    text.includes('polvo') ||
-    text.includes('temporales del sistema')
-  );
+  // Respetar estrictamente el valor almacenado en la base de datos
+  if (step.is_cleaning === true || step.is_cleaning === 1 || step.is_cleaning === "1" || step.is_cleaning === "true") {
+    return true;
+  }
+  if (step.is_cleaning === false || step.is_cleaning === 0 || step.is_cleaning === "0" || step.is_cleaning === "false") {
+    return false;
+  }
+  // Por defecto es Ensamblaje si no se especifica
+  return false;
 }
 
 export function distributeStepsSeparatingCleaning(stations, modelSteps, customCleaningSet = null) {
@@ -71,7 +66,7 @@ export function distributeStepsSeparatingCleaning(stations, modelSteps, customCl
     effectiveSteps = Array.from({ length: 52 }, (_, i) => ({
       step_number: i + 1,
       operation: `Paso ${i + 1}`,
-      is_cleaning: [12, 13, 14, 43, 52].includes(i + 1)
+      is_cleaning: false
     }));
   }
 
@@ -82,9 +77,6 @@ export function distributeStepsSeparatingCleaning(stations, modelSteps, customCl
     cleaningNums = [...new Set(customCleaningSet)].sort((a, b) => a - b);
   } else {
     cleaningNums = effectiveSteps.filter(s => isStepCleaning(s)).map(s => s.step_number);
-    if (cleaningNums.length === 0) {
-      cleaningNums = [12, 13, 14, 43, 52].filter(n => effectiveSteps.some(s => s.step_number === n));
-    }
   }
   const cleanSet = new Set(cleaningNums);
 

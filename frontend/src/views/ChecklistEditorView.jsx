@@ -523,7 +523,7 @@ export default function ChecklistEditorView({ models, notify, onRefreshModels })
             <button
               type="button"
               onClick={() => {
-                const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
+                const targetCat = filterType === "CLEANING" ? "CLEANING" : "ASSEMBLY";
                 openImportModal(targetCat);
               }}
               className="text-xs bg-white hover:bg-stone-50 text-stone-800 border border-stone-300 font-semibold px-2.5 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target"

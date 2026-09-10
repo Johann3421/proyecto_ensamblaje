@@ -362,9 +362,17 @@ def _match_column_header(header_cell_str: str) -> Optional[str]:
     if not norm or len(norm) > 40:
         return None
     
+    # 1. Coincidencia exacta primero
+    for col_key, synonyms in COLUMN_SYNONYMS.items():
+        if norm in synonyms:
+            return col_key
+            
+    # 2. Coincidencia por prefijo / sufijo delimitado
     for col_key, synonyms in COLUMN_SYNONYMS.items():
         for syn in synonyms:
-            if norm == syn or norm.startswith(syn + " ") or norm.endswith(" " + syn) or f"_{syn}" in norm:
+            if norm.startswith(syn + " ") or norm.endswith(" " + syn) or norm.startswith(syn + "_") or norm.endswith("_" + syn):
+                if col_key == "step_number" and ("tipo" in norm or "seccion" in norm or "apartad" in norm or "categ" in norm):
+                    continue
                 return col_key
             
     if "criterio" in norm or "calidad" in norm or "qc" in norm or "revision" in norm:
@@ -373,10 +381,10 @@ def _match_column_header(header_cell_str: str) -> Optional[str]:
         return "operation"
     if "descrip" in norm or "detall" in norm or "procedim" in norm:
         return "description"
-    if "paso" in norm or "item" in norm or norm in ("n", "no", "#"):
-        return "step_number"
-    if "tipo" in norm or "seccion" in norm or "apartad" in norm or "categ" in norm:
+    if "tipo" in norm or "seccion" in norm or "apartad" in norm or "categ" in norm or "bloque" in norm:
         return "is_cleaning"
+    if "paso" in norm or "item" in norm or norm in ("n", "no", "#", "nro", "num"):
+        return "step_number"
     if "foto" in norm or "imagen" in norm or "multimed" in norm:
         return "media_url"
         
@@ -413,28 +421,19 @@ CLEANING_TERMS = [
 ]
 
 def is_step_cleaning(op: str, desc: str = "", crit: str = "", explicit_type: str = "") -> bool:
-    """Clasifica de manera precisa si un paso es de LIMPIEZA / EMBALAJE o de ENSAMBLAJE"""
+    """
+    Clasifica si un paso es de LIMPIEZA o ENSAMBLAJE.
+    Regla estricta del usuario: El contenido del Excel por defecto SIEMPRE va a ENSAMBLAJE,
+    incluso si contiene términos de limpieza en su texto, a menos que en la columna explícita
+    de Tipo_Paso / Apartado se indique expresamente LIMPIEZA.
+    """
     t_type = _normalize_text(explicit_type)
-    if "ensam" in t_type or "armad" in t_type or "assem" in t_type or "hardw" in t_type:
-        return False
     if "limp" in t_type or "clean" in t_type or "embal" in t_type or "empaq" in t_type:
         return True
-
-    combined = f"{_normalize_text(op)} {_normalize_text(desc)} {_normalize_text(crit)}"
-    op_norm = _normalize_text(op)
-
-    # 1. Si el paso describe hardware, montaje o configuración de Windows/software, es ENSAMBLAJE
-    has_assembly = any(term in combined for term in ASSEMBLY_HARDWARE_TERMS)
-    has_cleaning = any(term in combined for term in CLEANING_TERMS)
-
-    # Solo es limpieza si es un paso final de limpieza externa o embalaje
-    if has_assembly and not ("limpieza final" in op_norm or "limpieza exterior" in op_norm or "embalaje" in op_norm or "armar caja" in op_norm):
+    if "ensam" in t_type or "armad" in t_type or "assem" in t_type or "hardw" in t_type:
         return False
 
-    # 2. Si contiene términos inequívocos de limpieza estética o empaque/caja
-    if has_cleaning:
-        return True
-
+    # Por defecto, todos los pasos del Excel van a Ensamblaje
     return False
 
 def _find_header_and_colmap(rows_data: List[List[Any]]) -> Tuple[Optional[int], Dict[str, int]]:

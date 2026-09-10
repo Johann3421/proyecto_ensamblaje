@@ -673,7 +673,7 @@ def toggle_step_cleaning(model_name: str, step_id: int, db: Session = Depends(ge
 
 @api_router.post("/models/{model_name}/classify-cleaning")
 def classify_cleaning_steps(model_name: str, db: Session = Depends(get_db)):
-    """Auto-clasifica los pasos de limpieza del modelo basándose en palabras clave y números estándar"""
+    """Auto-clasifica exclusivamente pasos de estética final y empaque, protegiendo ensamblaje de hardware"""
     model_name = model_name.strip().upper()
     items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).all()
     if not items:
@@ -681,14 +681,27 @@ def classify_cleaning_steps(model_name: str, db: Session = Depends(get_db)):
     
     updated_count = 0
     for it in items:
-        text = (it.operation or "") + " " + (it.description or "")
-        should_clean = (
-            any(k in text.lower() for k in ["limpieza", "limpiar", "película", "pelicula", "microfibra", "huellas", "desprotección", "desproteccion"])
-            or it.step_number in (12, 13, 14, 43, 52)
-        )
+        combined = f"{(it.operation or '').lower()} {(it.description or '').lower()} {(it.qc_criteria or '').lower()}"
+        
+        # Si describe hardware, componentes o software, es 100% ENSAMBLAJE
+        is_hardware = any(k in combined for k in [
+            "bomba", "cooler", "disipador", "socket", "cpu", "procesador", "ram", "memoria",
+            "placa", "motherboard", "tarjeta", "gpu", "disco", "ssd", "nvme", "hdd",
+            "fuente", "cable", "bios", "uefi", "windows", "driver", "benchmark", "fotograf",
+            "temporales", "cookies", "cache", "sistema operativo"
+        ])
+        
+        should_clean = False
+        if not is_hardware:
+            should_clean = any(k in combined for k in [
+                "limpieza exterior", "limpieza final", "limpieza y embalaje", "paño de microfibra",
+                "armar caja del case", "armar caja del teclado", "empaquetado correcto", "embalaje final"
+            ])
+            
         if bool(it.is_cleaning) != should_clean:
             it.is_cleaning = should_clean
             updated_count += 1
+            
     db.commit()
     return {
         "message": f"Se clasificaron los pasos de limpieza del modelo {model_name} ({updated_count} actualizados)",

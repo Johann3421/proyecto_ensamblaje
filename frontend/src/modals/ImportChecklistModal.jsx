@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { Check, CheckCircle, AlertTriangle, AlertCircle, Download, Upload, Loader2, X, Sparkles, Wrench } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
-export default function ImportChecklistModal({ modelName, category = "ALL", onClose, onSuccess, notify }) {
+export default function ImportChecklistModal({ modelName, category = "ASSEMBLY", onClose, onSuccess, notify }) {
+  const [selectedCategory, setSelectedCategory] = useState(category === "CLEANING" ? "CLEANING" : "ASSEMBLY");
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const isCleaning = category === "CLEANING";
-  const isAssembly = category === "ASSEMBLY";
+  const isCleaning = selectedCategory === "CLEANING";
+  const isAssembly = selectedCategory === "ASSEMBLY";
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -40,7 +41,7 @@ export default function ImportChecklistModal({ modelName, category = "ALL", onCl
     try {
       const fd = new FormData();
       fd.append("file", selectedFile);
-      const res = await fetch(`${API_BASE}/models/${modelName}/import-excel?category=${category}`, {
+      const res = await fetch(`${API_BASE}/models/${modelName}/import-excel?category=${selectedCategory}`, {
         method: "POST",
         body: fd
       });
@@ -62,21 +63,19 @@ export default function ImportChecklistModal({ modelName, category = "ALL", onCl
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className={`text-white p-4 flex justify-between items-center ${
-          isCleaning ? "bg-emerald-800" : isAssembly ? "bg-stone-800" : "bg-[#1B4332]"
+        <div className={`text-white p-4 flex justify-between items-center transition-colors ${
+          isCleaning ? "bg-emerald-800" : "bg-stone-900"
         }`}>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
-              {isCleaning ? <Sparkles className="w-4 h-4 text-emerald-200" /> : isAssembly ? <Wrench className="w-4 h-4 text-stone-200" /> : <Upload className="w-4 h-4 text-white" />}
+              {isCleaning ? <Sparkles className="w-4 h-4 text-emerald-200" /> : <Wrench className="w-4 h-4 text-stone-200" />}
             </div>
             <div>
               <h3 className="text-sm font-bold">
-                {isCleaning ? "Importar Pasos de Limpieza QC" : isAssembly ? "Importar Pasos de Ensamblaje" : "Importar Checklist de Pasos"}
+                {isCleaning ? "Importar a Limpieza QC" : "Importar a Ensamblaje"}
               </h3>
               <p className="text-[11px] text-stone-200">
-                Modelo: <span className="font-semibold text-white">{modelName}</span>
-                {isCleaning && " · Bloque Exclusivo de Limpieza"}
-                {isAssembly && " · Bloque de Ensamblaje"}
+                Modelo: <span className="font-semibold text-white">{modelName}</span> · Prioridad 100% al apartado seleccionado
               </p>
             </div>
           </div>
@@ -86,49 +85,87 @@ export default function ImportChecklistModal({ modelName, category = "ALL", onCl
         </div>
 
         {/* Contenido con pasos guiados */}
-        <div className="p-4 space-y-4 overflow-y-auto">
-          {/* PASO 1: Descargar Plantilla */}
-          <div className={`p-3.5 rounded-xl border ${
-            isCleaning ? "bg-emerald-50/60 border-emerald-200" : isAssembly ? "bg-stone-50 border-stone-200" : "bg-stone-50 border-stone-200"
+        <div className="p-4 space-y-3.5 overflow-y-auto">
+          {/* Selector de Apartado Destino */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+              Apartado de Destino:
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("ASSEMBLY")}
+                className={`p-2.5 rounded-xl border text-left transition flex items-center gap-2.5 ${
+                  isAssembly
+                    ? "bg-stone-900 text-white border-stone-900 shadow-xs"
+                    : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                }`}
+              >
+                <div className={`p-1.5 rounded-lg ${isAssembly ? "bg-white/20 text-white" : "bg-stone-200 text-stone-700"}`}>
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold leading-tight">Apartado Ensamblaje</p>
+                  <p className={`text-[10px] leading-tight ${isAssembly ? "text-stone-300" : "text-stone-500"}`}>
+                    Todo el Excel va a Ensamblaje
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("CLEANING")}
+                className={`p-2.5 rounded-xl border text-left transition flex items-center gap-2.5 ${
+                  isCleaning
+                    ? "bg-emerald-800 text-white border-emerald-800 shadow-xs"
+                    : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                }`}
+              >
+                <div className={`p-1.5 rounded-lg ${isCleaning ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"}`}>
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold leading-tight">Apartado Limpieza QC</p>
+                  <p className={`text-[10px] leading-tight ${isCleaning ? "text-emerald-200" : "text-stone-500"}`}>
+                    Todo el Excel va a Limpieza
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* PASO 1: Descargar Plantilla Oficial */}
+          <div className={`p-3 rounded-xl border ${
+            isCleaning ? "bg-emerald-50/60 border-emerald-200" : "bg-stone-50 border-stone-200"
           }`}>
             <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  isCleaning ? "text-emerald-800 bg-emerald-100" : isAssembly ? "text-stone-800 bg-stone-200" : "text-primary bg-stone-200"
-                }`}>
-                  PASO 1 · PLANTILLA {isCleaning ? "DE LIMPIEZA" : isAssembly ? "DE ENSAMBLAJE" : "GENERAL"}
-                </span>
+              <div className="space-y-0.5">
                 <h4 className="text-xs font-bold text-gray-900">
-                  {isCleaning ? "Plantilla Oficial para Pasos de Limpieza" : isAssembly ? "Plantilla Oficial para Ensamblaje" : "Descarga la Plantilla Oficial Excel"}
+                  {isCleaning ? "Plantilla para Pasos de Limpieza" : "Plantilla para Pasos de Ensamblaje"}
                 </h4>
                 <p className="text-[11px] text-gray-600 leading-relaxed">
                   {isCleaning
-                    ? "Contiene ejemplos reales de retiro de películas, soplado, desinfección con microfibra y sellos QC. Al importar, se asignarán al bloque de limpieza sin borrar el ensamble."
-                    : isAssembly
-                    ? "Contiene ejemplos prácticos de montaje de hardware, CPU, RAM, cables y pruebas BIOS. Al importar, actualiza solo el ensamble."
-                    : "Formato pre-configurado con columnas: Paso_Nro, Operacion, Descripcion_Detallada, Criterio_Control_Calidad, Tipo_Paso."}
+                    ? "Columnas pre-configuradas para soplado, microfibra, sellos QC y empaque."
+                    : "Columnas para montaje de componentes, armado físico, cableado y configuración."}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${modelName}&category=${category}`, "_blank")}
-                className={`flex-shrink-0 text-xs border font-bold px-3 py-2 rounded-lg shadow-2xs flex items-center gap-1.5 transition touch-target ${
+                onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${modelName}&category=${selectedCategory}`, "_blank")}
+                className={`flex-shrink-0 text-xs border font-bold px-3 py-1.5 rounded-lg shadow-2xs flex items-center gap-1.5 transition touch-target ${
                   isCleaning ? "bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-white hover:bg-stone-100 text-stone-800 border-stone-300"
                 }`}
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Descargar</span>
+                <span>Plantilla</span>
               </button>
             </div>
           </div>
 
           {/* PASO 2: Subir archivo */}
-          <div className="space-y-2">
-            <span className="inline-block text-[10px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
-              PASO 2 · SUBIDA
-            </span>
+          <div className="space-y-1.5">
             <h4 className="text-xs font-bold text-gray-900">
-              Sube tu archivo para {isCleaning ? "Limpieza" : isAssembly ? "Ensamblaje" : "el Modelo"} (.xlsx, .xls o .csv)
+              Seleccionar Archivo (.xlsx, .xls, .csv o .txt)
             </h4>
 
             <div
@@ -175,16 +212,16 @@ export default function ImportChecklistModal({ modelName, category = "ALL", onCl
             </div>
           </div>
 
-          {/* Advertencia / Nota */}
-          <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl flex items-start gap-2 text-amber-800">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+          {/* Advertencia / Nota de Asignación */}
+          <div className={`p-2.5 rounded-xl border flex items-start gap-2 ${
+            isCleaning ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-stone-100 border-stone-200 text-stone-800"
+          }`}>
+            <CheckCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isCleaning ? "text-emerald-700" : "text-stone-700"}`} />
             <p className="text-[11px] leading-tight">
-              <strong>Nota:</strong>{" "}
+              <strong>Prioridad de asignación:</strong>{" "}
               {isCleaning
-                ? `Los pasos del archivo actualizarán únicamente el Bloque de Limpieza del modelo ${modelName}. Los pasos de ensamblaje permanecerán intactos.`
-                : isAssembly
-                ? `Los pasos del archivo actualizarán únicamente el Bloque de Ensamblaje del modelo ${modelName}. Los pasos de limpieza permanecerán intactos.`
-                : `Los pasos contenidos en el archivo reemplazarán los pasos del modelo ${modelName}.`}
+                ? `El 100% de los pasos del archivo se asignarán al Apartado de Limpieza QC. Los pasos de ensamblaje existentes no serán alterados.`
+                : `El 100% de los pasos del archivo se asignarán al Apartado de Ensamblaje (incluso si contienen palabras de limpieza en su texto). Los pasos de limpieza QC existentes se conservan intactos.`}
             </p>
           </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, X, ShieldCheck, CheckSquare, Wrench, Users, Trash2, Trash, Sparkles, Layers } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, X, ShieldCheck, CheckSquare, Wrench, Users, Trash2, Trash, Sparkles, Layers, UserPlus } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import StepPickerModal from '../modals/StepPickerModal';
@@ -11,8 +11,26 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
   const [partNumber, setPartNumber] = useState(order?.part_number || "");
   const [totalUnits, setTotalUnits] = useState(order?.total_units || 1);
   const [status, setStatus] = useState(order?.status || "IN_PROGRESS");
-  const [supervisorId, setSupervisorId] = useState(order?.supervisor_id || "");
-  const [supervisorName, setSupervisorName] = useState(order?.supervisor_name || "");
+  
+  // Soporte de Múltiples Inspectores en Edición
+  const [selectedSupervisors, setSelectedSupervisors] = useState(() => {
+    if (Array.isArray(order?.supervisor_ids) && order.supervisor_ids.length > 0) {
+      return order.supervisor_ids.map(sid => {
+        const u = users.find(x => x.id === sid);
+        return { id: sid, name: u ? u.name : sid, role: u ? u.role : "SUPERVISOR" };
+      });
+    }
+    if (order?.supervisor_id) {
+      const ids = order.supervisor_id.split(',').map(s => s.trim()).filter(Boolean);
+      return ids.map(sid => {
+        const u = users.find(x => x.id === sid);
+        return { id: sid, name: u ? u.name : sid, role: u ? u.role : "SUPERVISOR" };
+      });
+    }
+    return [];
+  });
+  const [tempSupervisorId, setTempSupervisorId] = useState("");
+
   const [supervisorSteps, setSupervisorSteps] = useState(() => {
     if (!order?.supervisor_steps) return [];
     return order.supervisor_steps.split(',')
@@ -43,16 +61,17 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
     loadModelSteps(modelName);
   }, [modelName, loadModelSteps]);
 
-  // Sincronizar nombre de supervisor al cambiar supervisorId
-  const handleSupervisorChange = (newSupId) => {
-    setSupervisorId(newSupId);
-    if (!newSupId) {
-      setSupervisorName("");
-      setSupervisorSteps([]);
-    } else {
-      const u = users.find(x => x.id === newSupId);
-      setSupervisorName(u ? u.name : "");
-    }
+  const handleAddSupervisor = (uid) => {
+    if (!uid) return;
+    const u = users.find(x => x.id === uid);
+    if (!u) return;
+    if (selectedSupervisors.some(s => s.id === u.id)) return;
+    setSelectedSupervisors(prev => [...prev, { id: u.id, name: u.name, role: u.role }]);
+    setTempSupervisorId("");
+  };
+
+  const handleRemoveSupervisor = (uid) => {
+    setSelectedSupervisors(prev => prev.filter(s => s.id !== uid));
   };
 
   // Lista de estaciones inicializada desde initialStations
@@ -301,8 +320,9 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (cleaningCount < 2) {
-      alert(`Regla de Calidad Obligatoria: La línea debe incluir al menos 2 estaciones designadas para Limpieza. Actualmente tienes ${cleaningCount}.`);
+    const hasCleaningSteps = (modelSteps || []).some(s => isStepCleaning(s));
+    if (hasCleaningSteps && cleaningCount < 1) {
+      alert(`Regla de Calidad Obligatoria: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.`);
       return;
     }
 
@@ -315,14 +335,19 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
 
     try {
       setLoading(true);
+      const supIds = selectedSupervisors.map(s => s.id);
+      const supNames = selectedSupervisors.map(s => s.name);
+
       const payload = {
         model_name: modelName,
         part_number: partNumber,
         total_units: parseInt(totalUnits, 10),
         status: status,
-        supervisor_id: supervisorId || null,
-        supervisor_name: supervisorName || null,
-        supervisor_steps: supervisorId && supervisorSteps.length > 0 ? supervisorSteps.join(",") : null,
+        supervisor_id: supIds.length > 0 ? supIds.join(", ") : null,
+        supervisor_name: supNames.length > 0 ? supNames.join(", ") : null,
+        supervisor_ids: supIds,
+        supervisor_names: supNames,
+        supervisor_steps: supervisorSteps.length > 0 ? supervisorSteps.join(",") : null,
         stations: stationsList.map(st => ({
           station_number: st.station_number,
           station_name: st.station_name,
@@ -613,37 +638,73 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
               </div>
             )}
 
-            {/* Asignación de Supervisor de Calidad */}
+            {/* Asignación de Inspectores / Supervisores de Calidad */}
             <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2.5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="font-bold text-stone-900 flex items-center gap-1.5 text-xs">
                   <ShieldCheck className="w-4 h-4 text-primary" />
-                  <span>Supervisor de Calidad Asignado</span>
+                  <span>Inspectores / Supervisores de Calidad</span>
                 </label>
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-primary border border-stone-200">
-                  Rol: Valida con Fotos de Cumplimiento
+                  Puedes asignar 1 o más inspectores
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+
+              {/* Selector para añadir inspectores */}
+              <div className="flex items-center gap-2">
                 <select
-                  value={supervisorId}
-                  onChange={(e) => handleSupervisorChange(e.target.value)}
-                  className="w-full text-xs font-semibold border border-stone-300 rounded-xl p-2.5 bg-white focus:border-primary focus:outline-none"
+                  value={tempSupervisorId}
+                  onChange={(e) => setTempSupervisorId(e.target.value)}
+                  className="flex-1 text-xs border border-stone-300 rounded-lg p-2 bg-white font-medium text-stone-900 touch-target focus:border-primary"
                 >
-                  <option value="">-- Sin supervisor asignado --</option>
+                  <option value="">-- Seleccionar inspector para añadir --</option>
                   {users.map(u => (
                     <option key={u.id} value={u.id}>
-                      [{u.role}] {u.name}
+                      [{u.role}] {u.name} ({u.id})
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-stone-600 leading-tight">
-                  El supervisor es el encargado de verificar el cumplimiento de los pasos y certificar la orden capturando fotos de evidencia directa.
-                </p>
+                <button
+                  type="button"
+                  onClick={() => handleAddSupervisor(tempSupervisorId)}
+                  disabled={!tempSupervisorId}
+                  className="px-3.5 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:bg-stone-300 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Añadir Inspector</span>
+                </button>
+              </div>
+
+              {/* Lista de inspectores seleccionados */}
+              <div className="flex flex-wrap gap-2 min-h-[38px] p-2 bg-white rounded-xl border border-stone-200 items-center">
+                {selectedSupervisors.length > 0 ? (
+                  selectedSupervisors.map(sup => (
+                    <span
+                      key={sup.id}
+                      className="inline-flex items-center gap-2 bg-stone-100 hover:bg-stone-200/80 text-stone-900 px-2.5 py-1 rounded-lg text-xs font-bold border border-stone-300 shadow-2xs"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#1B4332]" />
+                      <span>{sup.name}</span>
+                      <span className="text-[10px] text-stone-500 font-mono">({sup.id})</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSupervisor(sup.id)}
+                        className="w-4 h-4 rounded-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-rose-600 transition"
+                        title={`Quitar inspector ${sup.name}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-stone-400 italic">
+                    Sin inspectores específicos asignados (cualquier supervisor podrá validar la orden).
+                  </span>
+                )}
               </div>
 
               {/* Apartado para seleccionar qué pasos va a supervisar en edición */}
-              {supervisorId && (
+              {selectedSupervisors.length > 0 && (
                 <div className="mt-2 pt-2.5 border-t border-stone-200 space-y-2.5">
                   {/* Fila 1: Resumen y Acciones Rápidas */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -907,7 +968,7 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
               </button>
               <button
                 type="submit"
-                disabled={loading || cleaningCount < 2}
+                disabled={loading || ((modelSteps || []).some(s => isStepCleaning(s)) && cleaningCount < 1)}
                 className="py-2.5 px-6 bg-primary hover:bg-primary text-white font-bold rounded-xl text-xs shadow-md transition disabled:opacity-50 touch-target flex items-center gap-2"
               >
                 {loading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -938,7 +999,7 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
           <SupervisorStepPickerModal
             isOpen={true}
             onClose={() => setSupervisorPickerOpen(false)}
-            supervisorName={supervisorName}
+            supervisorName={selectedSupervisors.map(s => s.name).join(", ") || "Inspectores QC"}
             modelSteps={modelSteps}
             supervisedSteps={supervisorSteps}
             onToggleStep={handleToggleSupervisorStep}

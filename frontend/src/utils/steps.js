@@ -59,16 +59,24 @@ export function isStepCleaning(step) {
   return false;
 }
 
+export function distributeStepsEqually(stepNumbers = [], stationCount = 1) {
+  if (!stepNumbers || stepNumbers.length === 0 || stationCount <= 0) return [];
+  const baseCount = Math.floor(stepNumbers.length / stationCount);
+  const remainder = stepNumbers.length % stationCount;
+  const result = [];
+  let cur = 0;
+  for (let i = 0; i < stationCount; i++) {
+    const extra = i < remainder ? 1 : 0;
+    const count = baseCount + extra;
+    result.push(stepNumbers.slice(cur, cur + count));
+    cur += count;
+  }
+  return result;
+}
+
 export function distributeStepsSeparatingCleaning(stations, modelSteps, customCleaningSet = null) {
   if (!stations || stations.length === 0) return [];
   let effectiveSteps = modelSteps || [];
-  if (effectiveSteps.length === 0) {
-    effectiveSteps = Array.from({ length: 52 }, (_, i) => ({
-      step_number: i + 1,
-      operation: `Paso ${i + 1}`,
-      is_cleaning: false
-    }));
-  }
 
   let cleaningNums = [];
   if (customCleaningSet && customCleaningSet instanceof Set) {
@@ -85,67 +93,25 @@ export function distributeStepsSeparatingCleaning(stations, modelSteps, customCl
     .filter(n => !cleanSet.has(n))
     .sort((a, b) => a - b);
 
-  let cleanIndices = [];
-  let asmbIndices = [];
-  stations.forEach((st, idx) => {
-    const isClean = Boolean(
-      st.is_cleaning_station ||
-      st.station_type === "CLEANING" ||
-      (st.station_name || "").toLowerCase().includes("limpieza")
-    );
+  const cleanStations = stations.filter(st => Boolean(st.is_cleaning_station || st.station_type === "CLEANING"));
+  const asmbStations = stations.filter(st => !Boolean(st.is_cleaning_station || st.station_type === "CLEANING"));
+
+  const asmbDistribution = distributeStepsEqually(assemblyNums, asmbStations.length);
+  const cleanDistribution = distributeStepsEqually(cleaningNums, cleanStations.length);
+
+  let asmbIdx = 0;
+  let cleanIdx = 0;
+
+  return stations.map((st) => {
+    const isClean = Boolean(st.is_cleaning_station || st.station_type === "CLEANING");
+    let assignedSteps = [];
     if (isClean) {
-      cleanIndices.push(idx);
+      assignedSteps = cleanDistribution[cleanIdx] || [];
+      cleanIdx++;
     } else {
-      asmbIndices.push(idx);
+      assignedSteps = asmbDistribution[asmbIdx] || [];
+      asmbIdx++;
     }
-  });
-
-  if (cleanIndices.length < 2 && stations.length >= 2) {
-    cleanIndices = [];
-    asmbIndices = [];
-    const midIdx = Math.floor(stations.length / 2);
-    const lastIdx = stations.length - 1;
-    stations.forEach((st, idx) => {
-      if (idx === midIdx || idx === lastIdx) {
-        cleanIndices.push(idx);
-      } else {
-        asmbIndices.push(idx);
-      }
-    });
-  }
-
-  const resultStepMap = {};
-  if (asmbIndices.length > 0) {
-    const baseCount = Math.floor(assemblyNums.length / asmbIndices.length);
-    const remainder = assemblyNums.length % asmbIndices.length;
-    let cur = 0;
-    asmbIndices.forEach((stIdx, i) => {
-      const extra = i < remainder ? 1 : 0;
-      const count = baseCount + extra;
-      resultStepMap[stIdx] = assemblyNums.slice(cur, cur + count);
-      cur += count;
-    });
-  }
-
-  if (cleanIndices.length === 2) {
-    const midCutoff = Math.max(1, Math.floor(cleaningNums.length / 2));
-    resultStepMap[cleanIndices[0]] = cleaningNums.slice(0, midCutoff);
-    resultStepMap[cleanIndices[1]] = cleaningNums.slice(midCutoff);
-  } else if (cleanIndices.length > 0) {
-    const baseClean = Math.floor(cleaningNums.length / cleanIndices.length);
-    const remClean = cleaningNums.length % cleanIndices.length;
-    let cCur = 0;
-    cleanIndices.forEach((stIdx, i) => {
-      const extra = i < remClean ? 1 : 0;
-      const count = baseClean + extra;
-      resultStepMap[stIdx] = cleaningNums.slice(cCur, cCur + count);
-      cCur += count;
-    });
-  }
-
-  return stations.map((st, idx) => {
-    const isClean = cleanIndices.includes(idx);
-    const assignedSteps = resultStepMap[idx] || [];
     return {
       ...st,
       is_cleaning_station: isClean,

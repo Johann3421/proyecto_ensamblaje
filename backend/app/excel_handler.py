@@ -390,50 +390,16 @@ def _match_column_header(header_cell_str: str) -> Optional[str]:
         
     return None
 
-# Términos que identifican inequívocamente hardware, montaje, componentes o configuración de software
-ASSEMBLY_HARDWARE_TERMS = [
-    "bomba", "cooler", "disipador", "socket", "procesador", "cpu", "ram", "memoria",
-    "placa base", "placa madre", "motherboard", "fuente de", "fuente alimentacion", "fuente poder",
-    "psu", "tarjeta grafica", "tarjeta de video", "gpu", "tarjeta wi-fi", "tarjeta wifi", "bluetooth",
-    "disco", "almacenamiento", "ssd", "m.2", "nvme", "hdd",
-    "gabinete", "frontis", "puertos frontales", "puerto usb", "puerto hdmi", "puerto jack",
-    "ventilacion interna", "cooler de chasis", "refrigeracion liquida", "ventilador",
-    "cable", "cableado", "conector", "atx", "pcie", "tornillo", "perno", "agitar",
-    "bios", "uefi", "boot logo", "rgb", "windows", "sistema operativo", "driver", "controlador",
-    "windows update", "administrador de dispositivos", "temperatura", "bench", "post correcto",
-    "office", "oem", "nombre del pc", "archivos temporales", "cookies", "cache",
-    "punto de restauracion", "activacion", "teclado y mouse", "apagado", "reinicio", "suspension",
-    "software kenya", "registro fotografico", "fotografias de la pc", "etiquetas internas", "sticker de intel",
-    "sticker kenya en cooler", "sticker de serie interno", "sticker de serie externo", "numero de serie",
-    "cambio de fuente", "estado fisico de componentes"
-]
-
-# Términos que identifican genuinamente la estación de limpieza estética y empaque/despacho
-CLEANING_TERMS = [
-    "limpieza exterior", "limpieza final", "limpieza del equipo", "limpieza de chasis",
-    "limpieza y embalaje", "microfibra y alcohol", "pano de microfibra", "alcohol isopropilico",
-    "huellas dactilares", "manchas de grasa", "sin huellas", "sin manchas", "suciedad antes del embalaje",
-    "soplado y remocion de polvo", "soplado final", "virutas metalicas", "polvo de embalaje",
-    "inspeccion de estetica", "estetica general", "sello de seguridad de control de calidad",
-    "sellos qc", "sello de garantia adherido firmemente en la union", "empaquetado correcto",
-    "embalaje utilizando espuma", "embalaje final", "armar caja del case", "armar caja del teclado",
-    "embalar la caja", "caja del teclado", "caja del case", "preparar y embalar"
-]
-
-def is_step_cleaning(op: str, desc: str = "", crit: str = "", explicit_type: str = "") -> bool:
+def is_step_cleaning(op: str = "", desc: str = "", crit: str = "", explicit_type: str = "") -> bool:
     """
     Clasifica si un paso es de LIMPIEZA o ENSAMBLAJE.
-    Regla estricta del usuario: El contenido del Excel por defecto SIEMPRE va a ENSAMBLAJE,
-    incluso si contiene términos de limpieza en su texto, a menos que en la columna explícita
-    de Tipo_Paso / Apartado se indique expresamente LIMPIEZA.
+    Regla estricta: NO se usan palabras clave heurísticas en texto de operación/descripción.
+    Únicamente se marca como limpieza si la columna explícita (Tipo_Paso / Apartado)
+    lo especifica como LIMPIEZA / CLEANING / EMBALAJE.
     """
     t_type = _normalize_text(explicit_type)
     if "limp" in t_type or "clean" in t_type or "embal" in t_type or "empaq" in t_type:
         return True
-    if "ensam" in t_type or "armad" in t_type or "assem" in t_type or "hardw" in t_type:
-        return False
-
-    # Por defecto, todos los pasos del Excel van a Ensamblaje
     return False
 
 def _find_header_and_colmap(rows_data: List[List[Any]]) -> Tuple[Optional[int], Dict[str, int]]:

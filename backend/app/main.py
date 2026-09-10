@@ -930,23 +930,37 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="El modelo seleccionado no tiene pasos configurados en su checklist")
 
     num_stations = len(req.stations)
-    if num_stations < 2:
-        raise HTTPException(status_code=400, detail="Debe asignar al menos 2 estaciones de trabajo para cumplir con las estaciones de limpieza obligatorias")
+    if num_stations < 1:
+        raise HTTPException(status_code=400, detail="Debe asignar al menos 1 estación de trabajo")
 
-    # Regla estricta: Mínimo 2 estaciones obligatorias de limpieza
+    # Regla: Si el modelo tiene pasos de limpieza registrados, la línea debe incluir al menos 1 estación de limpieza
+    model_clean_steps = db.query(QCChecklistItem).filter(
+        QCChecklistItem.model_name == req.model_name,
+        QCChecklistItem.is_cleaning == True
+    ).count()
+
     cleaning_stations = [
         st for st in req.stations
         if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower()
     ]
-    if len(cleaning_stations) < 2:
+    if model_clean_steps > 0 and len(cleaning_stations) < 1:
         raise HTTPException(
             status_code=400,
-            detail=f"Regla de Calidad Obligatoria: La línea de producción debe incluir al menos 2 estaciones designadas para Limpieza (Intermedia y Final). Se detectaron {len(cleaning_stations)} de 2 requeridas."
+            detail=f"Regla de Calidad: El modelo '{req.model_name}' contiene pasos de limpieza QC y requiere al menos 1 estación designada para Limpieza."
         )
 
-    # Obtener nombre del supervisor si no fue enviado explícitamente
+    # Obtener nombre del supervisor o inspectores múltiples
+    sup_id_str = req.supervisor_id
     sup_name = req.supervisor_name
-    if req.supervisor_id and not sup_name:
+    if req.supervisor_ids and len(req.supervisor_ids) > 0:
+        sup_id_str = ", ".join(str(s).strip() for s in req.supervisor_ids if str(s).strip())
+        if req.supervisor_names and len(req.supervisor_names) > 0:
+            sup_name = ", ".join(str(n).strip() for n in req.supervisor_names if str(n).strip())
+        else:
+            sup_users = db.query(QCUser).filter(QCUser.id.in_(req.supervisor_ids)).all()
+            name_map = {u.id: u.name for u in sup_users}
+            sup_name = ", ".join(name_map.get(sid, sid) for sid in req.supervisor_ids)
+    elif req.supervisor_id and not sup_name:
         sup_user = db.query(QCUser).filter(QCUser.id == req.supervisor_id).first()
         if sup_user:
             sup_name = sup_user.name
@@ -965,7 +979,7 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         total_units=req.total_units,
         total_stations=num_stations,
         status="IN_PROGRESS",
-        supervisor_id=req.supervisor_id,
+        supervisor_id=sup_id_str,
         supervisor_name=sup_name,
         supervisor_steps=sup_steps_str,
         created_by=req.created_by
@@ -1121,7 +1135,19 @@ def update_order(order_id: str, req: OrderUpdateRequest, db: Session = Depends(g
     if req.status is not None:
         order.status = req.status
 
-    if req.supervisor_id is not None:
+    if req.supervisor_ids is not None:
+        if len(req.supervisor_ids) > 0:
+            order.supervisor_id = ", ".join(str(s).strip() for s in req.supervisor_ids if str(s).strip())
+            if req.supervisor_names and len(req.supervisor_names) > 0:
+                order.supervisor_name = ", ".join(str(n).strip() for n in req.supervisor_names if str(n).strip())
+            else:
+                sup_users = db.query(QCUser).filter(QCUser.id.in_(req.supervisor_ids)).all()
+                name_map = {u.id: u.name for u in sup_users}
+                order.supervisor_name = ", ".join(name_map.get(sid, sid) for sid in req.supervisor_ids)
+        else:
+            order.supervisor_id = None
+            order.supervisor_name = None
+    elif req.supervisor_id is not None:
         order.supervisor_id = req.supervisor_id or None
         if req.supervisor_name:
             order.supervisor_name = req.supervisor_name

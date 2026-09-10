@@ -113,6 +113,8 @@ class OrderCreateRequest(BaseModel):
     total_units: int
     supervisor_id: Optional[str] = None
     supervisor_name: Optional[str] = None
+    supervisor_ids: Optional[List[str]] = None
+    supervisor_names: Optional[List[str]] = None
     supervisor_steps: Optional[Union[List[int], str]] = None
     stations: List[StationAssignmentCreate]
     created_by: Optional[str] = "Administrador"
@@ -125,6 +127,8 @@ class OrderUpdateRequest(BaseModel):
     status: Optional[str] = None # IN_PROGRESS, COMPLETED, PAUSED
     supervisor_id: Optional[str] = None
     supervisor_name: Optional[str] = None
+    supervisor_ids: Optional[List[str]] = None
+    supervisor_names: Optional[List[str]] = None
     supervisor_steps: Optional[Union[List[int], str]] = None
     stations: Optional[List[StationAssignmentCreate]] = None
     assignment_mode: Optional[str] = None

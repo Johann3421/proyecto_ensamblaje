@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Check, X, Search } from 'lucide-react';
-import { formatStepNumbersRange } from '../utils/steps';
+import { Check, X, Search, Wrench, Sparkles } from 'lucide-react';
+import { formatStepNumbersRange, isStepCleaning } from '../utils/steps';
 
 export default function StepPickerModal({
   isOpen,
@@ -20,18 +20,28 @@ export default function StepPickerModal({
 
   if (!isOpen || !station) return null;
 
+  const isCleaningStation = Boolean(station.is_cleaning_station || station.station_type === "CLEANING");
   const currentStepNumbers = new Set(station.step_numbers || []);
-  const totalSteps = modelSteps.length || 0;
+  
+  // Aislar pasos aplicables: la estación de ensamble SOLO ve ensamble, y la de limpieza SOLO ve limpieza
+  const allowedSteps = (modelSteps || []).filter(s => {
+    const isClean = isStepCleaning(s);
+    return isCleaningStation ? isClean : !isClean;
+  });
+  const totalAllowedSteps = allowedSteps.length;
 
-  // Mapa de pasos asignados a cada estación
+  // Mapa de pasos asignados solo a estaciones de la misma categoría
   const stepOwnerMap = {};
   (allStations || []).forEach((st, idx) => {
-    (st.step_numbers || []).forEach(num => {
-      stepOwnerMap[num] = { stationIdx: idx, stationNumber: st.station_number, stationName: st.station_name };
-    });
+    const stIsClean = Boolean(st.is_cleaning_station || st.station_type === "CLEANING");
+    if (stIsClean === isCleaningStation) {
+      (st.step_numbers || []).forEach(num => {
+        stepOwnerMap[num] = { stationIdx: idx, stationNumber: st.station_number, stationName: st.station_name };
+      });
+    }
   });
 
-  const filteredSteps = (modelSteps || []).filter(s => {
+  const filteredSteps = allowedSteps.filter(s => {
     const term = searchTerm.toLowerCase();
     return s.step_number.toString().includes(term) ||
            (s.operation && s.operation.toLowerCase().includes(term)) ||
@@ -53,17 +63,23 @@ export default function StepPickerModal({
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header del Modal */}
-        <div className="bg-[#1B4332] text-white p-4 flex justify-between items-center flex-shrink-0">
+        <div className={`${isCleaningStation ? "bg-emerald-800" : "bg-[#1B4332]"} text-white p-4 flex justify-between items-center flex-shrink-0`}>
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm flex-shrink-0">
               {station.station_number}
             </div>
             <div className="truncate">
-              <h3 className="text-sm font-bold truncate">
-                Asignar Pasos a Estación {station.station_number}: {station.station_name}
-              </h3>
-              <p className="text-[11px] text-blue-100 truncate">
-                Técnico: <strong>{station.user_name}</strong> · Asignados: <strong className="text-white">{currentStepNumbers.size} pasos</strong> ({formatStepNumbersRange(Array.from(currentStepNumbers))})
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold truncate">
+                  Estación {station.station_number}: {station.station_name}
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white flex items-center gap-1">
+                  {isCleaningStation ? <Sparkles className="w-3 h-3 text-emerald-300" /> : <Wrench className="w-3 h-3 text-stone-200" />}
+                  <span>{isCleaningStation ? "Bloque Limpieza" : "Bloque Ensamblaje"}</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-white/80 truncate">
+                Técnico: <strong>{station.user_name}</strong> · Asignados: <strong className="text-white">{currentStepNumbers.size} de {totalAllowedSteps} pasos</strong> ({formatStepNumbersRange(Array.from(currentStepNumbers))})
               </p>
             </div>
           </div>
@@ -94,8 +110,8 @@ export default function StepPickerModal({
               <input
                 type="number"
                 min="1"
-                max={totalSteps}
-                placeholder="17"
+                max={modelSteps.length || 500}
+                placeholder="1"
                 value={rangeFrom}
                 onChange={(e) => setRangeFrom(e.target.value)}
                 className="w-12 text-center p-1 text-xs font-bold border border-gray-200 rounded focus:border-primary"
@@ -104,8 +120,8 @@ export default function StepPickerModal({
               <input
                 type="number"
                 min="1"
-                max={totalSteps}
-                placeholder="31"
+                max={modelSteps.length || 500}
+                placeholder="20"
                 value={rangeTo}
                 onChange={(e) => setRangeTo(e.target.value)}
                 className="w-12 text-center p-1 text-xs font-bold border border-gray-200 rounded focus:border-primary"

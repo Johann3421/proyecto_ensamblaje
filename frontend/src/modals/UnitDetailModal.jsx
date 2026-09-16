@@ -19,7 +19,7 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
         .then(r => r.ok ? r.json() : [])
         .then(data => {
           if (Array.isArray(data)) {
-            setUnitLogs(data.filter(l => l.unit_number === unit.unit_number && l.status === "PASS"));
+            setUnitLogs(data.filter(l => Number(l.unit_number) === Number(unit.unit_number) && l.status === "PASS"));
           }
         })
         .catch(() => {});
@@ -144,8 +144,9 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                       key={idx}
                       onClick={() => onPreviewPhoto && onPreviewPhoto({
                         url: l.photo_url,
-                        title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}`,
-                        subtitle: `Estación ${l.station_number}`,
+                        title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
+                        subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
+                        operation: l.operation,
                         user_name: l.user_name,
                         timestamp: l.timestamp
                       })}
@@ -157,9 +158,11 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                         loading="lazy"
                       />
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 text-white">
-                        <span className="text-[10px] font-bold block leading-none">Paso #{l.step_number}</span>
-                        <span className="text-[8px] text-slate-300 block truncate mt-0.5">{l.user_name}</span>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-1.5 text-white">
+                        <span className="text-[10px] font-bold block leading-tight truncate">
+                          #{l.step_number} {l.operation || `Paso ${l.step_number}`}
+                        </span>
+                        <span className="text-[8px] text-slate-300 block truncate mt-0.5">E{l.station_number} · {l.user_name}</span>
                       </div>
                     </div>
                   ))}
@@ -193,8 +196,8 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                         <div 
                           onClick={() => onPreviewPhoto && onPreviewPhoto({
                             url: iss.photo_url,
-                            title: `Falla PC #${unit.unit_number} · ${iss.issue_title}`,
-                            subtitle: `Reportado por ${iss.reported_by}`,
+                            title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Falla: ${iss.issue_title}`,
+                            subtitle: `Estación ${iss.station_number} · Reportado por ${iss.reported_by}`,
                             user_name: iss.reported_by
                           })}
                           className="block relative group overflow-hidden rounded-lg border border-rose-300 cursor-pointer"

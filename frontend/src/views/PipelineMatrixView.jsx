@@ -3,7 +3,7 @@ import { Check, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, Re
 import Badge from '../components/Badge';
 import Card from '../components/Card';
 
-export default function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder, onOpenEditOrder }) {
+export default function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder, onOpenEditOrder, onPreviewPhoto }) {
   if (!matrixData || !matrixData.order) {
     return (
       <Card className="p-8 text-center mx-auto max-w-sm space-y-4">
@@ -272,11 +272,14 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
                 )}
 
                 {iss.photo_url && (
-                  <a
-                    href={iss.photo_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block relative rounded-lg overflow-hidden border border-rose-300 group"
+                  <div
+                    onClick={() => onPreviewPhoto && onPreviewPhoto({
+                      url: iss.photo_url,
+                      title: `PC #${iss.unit_number.toString().padStart(2, '0')} · Falla: ${iss.issue_title}`,
+                      subtitle: `Estación ${iss.station_number} · Reportado por ${iss.reported_by}`,
+                      user_name: iss.reported_by
+                    })}
+                    className="block relative rounded-lg overflow-hidden border border-rose-300 group cursor-pointer"
                   >
                     <img
                       src={iss.photo_url}
@@ -287,7 +290,7 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
                       <Camera className="w-3 h-3" />
                       <span>Ver Foto</span>
                     </span>
-                  </a>
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between text-[10px] text-stone-500 pt-1 border-t border-rose-200">

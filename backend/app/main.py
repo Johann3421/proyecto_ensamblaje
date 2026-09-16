@@ -1688,21 +1688,39 @@ def get_operator_workspace(
     completed_step_logs = []
     pending_prior_steps = []
     if active_unit:
+        # Consultar ítems del checklist para enriquecer logs con nombre de la operación
+        step_ops = {s.step_number: s.operation for s in all_steps}
+
         logs = db.query(QCStepLog).filter(
             QCStepLog.order_id == order.order_id,
             QCStepLog.unit_number == active_unit.unit_number,
             QCStepLog.status == "PASS"
-        ).all()
-        completed_steps_ids = [l.step_number for l in logs]
+        ).order_by(QCStepLog.id.asc()).all()
+
+        # Deduplicar por step_number priorizando el registro con photo_url o el más reciente
+        logs_by_step = {}
+        for l in logs:
+            existing = logs_by_step.get(l.step_number)
+            if not existing:
+                logs_by_step[l.step_number] = l
+            else:
+                if l.photo_url and not existing.photo_url:
+                    logs_by_step[l.step_number] = l
+                elif (not existing.photo_url or l.photo_url) and l.id > existing.id:
+                    logs_by_step[l.step_number] = l
+
+        deduped_logs = sorted(logs_by_step.values(), key=lambda x: x.step_number)
+        completed_steps_ids = [l.step_number for l in deduped_logs]
         completed_step_logs = [
             {
                 "step_number": l.step_number,
                 "photo_url": l.photo_url,
                 "user_name": l.user_name,
                 "is_supervisor_verified": bool(l.is_supervisor_verified),
-                "timestamp": l.timestamp.isoformat() if l.timestamp else None
+                "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+                "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
             }
-            for l in logs
+            for l in deduped_logs
         ]
         # Identificar si hay pasos de estaciones previas que aún falten completar (Deduplicados)
         current_station_step_nums = {s["step_number"] for s in station_steps}
@@ -1927,6 +1945,15 @@ def get_unit_supervisor_audit(order_id: str, unit_number: int, db: Session = Dep
 
 @api_router.post("/operator/submit-step")
 def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
+    if req.status == "PASS":
+        # Limpiar logs PASS previos para esta unidad y paso, garantizando unicidad estricta de fotos
+        db.query(QCStepLog).filter(
+            QCStepLog.order_id == req.order_id,
+            QCStepLog.unit_number == req.unit_number,
+            QCStepLog.step_number == req.step_number,
+            QCStepLog.status == "PASS"
+        ).delete()
+
     new_log = QCStepLog(
         order_id=req.order_id,
         unit_number=req.unit_number,
@@ -2242,7 +2269,37 @@ async def capture_camera_photo(data: dict):
 
 @api_router.get("/orders/{order_id}/logs")
 def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
-    return db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()
+    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    step_ops = {}
+    if order:
+        items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).all()
+        step_ops = {item.step_number: item.operation for item in items}
+
+    logs = db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()
+    result = []
+    for l in logs:
+        op_name = step_ops.get(l.step_number)
+        if not op_name:
+            if l.step_number == 999:
+                op_name = "Auditoría Supervisor"
+            else:
+                op_name = f"Paso {l.step_number}"
+        result.append({
+            "id": l.id,
+            "order_id": l.order_id,
+            "unit_number": l.unit_number,
+            "step_number": l.step_number,
+            "station_number": l.station_number,
+            "user_id": l.user_id,
+            "user_name": l.user_name,
+            "status": l.status,
+            "photo_url": l.photo_url,
+            "is_supervisor_verified": bool(l.is_supervisor_verified),
+            "notes": l.notes,
+            "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+            "operation": op_name
+        })
+    return result
 
 # Registrar todas las rutas de API
 app.include_router(api_router, prefix="/api")

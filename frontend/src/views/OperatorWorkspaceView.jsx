@@ -463,7 +463,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                 <button
                   key={u.unit_number}
                   type="button"
-                  onClick={() => onSelectUnit && onSelectUnit(u.unit_number)}
+                  onClick={() => {
+                    if (!isCurrent) {
+                      setCompletedSteps([]);
+                      setStepLogsMap({});
+                      onSelectUnit && onSelectUnit(u.unit_number);
+                    }
+                  }}
                   className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1 ${
                     isCurrent
                       ? "bg-[#1B4332] text-white shadow-md scale-105"
@@ -491,7 +497,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   {units_in_station.length > 1 && (
                     <select
                       value={active_unit.unit_number}
-                      onChange={(e) => onSelectUnit && onSelectUnit(parseInt(e.target.value, 10))}
+                      onChange={(e) => {
+                        const nextUnit = parseInt(e.target.value, 10);
+                        if (nextUnit !== active_unit.unit_number) {
+                          setCompletedSteps([]);
+                          setStepLogsMap({});
+                          onSelectUnit && onSelectUnit(nextUnit);
+                        }
+                      }}
                       className="text-xs bg-white/20 text-white font-bold border border-white/40 rounded-lg px-2 py-0.5 focus:outline-none touch-target"
                       title="Cambiar a otra PC disponible"
                     >
@@ -739,8 +752,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                               e.stopPropagation();
                               onPreviewPhoto && onPreviewPhoto({
                                 url: stepLog.photo_url,
-                                title: `PC #${active_unit.unit_number} · Paso #${st.step_number}`,
-                                subtitle: st.operation,
+                                title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
+                                subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
+                                operation: st.operation,
                                 user_name: stepLog.user_name,
                                 timestamp: stepLog.timestamp
                               });
@@ -943,7 +957,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shadow-2xs cursor-pointer hover:opacity-90"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  window.open(stepLog.media_url || stepLog.photo_url, "_blank");
+                                  onPreviewPhoto && onPreviewPhoto({
+                                    url: stepLog.media_url || stepLog.photo_url,
+                                    title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
+                                    subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
+                                    operation: st.operation,
+                                    user_name: stepLog.user_name,
+                                    timestamp: stepLog.timestamp
+                                  });
                                 }}
                               />
                               <div className="text-[10px]">
@@ -1124,7 +1145,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       {/* Modal Captura de Foto para Paso */}
       {photoStepModal && active_unit && (
         <CameraCaptureModal
-          title={`PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${photoStepModal.step_number}`}
+          title={`PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${photoStepModal.step_number}: ${photoStepModal.operation}`}
           subtitle={photoStepModal.operation}
           prefix={`step_${order.order_id}_pc${active_unit.unit_number}_p${photoStepModal.step_number}`}
           onCapture={(photoUrl) => {

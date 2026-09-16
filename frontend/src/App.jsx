@@ -350,6 +350,7 @@ export default function App() {
               onOpenResetOrder={() => setResetOrderModalOpen(true)}
               onOpenDeleteOrder={() => setDeleteOrderModalOpen(true)}
               onOpenEditOrder={() => setEditOrderModalOpen(true)}
+              onPreviewPhoto={(p) => setActivePhotoPreview(p)}
             />
           )}
           {activeTab === 'create-order' && (

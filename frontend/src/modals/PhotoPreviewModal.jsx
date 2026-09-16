@@ -3,7 +3,12 @@ import { Download, X, Camera } from 'lucide-react';
 
 export default function PhotoPreviewModal({ photo, onClose }) {
   if (!photo) return null;
-  const { url, title, subtitle, user_name, timestamp } = photo;
+  const { url, title, subtitle, operation, user_name, timestamp } = photo;
+
+  let displayTitle = title || "Evidencia Fotográfica";
+  if (operation && !displayTitle.includes(operation)) {
+    displayTitle = `${displayTitle}: ${operation}`;
+  }
 
   return (
     <div 
@@ -14,15 +19,19 @@ export default function PhotoPreviewModal({ photo, onClose }) {
         className="bg-slate-900 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[92vh] relative z-10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-slate-950 px-4 py-3 flex justify-between items-center border-b border-slate-800">
-          <div className="min-w-0 pr-2">
-            <div className="flex items-center gap-2">
-              <Camera className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-bold text-white truncate">{title || "Evidencia Fotográfica"}</h3>
+        <div className="bg-slate-950 px-4 py-3 flex justify-between items-start sm:items-center border-b border-slate-800 gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="p-1 rounded bg-emerald-500/10 text-emerald-400 flex-shrink-0">
+                <Camera className="w-4 h-4" />
+              </span>
+              <h3 className="text-xs sm:text-sm font-bold text-white break-words">
+                {displayTitle}
+              </h3>
             </div>
             {subtitle && <p className="text-xs text-slate-400 truncate mt-0.5">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white">
+          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white flex-shrink-0">
             <X className="w-5 h-5" />
           </button>
         </div>

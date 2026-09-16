@@ -119,7 +119,7 @@ export default function CameraCaptureModal({ title = "Tomar Foto con Cámara", s
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in">
+    <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in">
       <div className="bg-[#1e293b] text-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-700">
         <div className="bg-slate-900 px-4 py-3 flex justify-between items-center border-b border-slate-800">
           <div className="min-w-0 pr-2">

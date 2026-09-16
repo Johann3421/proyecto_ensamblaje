@@ -406,8 +406,6 @@ export default function App() {
       </nav>
 
       {/* MODALS */}
-      {activeMediaModal && <MediaViewerModal item={activeMediaModal} onClose={() => setActiveMediaModal(null)} />}
-      {activePhotoPreview && <PhotoPreviewModal photo={activePhotoPreview} onClose={() => setActivePhotoPreview(null)} />}
       {activeIssueModal && (
         <IssueReportModal
           data={activeIssueModal} currentUser={currentUser}
@@ -458,6 +456,10 @@ export default function App() {
           notify={notify}
         />
       )}
+
+      {/* VISORES MULTIMEDIA Y PREVISUALIZADORES (SIEMPRE EN LA CAPA MÁS ALTA) */}
+      {activeMediaModal && <MediaViewerModal item={activeMediaModal} onClose={() => setActiveMediaModal(null)} />}
+      {activePhotoPreview && <PhotoPreviewModal photo={activePhotoPreview} onClose={() => setActivePhotoPreview(null)} />}
     </div>
   );
 }

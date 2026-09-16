@@ -2,12 +2,19 @@ import React from 'react';
 import { X, Image as ImageIcon } from 'lucide-react';
 
 export default function MediaViewerModal({ item, onClose }) {
+  if (!item) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl">
+    <div 
+      className="fixed inset-0 z-[100] bg-black/85 flex items-end sm:items-center justify-center sm:p-4 fade-in backdrop-blur-xs"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl relative z-10"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="bg-[#1B4332] text-white p-4 flex justify-between items-start">
           <div className="min-w-0 pr-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Guía Visual</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Guía Visual</span>
             <h3 className="text-sm font-bold leading-tight">Paso #{item.step_number}: {item.operation}</h3>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-white/20 rounded flex-shrink-0 touch-target flex items-center justify-center">
@@ -25,11 +32,14 @@ export default function MediaViewerModal({ item, onClose }) {
               </div>
             )}
           </div>
-          <div className="bg-stone-100 p-3 rounded-xl border border-stone-200">
-            <h4 className="text-xs font-bold text-stone-900">Criterio de Aceptación:</h4>
-            <p className="text-xs text-stone-800 mt-1">{item.qc_criteria}</p>
-          </div>
+          {item.qc_criteria && (
+            <div className="bg-stone-100 p-3 rounded-xl border border-stone-200">
+              <h4 className="text-xs font-bold text-stone-900">Criterio de Aceptación:</h4>
+              <p className="text-xs text-stone-800 mt-1">{item.qc_criteria}</p>
+            </div>
+          )}
           <button
+            type="button"
             onClick={onClose}
             className="w-full py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-sm rounded-xl shadow touch-target transition"
           >

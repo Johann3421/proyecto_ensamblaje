@@ -62,7 +62,7 @@ export default function SupervisorAuditModal({ isOpen, onClose, orderId, unitNum
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
+    <div className="fixed inset-0 z-[60] bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto">
         <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white p-4 flex justify-between items-center sticky top-0 z-10">
           <div className="flex items-center gap-2">

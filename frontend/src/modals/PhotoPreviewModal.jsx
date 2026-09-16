@@ -6,9 +6,12 @@ export default function PhotoPreviewModal({ photo, onClose }) {
   const { url, title, subtitle, user_name, timestamp } = photo;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in" onClick={onClose}>
+    <div 
+      className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in backdrop-blur-xs" 
+      onClick={onClose}
+    >
       <div 
-        className="bg-slate-900 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[92vh]"
+        className="bg-slate-900 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[92vh] relative z-10"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-slate-950 px-4 py-3 flex justify-between items-center border-b border-slate-800">
@@ -54,7 +57,7 @@ export default function PhotoPreviewModal({ photo, onClose }) {
             </a>
             <button 
               onClick={onClose} 
-              className="px-4 py-1.5 bg-primary hover:bg-primary-light text-white rounded-lg text-xs font-bold transition"
+              className="px-4 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold transition shadow-xs"
             >
               Cerrar
             </button>

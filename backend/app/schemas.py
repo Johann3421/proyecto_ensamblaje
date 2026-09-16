@@ -287,3 +287,13 @@ class SupervisorAuditSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+class AdminPhotoCorrectionRequest(BaseModel):
+    order_id: str
+    unit_number: int
+    step_number: int
+    action: str # "DELETE" o "REPLACE"
+    reason: str
+    admin_name: str
+    return_to_station: Optional[int] = None
+    new_photo_url: Optional[str] = None

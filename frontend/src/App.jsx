@@ -460,7 +460,19 @@ export default function App() {
 
       {/* VISORES MULTIMEDIA Y PREVISUALIZADORES (SIEMPRE EN LA CAPA MÁS ALTA) */}
       {activeMediaModal && <MediaViewerModal item={activeMediaModal} onClose={() => setActiveMediaModal(null)} />}
-      {activePhotoPreview && <PhotoPreviewModal photo={activePhotoPreview} onClose={() => setActivePhotoPreview(null)} />}
+      {activePhotoPreview && (
+        <PhotoPreviewModal
+          photo={activePhotoPreview}
+          currentUser={currentUser}
+          onClose={() => setActivePhotoPreview(null)}
+          onPhotoCorrected={(msg) => {
+            notify(msg || 'Foto y estación corregidas', 'warning');
+            loadMatrixData();
+            loadInitialData();
+            if (activeTab === 'operator') loadOperatorWorkspace();
+          }}
+        />
+      )}
     </div>
   );
 }

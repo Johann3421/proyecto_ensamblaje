@@ -90,7 +90,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   }, [pending_prior_steps, uniqueStationSteps]);
 
   const totalStationSteps = uniqueStationSteps.length;
-  const isStationComplete = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
+  const lastStationStep = uniqueStationSteps[uniqueStationSteps.length - 1];
+  const hasLastStepPhoto = lastStationStep ? Boolean(stepLogsMap[lastStationStep.step_number]?.photo_url) : false;
+  const allStepsDone = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
+  const isStationComplete = allStepsDone && hasLastStepPhoto;
 
   const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
   const isSupport = is_support_operator || currentUser.id === 'OP-106' || (currentUser.email || '').toLowerCase().includes('apoyo');
@@ -143,8 +146,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         setSubmittingStep(null);
       }
     } else {
-      // Si la foto está activa, abrir la cámara para verificar con foto
-      if (requirePhotoVerification) {
+      // El último paso de la estación SIEMPRE exige foto obligatoria
+      const isLastStep = lastStationStep && step.step_number === lastStationStep.step_number;
+      if (requirePhotoVerification || isLastStep) {
         setPhotoStepModal(step);
       } else {
         // Marcar paso conforme sin foto
@@ -756,7 +760,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
                                 operation: st.operation,
                                 user_name: stepLog.user_name,
-                                timestamp: stepLog.timestamp
+                                timestamp: stepLog.timestamp,
+                                order_id: order?.order_id,
+                                unit_number: active_unit?.unit_number,
+                                step_number: st.step_number,
+                                station_number: assignment?.station_number
                               });
                             }}
                             className="mt-1.5 inline-flex items-center gap-1.5 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-900 border border-emerald-300 transition"
@@ -963,7 +971,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                     subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
                                     operation: st.operation,
                                     user_name: stepLog.user_name,
-                                    timestamp: stepLog.timestamp
+                                    timestamp: stepLog.timestamp,
+                                    order_id: order?.order_id,
+                                    unit_number: active_unit?.unit_number,
+                                    step_number: st.step_number,
+                                    station_number: assignment?.station_number
                                   });
                                 }}
                               />
@@ -1094,6 +1106,24 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   <><ArrowRightCircle className="w-6 h-6" /><span>Enviar PC #{active_unit.unit_number} a siguiente estación</span></>
                 )}
               </button>
+            ) : allStepsDone && !hasLastStepPhoto ? (
+              <div className="bg-amber-50 p-3 rounded-xl text-center border border-amber-300 space-y-2">
+                <p className="text-xs font-bold text-amber-900 flex items-center justify-center gap-1.5">
+                  <Camera className="w-4 h-4 text-amber-700" />
+                  <span>Foto obligatoria requerida en Paso #{lastStationStep?.step_number}</span>
+                </p>
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  Para enviar la PC a la siguiente estación debes tomar la foto de evidencia del último paso: <strong>{lastStationStep?.operation}</strong>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPhotoStepModal(lastStationStep)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition inline-flex items-center gap-1.5 shadow-sm"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Tomar Foto del Paso #{lastStationStep?.step_number} Ahora</span>
+                </button>
+              </div>
             ) : (
               <div className="bg-gray-50 p-3 rounded-xl text-center text-xs text-gray-500 border border-gray-200">
                 Completa los {totalStationSteps} pasos de la <strong>PC #{active_unit.unit_number}</strong> para habilitar su despacho.

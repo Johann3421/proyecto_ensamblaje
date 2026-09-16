@@ -20,7 +20,7 @@ from .schemas import (
     IssueCreate, IssueSchema,
     ReassignEmergencyRequest, TransferUnitRequest, StepReassignRequest,
     SupervisorAuditCreate, SupervisorAuditSchema, SupervisorStepPhotoVerify,
-    AuthRegister, AuthLogin, TokenResponse
+    AuthRegister, AuthLogin, TokenResponse, AdminPhotoCorrectionRequest
 )
 from .seed_data import seed_database, DEFAULT_USERS, PROWORK_52_STEPS
 from .excel_handler import generate_checklist_excel, parse_checklist_excel, generate_checklist_template
@@ -2042,6 +2042,57 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
     order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    # Obtener los pasos asignados a esta estación
+    assignment = db.query(QCStationAssignment).filter(
+        QCStationAssignment.order_id == order_id,
+        QCStationAssignment.station_number == station_number
+    ).first()
+
+    assigned_steps = []
+    if assignment:
+        if assignment.step_numbers:
+            try:
+                assigned_steps = [int(x.strip()) for x in assignment.step_numbers.split(",") if x.strip().isdigit()]
+            except Exception:
+                assigned_steps = []
+        if not assigned_steps and assignment.start_step and assignment.end_step:
+            assigned_steps = list(range(assignment.start_step, assignment.end_step + 1))
+
+    # Filtrar pasos reasignados/transferidos
+    overrides = db.query(QCStepStationOverride).filter(QCStepStationOverride.order_id == order_id).all()
+    out_steps = {o.step_number for o in overrides if o.from_station == station_number and (o.unit_number is None or o.unit_number == unit_number)}
+    in_steps = {o.step_number for o in overrides if o.target_station == station_number and (o.unit_number is None or o.unit_number == unit_number)}
+    
+    effective_steps = sorted(list((set(assigned_steps) - out_steps) | in_steps))
+
+    if effective_steps:
+        # 1. Comprobar que todos los pasos de la estación estén aprobados (PASS)
+        completed_logs = db.query(QCStepLog).filter(
+            QCStepLog.order_id == order_id,
+            QCStepLog.unit_number == unit_number,
+            QCStepLog.step_number.in_(effective_steps),
+            QCStepLog.status == "PASS"
+        ).all()
+        completed_set = {l.step_number for l in completed_logs}
+        missing = [s for s in effective_steps if s not in completed_set]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede avanzar: Faltan completar {len(missing)} paso(s) en la Estación {station_number} (Pasos: {', '.join(map(str, missing[:5]))})."
+            )
+
+        # 2. VALIDACIÓN ESTRICTA: El último paso de la estación DEBE tener fotografía de evidencia
+        last_step = effective_steps[-1]
+        last_log = next((l for l in completed_logs if l.step_number == last_step), None)
+        if not last_log or not last_log.photo_url or not last_log.photo_url.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede avanzar de estación: El último paso de la estación (Paso #{last_step}) requiere fotografía de evidencia obligatoria antes de despachar."
+            )
+
     next_station = station_number + 1
     if next_station > order.total_stations:
         unit.current_station = next_station
@@ -2056,6 +2107,100 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
         "message": f"PC #{unit_number} enviada a Estación {next_station if next_station <= order.total_stations else 'FINALIZADO'}",
         "next_station": next_station,
         "is_finished": next_station > order.total_stations
+    }
+
+@api_router.post("/admin/correct-step-photo")
+def correct_step_photo(req: AdminPhotoCorrectionRequest, db: Session = Depends(get_db)):
+    """Permite al Admin/Supervisor corregir o eliminar una foto, registrando auditoría forense y retroceder la PC a estaciones previas"""
+    unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == req.order_id,
+        QCPCUnit.unit_number == req.unit_number
+    ).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad de PC no encontrada")
+
+    current_log = db.query(QCStepLog).filter(
+        QCStepLog.order_id == req.order_id,
+        QCStepLog.unit_number == req.unit_number,
+        QCStepLog.step_number == req.step_number,
+        QCStepLog.status == "PASS"
+    ).first()
+
+    old_photo = current_log.photo_url if current_log and current_log.photo_url else "Sin foto"
+
+    # 1. Registrar auditoría forense inmutable de la corrección administrativa
+    action_label = "FOTO RECHAZADA/BORRADA" if req.action == "DELETE" else "FOTO REEMPLAZADA"
+    audit_entry = QCStepLog(
+        order_id=req.order_id,
+        unit_number=req.unit_number,
+        step_number=req.step_number,
+        station_number=unit.current_station,
+        user_id=req.admin_name,
+        user_name=f"{req.admin_name} (Admin)",
+        status="ADMIN_CORRECTION",
+        photo_url=old_photo if req.action == "DELETE" else (req.new_photo_url or old_photo),
+        notes=f"[{action_label}] Motivo del Admin: {req.reason}. Foto anterior: {old_photo}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(audit_entry)
+
+    # 2. Aplicar acción técnica sobre el paso
+    if req.action == "DELETE":
+        if current_log:
+            db.delete(current_log)
+    elif req.action == "REPLACE":
+        if current_log:
+            current_log.photo_url = req.new_photo_url
+            current_log.notes = f"Foto corregida por {req.admin_name}: {req.reason}"
+        else:
+            new_log = QCStepLog(
+                order_id=req.order_id,
+                unit_number=req.unit_number,
+                step_number=req.step_number,
+                station_number=unit.current_station,
+                user_id=req.admin_name,
+                user_name=f"{req.admin_name} (Admin)",
+                status="PASS",
+                photo_url=req.new_photo_url,
+                notes=f"Foto asignada por {req.admin_name}: {req.reason}",
+                timestamp=datetime.utcnow()
+            )
+            db.add(new_log)
+
+    # 3. Retorno de estación si fue solicitado
+    msg_station = ""
+    if req.return_to_station and req.return_to_station > 0:
+        prev_station = unit.current_station
+        unit.current_station = req.return_to_station
+        unit.overall_status = "IN_PROGRESS"
+
+        reassign_log = QCStepLog(
+            order_id=req.order_id,
+            unit_number=req.unit_number,
+            step_number=req.step_number,
+            station_number=req.return_to_station,
+            user_id=req.admin_name,
+            user_name=f"{req.admin_name} (Admin)",
+            status="REASSIGNED",
+            notes=f"PC devuelta de E{prev_station} a E{req.return_to_station} para subsanación. Observación: {req.reason}",
+            timestamp=datetime.utcnow()
+        )
+        db.add(reassign_log)
+        msg_station = f" y devuelta a Estación {req.return_to_station}"
+
+    # Recalcular progreso acumulado
+    remaining = db.query(QCStepLog).filter(
+        QCStepLog.order_id == req.order_id,
+        QCStepLog.unit_number == req.unit_number,
+        QCStepLog.status == "PASS"
+    ).all()
+    unit.current_step_progress = max([l.step_number for l in remaining], default=0)
+
+    db.commit()
+    return {
+        "message": f"Evidencia de Paso #{req.step_number} procesada{msg_station}. Historial registrado.",
+        "unit_number": unit.unit_number,
+        "current_station": unit.current_station
     }
 
 @api_router.post("/operator/report-issue")

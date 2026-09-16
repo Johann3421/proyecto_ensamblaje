@@ -144,6 +144,10 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                       key={idx}
                       onClick={() => onPreviewPhoto && onPreviewPhoto({
                         url: l.photo_url,
+                        order_id: order.order_id,
+                        unit_number: unit.unit_number,
+                        step_number: l.step_number,
+                        station_number: l.station_number,
                         title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
                         subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
                         operation: l.operation,

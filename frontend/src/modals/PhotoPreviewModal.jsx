@@ -1,78 +1,108 @@
-import React from 'react';
-import { Download, X, Camera } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, X, Camera, Wrench } from 'lucide-react';
+import AdminPhotoCorrectionModal from './AdminPhotoCorrectionModal';
 
-export default function PhotoPreviewModal({ photo, onClose }) {
+export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhotoCorrected }) {
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   if (!photo) return null;
-  const { url, title, subtitle, operation, user_name, timestamp } = photo;
+  const { url, title, subtitle, operation, user_name, timestamp, order_id, unit_number, step_number } = photo;
 
   let displayTitle = title || "Evidencia Fotográfica";
   if (operation && !displayTitle.includes(operation)) {
     displayTitle = `${displayTitle}: ${operation}`;
   }
 
+  const canCorrect = (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR') && order_id && unit_number && step_number;
+
   return (
-    <div 
-      className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in backdrop-blur-xs" 
-      onClick={onClose}
-    >
+    <>
       <div 
-        className="bg-slate-900 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[92vh] relative z-10"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-3 sm:p-4 fade-in backdrop-blur-xs" 
+        onClick={onClose}
       >
-        <div className="bg-slate-950 px-4 py-3 flex justify-between items-start sm:items-center border-b border-slate-800 gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="p-1 rounded bg-emerald-500/10 text-emerald-400 flex-shrink-0">
-                <Camera className="w-4 h-4" />
-              </span>
-              <h3 className="text-xs sm:text-sm font-bold text-white break-words">
-                {displayTitle}
-              </h3>
+        <div 
+          className="bg-slate-900 text-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[92vh] relative z-10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="bg-slate-950 px-4 py-3 flex justify-between items-start sm:items-center border-b border-slate-800 gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="p-1 rounded bg-emerald-500/10 text-emerald-400 flex-shrink-0">
+                  <Camera className="w-4 h-4" />
+                </span>
+                <h3 className="text-xs sm:text-sm font-bold text-white break-words">
+                  {displayTitle}
+                </h3>
+              </div>
+              {subtitle && <p className="text-xs text-slate-400 truncate mt-0.5">{subtitle}</p>}
             </div>
-            {subtitle && <p className="text-xs text-slate-400 truncate mt-0.5">{subtitle}</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white flex-shrink-0">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 bg-black p-2 flex items-center justify-center min-h-[260px] overflow-hidden">
-          <img 
-            src={url} 
-            alt="Evidencia fotográfica" 
-            className="max-h-[60vh] sm:max-h-[68vh] w-auto max-w-full object-contain rounded-lg shadow-md" 
-          />
-        </div>
-
-        <div className="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-3 text-slate-300">
-            {user_name && (
-              <span>Verificado por: <strong className="text-emerald-400 font-semibold">{user_name}</strong></span>
-            )}
-            {timestamp && (
-              <span className="text-slate-400 font-mono text-[11px]">{new Date(timestamp).toLocaleString("es-PE")}</span>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <a 
-              href={url} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              download 
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Descargar</span>
-            </a>
-            <button 
-              onClick={onClose} 
-              className="px-4 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold transition shadow-xs"
-            >
-              Cerrar
+            <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition text-slate-400 hover:text-white flex-shrink-0">
+              <X className="w-5 h-5" />
             </button>
+          </div>
+
+          <div className="flex-1 bg-black p-2 flex items-center justify-center min-h-[260px] overflow-hidden">
+            <img 
+              src={url} 
+              alt="Evidencia fotográfica" 
+              className="max-h-[60vh] sm:max-h-[68vh] w-auto max-w-full object-contain rounded-lg shadow-md" 
+            />
+          </div>
+
+          <div className="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-3 text-slate-300">
+              {user_name && (
+                <span>Verificado por: <strong className="text-emerald-400 font-semibold">{user_name}</strong></span>
+              )}
+              {timestamp && (
+                <span className="text-slate-400 font-mono text-[11px]">{new Date(timestamp).toLocaleString("es-PE")}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {canCorrect && (
+                <button 
+                  type="button"
+                  onClick={() => setShowCorrectionModal(true)}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-black flex items-center gap-1.5 transition shadow-sm"
+                  title="Rechazar foto o retroceder PC de estación para corrección"
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span>Corregir / Devolver PC</span>
+                </button>
+              )}
+              <a 
+                href={url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                download 
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Descargar</span>
+              </a>
+              <button 
+                onClick={onClose} 
+                className="px-4 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold transition shadow-xs"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {showCorrectionModal && (
+        <AdminPhotoCorrectionModal
+          photo={photo}
+          currentUser={currentUser}
+          currentStation={photo.station_number || 1}
+          onClose={() => setShowCorrectionModal(false)}
+          onSuccess={(msg) => {
+            onPhotoCorrected && onPhotoCorrected(msg);
+            onClose();
+          }}
+        />
+      )}
+    </>
   );
 }

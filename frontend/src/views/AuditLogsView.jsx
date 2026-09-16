@@ -184,6 +184,10 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                         key={idx}
                         onClick={() => onPreviewPhoto && onPreviewPhoto({
                           url: l.photo_url,
+                          order_id: l.order_id || activeOrderId,
+                          unit_number: l.unit_number,
+                          step_number: l.step_number,
+                          station_number: l.station_number,
                           title: `PC #${l.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
                           subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
                           operation: l.operation,
@@ -264,6 +268,10 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                         type="button"
                         onClick={() => onPreviewPhoto && onPreviewPhoto({
                           url: l.photo_url,
+                          order_id: l.order_id || activeOrderId,
+                          unit_number: l.unit_number,
+                          step_number: l.step_number,
+                          station_number: l.station_number,
                           title: `PC #${l.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
                           subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
                           operation: l.operation,
@@ -284,6 +292,7 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                   {l.status === "FAIL" && <Badge variant="danger">FAIL</Badge>}
                   {l.status === "UNCHECK" && <Badge variant="warning">DESMARC.</Badge>}
                   {l.status === "REASSIGNED" && <Badge variant="warning">REASIG.</Badge>}
+                  {l.status === "ADMIN_CORRECTION" && <Badge variant="warning">CORREC. ADMIN</Badge>}
                 </div>
               </div>
             </Card>

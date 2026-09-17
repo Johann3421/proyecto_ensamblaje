@@ -36,3 +36,18 @@
 - **Comandos de activación por prompt:**
   - `caveman review`: Revisa código con compresión máxima.
   - `caveman lite` | `full` | `ultra`: Cambia nivel de brevedad.
+
+---
+
+# Protocolo Obligatorio de Memoria & Bitácora en Obsidian
+
+> **Bóveda del Proyecto:** Carpeta `obsidian/` en la raíz del repositorio. Compatible 100% con Obsidian (Markdown estándar, enlaces `[[...]]`, tags `#...` y frontmatter YAML).
+
+1. **Registro Automático al Finalizar Cada Tarea**:
+   - Al terminar cualquier requerimiento, bugfix o función nueva, el agente DEBE crear inmediatamente la nota técnica en `obsidian/tareas/YYYY-MM-DD-nombre-tarea.md`.
+   - Registrar la entrada cronológica con enlace wiki en `obsidian/BITACORA_TAREAS.md`.
+   - Estructura de la nota: YAML frontmatter (`fecha`, `tipo`, `estado`, `tags`), Descripción, Causa Raíz, Solución Técnica, Archivos Modificados y Verificación.
+2. **Resiliencia ante Compactación de Contexto**:
+   - Tras cualquier compactación o reanudación de sesión, consultar primero `obsidian/BITACORA_TAREAS.md` y `obsidian/00_INDICE.md` para recuperar el estado exacto sin pérdida de contexto ni re-preguntas.
+3. **Mantenimiento de Arquitectura Viva**:
+   - Si una tarea modifica flujos o reglas de negocio clave (estaciones, supervisión, fotos, hardware), actualizar su nota en `obsidian/arquitectura/`.

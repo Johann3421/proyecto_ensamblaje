@@ -35,3 +35,7 @@ Thumbs.db
 
 # Variables de entorno sensibles (usar .env.example)
 .env
+
+# Obsidian workspace local
+obsidian/.obsidian/workspace*
+obsidian/.obsidian/cache*

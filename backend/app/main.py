@@ -1486,8 +1486,12 @@ def get_operator_workspace(
     if not target_order:
         target_order = db.query(QCOrder).order_by(QCOrder.created_at.desc()).first()
 
-    # MODO SUPERVISIÓN EXCLUSIVO: Si es Supervisor/Admin y no seleccionó una estación fija de operario (station_number == 0 o None)
-    if is_supervisor and target_order and (station_number is None or station_number == 0):
+    # Identificar si la solicitud es para el Puesto de Supervisión (Estación 0)
+    is_supervisor_role = (requesting_user and requesting_user.role in ["SUPERVISOR", "ADMIN"]) or (target_order and target_order.supervisor_id == user_id)
+    wants_supervisor_station = (station_number == 0) or (is_supervisor_role and (station_number is None or station_number == 0))
+
+    # MODO SUPERVISIÓN EXCLUSIVO: Estación propia del Supervisor (Estación 0)
+    if target_order and wants_supervisor_station:
         order = target_order
         all_stations = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == order.order_id
@@ -1526,26 +1530,15 @@ def get_operator_workspace(
             except Exception:
                 sup_step_nums = []
 
+        # Si no hay pasos asignados específicamente, TODOS los pasos del modelo están a disposición de la estación de supervisión
         if not sup_step_nums:
-            last_steps = set()
-            for st in all_stations:
-                st_steps = []
-                if st.step_numbers:
-                    try:
-                        st_steps = [int(x.strip()) for x in st.step_numbers.split(",") if x.strip().isdigit()]
-                    except Exception:
-                        st_steps = []
-                if not st_steps and st.start_step and st.end_step:
-                    st_steps = list(range(st.start_step, st.end_step + 1))
-                if st_steps:
-                    last_steps.add(st_steps[-1])
-            sup_step_nums = sorted(list(last_steps)) if last_steps else [s.step_number for s in all_steps]
+            sup_step_nums = [s.step_number for s in all_steps]
 
         sup_step_nums_set = set(sup_step_nums)
         supervisor_station_steps = []
         for s in all_steps:
             if s.step_number in sup_step_nums_set:
-                st_info = step_to_station.get(s.step_number, {"station_number": 1, "station_name": "General", "is_cleaning_station": False})
+                st_info = step_to_station.get(s.step_number, {"station_number": 0, "station_name": "Supervisión", "is_cleaning_station": False})
                 supervisor_station_steps.append({
                     "id": s.id,
                     "model_name": s.model_name,
@@ -1556,12 +1549,14 @@ def get_operator_workspace(
                     "media_url": s.media_url,
                     "media_type": s.media_type,
                     "is_delegated_in": False,
-                    "station_number": st_info["station_number"],
-                    "station_name": st_info["station_name"],
-                    "is_cleaning_station": st_info["is_cleaning_station"],
+                    "station_number": 0,
+                    "origin_station_number": st_info["station_number"],
+                    "origin_station_name": st_info["station_name"],
+                    "station_name": "Puesto de Supervisión & Calidad",
+                    "is_cleaning_station": False,
                     "is_supervisor_step": True,
                     "assigned_technicians": [],
-                    "primary_technician": requesting_user.name
+                    "primary_technician": requesting_user.name if requesting_user else (order.supervisor_name or "Supervisor")
                 })
 
         all_order_units = db.query(QCPCUnit).filter(
@@ -1634,8 +1629,8 @@ def get_operator_workspace(
             "order_id": order.order_id,
             "station_number": 0,
             "station_name": "Puesto de Supervisión & Control de Calidad",
-            "user_id": requesting_user.id,
-            "user_name": requesting_user.name,
+            "user_id": requesting_user.id if requesting_user else user_id,
+            "user_name": requesting_user.name if requesting_user else (order.supervisor_name or "Supervisor"),
             "start_step": supervisor_station_steps[0]["step_number"] if supervisor_station_steps else 1,
             "end_step": supervisor_station_steps[-1]["step_number"] if supervisor_station_steps else 1,
             "step_numbers": ",".join(str(s["step_number"]) for s in supervisor_station_steps),
@@ -1663,16 +1658,16 @@ def get_operator_workspace(
             "completed_units": [u for u in all_order_units if u.overall_status == "PASSED"],
             "is_support_operator": False,
             "requesting_user": {
-                "id": requesting_user.id,
-                "name": requesting_user.name,
-                "role": requesting_user.role
+                "id": requesting_user.id if requesting_user else user_id,
+                "name": requesting_user.name if requesting_user else (order.supervisor_name or "Supervisor"),
+                "role": requesting_user.role if requesting_user else "SUPERVISOR"
             },
             "supervisor_audit": supervisor_audit
         }
 
     # Si se especificó station_number explícitamente (ej: por Supervisor, Apoyo o Admin para seleccionar puesto de trabajo)
     assignment = None
-    if order_id and station_number:
+    if order_id and station_number is not None and station_number > 0:
         assignment = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == order_id,
             QCStationAssignment.station_number == station_number

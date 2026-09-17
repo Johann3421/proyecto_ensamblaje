@@ -173,8 +173,10 @@ export default function App() {
     if (unitNumber) params.append('unit_number', unitNumber);
     if (orderId) params.append('order_id', orderId);
     else if (selectedOrder) params.append('order_id', selectedOrder);
-    const targetStation = stationNumber !== null ? stationNumber : operatorStationFilter;
-    if (targetStation) params.append('station_number', targetStation);
+    const targetStation = (stationNumber !== null && stationNumber !== undefined) ? stationNumber : operatorStationFilter;
+    if (targetStation !== null && targetStation !== undefined) {
+      params.append('station_number', targetStation);
+    }
     const qs = params.toString() ? `?${params.toString()}` : '';
     fetch(`${API_BASE}/operator/${currentUser.id}/station${qs}`)
       .then(r => r.ok ? r.json() : null)
@@ -193,7 +195,8 @@ export default function App() {
   useEffect(() => { loadMatrixData(); }, [selectedOrder]);
   useEffect(() => {
     if (activeTab === 'operator' || currentUser.role === 'OPERATOR') {
-      loadOperatorWorkspace(null, selectedOrder);
+      const defaultStation = (currentUser.role === 'SUPERVISOR' && (operatorStationFilter === null || operatorStationFilter === undefined)) ? 0 : operatorStationFilter;
+      loadOperatorWorkspace(null, selectedOrder, defaultStation);
     }
   }, [activeTab, currentUser, selectedOrder]);
 

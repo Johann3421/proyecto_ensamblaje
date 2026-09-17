@@ -242,7 +242,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           order_id: order.order_id,
           unit_number: active_unit.unit_number,
           step_number: step.step_number,
-          station_number: step.station_number || assignment.station_number || 1,
+          station_number: step.origin_station_number || step.station_number || 0,
           supervisor_id: currentUser.id,
           supervisor_name: currentUser.name,
           photo_url: photoUrl,
@@ -369,6 +369,17 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {!isSupervisorMode && (
+                <button
+                  type="button"
+                  onClick={() => onSelectStation && onSelectStation(0)}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-600 hover:bg-amber-700 text-white shadow-xs flex items-center gap-1 transition touch-target"
+                  title="Volver a mi puesto de supervisión"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>⭐ Ir a Mi Estación</span>
+                </button>
+              )}
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-bold text-amber-900 flex-shrink-0">Puesto:</span>
                 <select
@@ -376,7 +387,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   onChange={(e) => onSelectStation && onSelectStation(parseInt(e.target.value, 10))}
                   className="text-xs font-bold border border-amber-400 bg-white text-gray-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-amber-500 shadow-xs touch-target"
                 >
-                  <option value={0}>⭐ Mis Pasos de Supervisión {isSupervisorMode ? `(${uniqueStationSteps.length} pasos)` : ''}</option>
+                  <option value={0}>⭐ Mi Estación: Pasos de Supervisión {isSupervisorMode ? `(${uniqueStationSteps.length} pasos)` : ''}</option>
                   {all_stations.map(st => (
                     <option key={st.station_number} value={st.station_number}>
                       Auditar E{st.station_number}: {st.station_name} (Titular: {st.user_name}) {st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
@@ -440,7 +451,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               {formatStepNumbersRange(assignment.step_numbers || (assignment.start_step ? `${assignment.start_step}-${assignment.end_step}` : ""))}
             </span>
             <span className="text-[10px] text-gray-400 block mt-1">
-              Operario: <strong>{assignment.user_name}</strong>
+              {assignment.station_number === 0 ? 'Supervisor: ' : 'Operario: '}<strong>{assignment.user_name}</strong>
             </span>
           </div>
         </div>
@@ -533,15 +544,17 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                 <p className="text-xs text-blue-200 font-mono">{active_unit.serial_number}</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setTransferModalOpen(true)}
-                  className="flex flex-col items-center gap-0.5 bg-white/20 hover:bg-white/30 px-2.5 py-1.5 rounded-xl transition touch-target"
-                  title="Derivar PC a otra estación"
-                >
-                  <ArrowRightCircle className="w-4 h-4 text-sky-200" />
-                  <span className="text-[9px] font-bold text-white">Derivar</span>
-                </button>
+                {!isSupervisorMode && (
+                  <button
+                    type="button"
+                    onClick={() => setTransferModalOpen(true)}
+                    className="flex flex-col items-center gap-0.5 bg-white/20 hover:bg-white/30 px-2.5 py-1.5 rounded-xl transition touch-target"
+                    title="Derivar PC a otra estación"
+                  >
+                    <ArrowRightCircle className="w-4 h-4 text-sky-200" />
+                    <span className="text-[9px] font-bold text-white">Derivar</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onOpenIssue(active_unit, uniqueStationSteps[0] || { step_number: 1, operation: "Inspección de Unidad" })}
@@ -721,7 +734,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           )}
 
           {/* PASOS HEREDADOS DE OTRAS ESTACIONES (SI EXISTEN, DEDUPLICADOS) */}
-          {filteredPendingPriorSteps && filteredPendingPriorSteps.length > 0 && (
+          {!isSupervisorMode && filteredPendingPriorSteps && filteredPendingPriorSteps.length > 0 && (
             <div className="p-3 bg-amber-50 border-b border-amber-200 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
@@ -813,7 +826,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           )}
 
           {/* PASOS DERIVADOS A OTRAS ESTACIONES */}
-          {transferred_out_steps && transferred_out_steps.length > 0 && (
+          {!isSupervisorMode && transferred_out_steps && transferred_out_steps.length > 0 && (
             <div className="p-2.5 bg-stone-50 border-b border-stone-200 space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-stone-900 flex items-center gap-1.5">
@@ -918,11 +931,15 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                               #{st.step_number}
                             </span>
                             {st.operation}
-                            {st.station_number && (
+                            {st.origin_station_number ? (
+                              <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded ml-1.5 inline-block">
+                                Línea E{st.origin_station_number} {st.origin_station_name ? `· ${st.origin_station_name}` : ''}
+                              </span>
+                            ) : (st.station_number > 0 && (
                               <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded ml-1.5 inline-block">
                                 Estación {st.station_number} {st.station_name ? `· ${st.station_name}` : ''}
                               </span>
-                            )}
+                            ))}
                             {st.is_delegated_in && (
                               <span className="text-[9px] font-bold bg-stone-200 text-stone-800 px-1.5 py-0.5 rounded border border-stone-200 ml-1.5 inline-block">
                                 Recibido de E{st.delegated_from_station}

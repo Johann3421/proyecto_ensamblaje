@@ -886,6 +886,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               const isSupervisorVerified = Boolean(stepLog?.is_supervisor_verified);
               // Para el supervisor, el paso SOLO es verde ("hecho") si ÉL lo verificó oficialmente
               const isStepComplete = isSupervisorMode ? isSupervisorVerified : isTechnicianDone;
+              const isDone = isStepComplete;
               const isSupervisedByRole = isSupervisorUser && (!supervisedStepsSet || supervisedStepsSet.has(st.step_number));
 
               return (
@@ -1143,11 +1144,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                               setPhotoStepModal(st);
                             }}
                             className={`w-8 h-8 rounded-xl flex items-center justify-center transition shadow-xs ${
-                              isDone
+                              isStepComplete
                                 ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300"
                                 : "bg-stone-200 hover:bg-stone-200 text-primary border border-stone-300"
                             }`}
-                            title={isDone ? "Volver a tomar / actualizar foto" : "Tomar foto y verificar paso"}
+                            title={isStepComplete ? "Volver a tomar / actualizar foto" : "Tomar foto y verificar paso"}
                           >
                             <Camera className="w-4 h-4" />
                           </button>
@@ -1162,7 +1163,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                               <PlayCircle className="w-4 h-4" />
                             </button>
                           )}
-                          {!isDone && (
+                          {!isStepComplete && (
                             <button
                               type="button"
                               onClick={(e) => {

@@ -32,10 +32,12 @@ Dado que `completedSteps` contiene cualquier paso registrado en la PC (ya sea po
    - Una vez el supervisor toma la foto oficial o certifica, la tarjeta pasa a verde esmeralda (`bg-emerald-50/70 border-emerald-400`), mostrando `🛡️ V°B° Supervisor Aprobado` y `Actualizar Foto Cumplimiento`.
 4. **Métricas de Progreso Supervisor**:
    - El contador de progreso en modo supervisor calcula `supervisorVerifiedCount/totalStationSteps` en lugar del progreso del operario.
+5. **Corrección de Alcance (`isDone` ReferenceError)**:
+   - Se definió `const isDone = isStepComplete` explícitamente y se actualizaron los botones auxiliares (`Camera`, `Reassign`) para prevenir errores de referencia en el runtime de Vite.
 
 ## 4. Archivos Modificados
 - `frontend/src/views/OperatorWorkspaceView.jsx`
 
 ## 5. Verificación
 - `npm run build` en `frontend/` ejecutado con éxito (0 errores).
-- Pruebas de renderizado y lógica condicional validadas.
+- Validación de declaraciones completas con `git grep`.

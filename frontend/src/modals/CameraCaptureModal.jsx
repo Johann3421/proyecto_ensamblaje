@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, AlertCircle, Upload, Loader2, X, RotateCcw, Camera, ZoomIn, ZoomOut, Smartphone, RefreshCw } from 'lucide-react';
+import { Check, AlertCircle, Upload, Loader2, X, RotateCcw, Camera, ZoomIn, ZoomOut, Smartphone, RefreshCw, Zap, ZapOff } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import { compressImageToOptimized } from '../utils/imageCompressor';
 
@@ -20,6 +20,9 @@ export default function CameraCaptureModal({ title = "Tomar Foto con Cámara", s
   const [hasHardwareZoom, setHasHardwareZoom] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 3, step: 0.1 });
 
+  // Control de Flash / Linterna
+  const [torchOn, setTorchOn] = useState(false);
+
   // Enumerar cámaras físicas disponibles
   const enumerateCameras = async () => {
     try {
@@ -39,6 +42,7 @@ export default function CameraCaptureModal({ title = "Tomar Foto con Cámara", s
       }
       setCameraError(null);
       setZoom(1);
+      setTorchOn(false);
 
       const videoConstraints = {
         width: { ideal: 1920 },
@@ -138,6 +142,27 @@ export default function CameraCaptureModal({ title = "Tomar Foto con Cámara", s
     const currentIdx = videoDevices.findIndex(d => d.deviceId === selectedDeviceId);
     const nextIdx = (currentIdx + 1) % videoDevices.length;
     setSelectedDeviceId(videoDevices[nextIdx].deviceId);
+  };
+
+  // Alternar linterna / flash en cámara trasera
+  const handleToggleTorch = async () => {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+    const nextTorch = !torchOn;
+    try {
+      if (typeof track.applyConstraints === 'function') {
+        await track.applyConstraints({
+          advanced: [{ torch: nextTorch }]
+        });
+        setTorchOn(nextTorch);
+      } else {
+        throw new Error("applyConstraints no soportado");
+      }
+    } catch (e) {
+      console.warn("Fallo al alternar flash/linterna:", e);
+      alert("El sensor actual no admite control directo de linterna por navegador. Puede usar el botón 'Cámara Celular' para capturar con el flash nativo de su teléfono.");
+    }
   };
 
   const handleTakeSnapshot = async () => {
@@ -305,8 +330,22 @@ export default function CameraCaptureModal({ title = "Tomar Foto con Cámara", s
                     />
                   </div>
 
-                  {/* Selector rápido de Lente en esquina superior derecha */}
-                  <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                  {/* Controles superiores: Flash y Selector de Lente */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+                    <button
+                      type="button"
+                      onClick={handleToggleTorch}
+                      className={`border px-2.5 py-1 rounded-full text-[10px] font-bold backdrop-blur-md flex items-center gap-1.5 shadow transition ${
+                        torchOn
+                          ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-400 font-black'
+                          : 'bg-black/65 hover:bg-black/85 text-slate-200 border-white/20'
+                      }`}
+                      title="Activar / Desactivar Flash o Linterna"
+                    >
+                      {torchOn ? <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950" /> : <ZapOff className="w-3.5 h-3.5 text-slate-300" />}
+                      <span>{torchOn ? "Flash ON" : "Flash"}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={handleCycleCamera}

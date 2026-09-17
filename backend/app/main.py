@@ -1477,6 +1477,199 @@ def get_operator_workspace(
             "is_support": is_support
         })
 
+    # Determinar orden base
+    target_order = None
+    if order_id:
+        target_order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if not target_order:
+        target_order = db.query(QCOrder).filter(QCOrder.status == "IN_PROGRESS").order_by(QCOrder.created_at.desc()).first()
+    if not target_order:
+        target_order = db.query(QCOrder).order_by(QCOrder.created_at.desc()).first()
+
+    # MODO SUPERVISIÓN EXCLUSIVO: Si es Supervisor/Admin y no seleccionó una estación fija de operario (station_number == 0 o None)
+    if is_supervisor and target_order and (station_number is None or station_number == 0):
+        order = target_order
+        all_stations = db.query(QCStationAssignment).filter(
+            QCStationAssignment.order_id == order.order_id
+        ).order_by(QCStationAssignment.station_number).all()
+
+        step_to_station = {}
+        for st in all_stations:
+            st_steps = []
+            if st.step_numbers:
+                try:
+                    st_steps = [int(x.strip()) for x in st.step_numbers.split(",") if x.strip().isdigit()]
+                except Exception:
+                    st_steps = []
+            if not st_steps and st.start_step and st.end_step:
+                st_steps = list(range(st.start_step, st.end_step + 1))
+            for sn in st_steps:
+                step_to_station[sn] = {
+                    "station_number": st.station_number,
+                    "station_name": st.station_name,
+                    "is_cleaning_station": bool(st.is_cleaning_station)
+                }
+
+        all_steps_raw = db.query(QCChecklistItem).filter(
+            QCChecklistItem.model_name == order.model_name
+        ).order_by(QCChecklistItem.step_number, QCChecklistItem.id).all()
+        unique_steps_map = {}
+        for it in all_steps_raw:
+            if it.step_number not in unique_steps_map:
+                unique_steps_map[it.step_number] = it
+        all_steps = [unique_steps_map[k] for k in sorted(unique_steps_map.keys())]
+
+        sup_step_nums = []
+        if order.supervisor_steps:
+            try:
+                sup_step_nums = [int(x.strip()) for x in order.supervisor_steps.split(",") if x.strip().isdigit()]
+            except Exception:
+                sup_step_nums = []
+
+        if not sup_step_nums:
+            last_steps = set()
+            for st in all_stations:
+                st_steps = []
+                if st.step_numbers:
+                    try:
+                        st_steps = [int(x.strip()) for x in st.step_numbers.split(",") if x.strip().isdigit()]
+                    except Exception:
+                        st_steps = []
+                if not st_steps and st.start_step and st.end_step:
+                    st_steps = list(range(st.start_step, st.end_step + 1))
+                if st_steps:
+                    last_steps.add(st_steps[-1])
+            sup_step_nums = sorted(list(last_steps)) if last_steps else [s.step_number for s in all_steps]
+
+        sup_step_nums_set = set(sup_step_nums)
+        supervisor_station_steps = []
+        for s in all_steps:
+            if s.step_number in sup_step_nums_set:
+                st_info = step_to_station.get(s.step_number, {"station_number": 1, "station_name": "General", "is_cleaning_station": False})
+                supervisor_station_steps.append({
+                    "id": s.id,
+                    "model_name": s.model_name,
+                    "step_number": s.step_number,
+                    "operation": s.operation,
+                    "description": s.description,
+                    "qc_criteria": s.qc_criteria,
+                    "media_url": s.media_url,
+                    "media_type": s.media_type,
+                    "is_delegated_in": False,
+                    "station_number": st_info["station_number"],
+                    "station_name": st_info["station_name"],
+                    "is_cleaning_station": st_info["is_cleaning_station"],
+                    "is_supervisor_step": True,
+                    "assigned_technicians": [],
+                    "primary_technician": requesting_user.name
+                })
+
+        all_order_units = db.query(QCPCUnit).filter(
+            QCPCUnit.order_id == order.order_id
+        ).order_by(QCPCUnit.unit_number).all()
+
+        active_unit = None
+        if unit_number is not None:
+            active_unit = next((u for u in all_order_units if u.unit_number == unit_number), None)
+        if not active_unit:
+            active_unit = all_order_units[0] if all_order_units else None
+
+        completed_steps_ids = []
+        completed_step_logs = []
+        if active_unit:
+            step_ops = {s.step_number: s.operation for s in all_steps}
+            logs = db.query(QCStepLog).filter(
+                QCStepLog.order_id == order.order_id,
+                QCStepLog.unit_number == active_unit.unit_number,
+                QCStepLog.status == "PASS"
+            ).order_by(QCStepLog.id.asc()).all()
+            logs_by_step = {}
+            for l in logs:
+                existing = logs_by_step.get(l.step_number)
+                if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+                    logs_by_step[l.step_number] = l
+            deduped_logs = sorted(logs_by_step.values(), key=lambda x: x.step_number)
+            completed_steps_ids = [l.step_number for l in deduped_logs]
+            completed_step_logs = [
+                {
+                    "step_number": l.step_number,
+                    "photo_url": l.photo_url,
+                    "user_name": l.user_name,
+                    "is_supervisor_verified": bool(l.is_supervisor_verified),
+                    "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+                    "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
+                }
+                for l in deduped_logs
+            ]
+
+        supervisor_audit = None
+        if active_unit:
+            import json
+            aud = db.query(QCSupervisorAudit).filter(
+                QCSupervisorAudit.order_id == order.order_id,
+                QCSupervisorAudit.unit_number == active_unit.unit_number
+            ).order_by(QCSupervisorAudit.created_at.desc()).first()
+            if aud:
+                checks = []
+                if aud.checks_json:
+                    try:
+                        checks = json.loads(aud.checks_json)
+                    except Exception:
+                        checks = []
+                supervisor_audit = {
+                    "id": aud.id,
+                    "order_id": aud.order_id,
+                    "unit_number": aud.unit_number,
+                    "supervisor_id": aud.supervisor_id,
+                    "supervisor_name": aud.supervisor_name,
+                    "status": aud.status,
+                    "checks": checks,
+                    "photo_url": aud.photo_url,
+                    "notes": aud.notes or "",
+                    "created_at": aud.created_at.isoformat() if aud.created_at else None
+                }
+
+        virtual_assignment = {
+            "id": 0,
+            "order_id": order.order_id,
+            "station_number": 0,
+            "station_name": "Puesto de Supervisión & Control de Calidad",
+            "user_id": requesting_user.id,
+            "user_name": requesting_user.name,
+            "start_step": supervisor_station_steps[0]["step_number"] if supervisor_station_steps else 1,
+            "end_step": supervisor_station_steps[-1]["step_number"] if supervisor_station_steps else 1,
+            "step_numbers": ",".join(str(s["step_number"]) for s in supervisor_station_steps),
+            "is_cleaning_station": False,
+            "is_supervisor_station": True
+        }
+
+        return {
+            "active": True,
+            "is_supervisor_mode": True,
+            "assignment": virtual_assignment,
+            "order": order,
+            "supervisor_id": order.supervisor_id,
+            "supervisor_name": order.supervisor_name,
+            "available_orders": available_orders_info,
+            "station_steps": supervisor_station_steps,
+            "transferred_out_steps": [],
+            "pending_prior_steps": [],
+            "all_stations": all_stations,
+            "active_unit": active_unit,
+            "units_in_station": all_order_units,
+            "completed_step_numbers": completed_steps_ids,
+            "completed_step_logs": completed_step_logs,
+            "queue_units": [u for u in all_order_units if active_unit and u.unit_number != active_unit.unit_number],
+            "completed_units": [u for u in all_order_units if u.overall_status == "PASSED"],
+            "is_support_operator": False,
+            "requesting_user": {
+                "id": requesting_user.id,
+                "name": requesting_user.name,
+                "role": requesting_user.role
+            },
+            "supervisor_audit": supervisor_audit
+        }
+
     # Si se especificó station_number explícitamente (ej: por Supervisor, Apoyo o Admin para seleccionar puesto de trabajo)
     assignment = None
     if order_id and station_number:

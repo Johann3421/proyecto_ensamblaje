@@ -106,14 +106,20 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   }, [order?.supervisor_steps]);
 
   const [filterSupervisorOnly, setFilterSupervisorOnly] = useState(false);
+  const isSupervisorMode = Boolean(workspace.is_supervisor_mode || assignment.is_supervisor_station || assignment.station_number === 0);
 
   // Pasos de la estación filtrados si el supervisor activa su filtro personal
   const displayedStationSteps = useMemo(() => {
+    if (isSupervisorMode) return uniqueStationSteps;
     if (!filterSupervisorOnly || !supervisedStepsSet) return uniqueStationSteps;
     return uniqueStationSteps.filter(s => supervisedStepsSet.has(s.step_number));
-  }, [uniqueStationSteps, filterSupervisorOnly, supervisedStepsSet]);
+  }, [uniqueStationSteps, filterSupervisorOnly, supervisedStepsSet, isSupervisorMode]);
 
   const handleToggleStep = async (step) => {
+    if (isSupervisorMode) {
+      setSupervisorPhotoStepModal(step);
+      return;
+    }
     const isDone = completedSteps.includes(step.step_number);
     if (isDone) {
       // Desmarcar paso
@@ -236,7 +242,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           order_id: order.order_id,
           unit_number: active_unit.unit_number,
           step_number: step.step_number,
-          station_number: assignment.station_number,
+          station_number: step.station_number || assignment.station_number || 1,
           supervisor_id: currentUser.id,
           supervisor_name: currentUser.name,
           photo_url: photoUrl,
@@ -338,8 +344,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       )}
 
       {/* Selector de Inspección para Supervisor y Admin (Nunca se muestra para Apoyo) */}
+      {/* Selector de Inspección para Supervisor y Admin (Nunca se muestra para Apoyo) */}
       {!isSupport && isSupervisorUser && all_stations && all_stations.length > 0 && (
-        <Card className="p-3 bg-amber-50/70 border border-amber-200 shadow-sm">
+        <Card className="p-3 bg-amber-50/80 border border-amber-300 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
@@ -348,43 +355,31 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-amber-950 block leading-tight">
-                    Modo Auditoría e Inspección ({currentUser.role === 'SUPERVISOR' ? 'Supervisor de Calidad' : 'Administrador'})
+                    {isSupervisorMode ? 'Puesto Oficial de Supervisión & Calidad' : `Auditando Estación E${assignment.station_number}`}
                   </span>
                   <span className="text-[9px] font-bold bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-md">
-                    Auditoría en Línea
+                    {isSupervisorMode ? 'Tus Pasos Asignados' : 'Vista de Estación Específica'}
                   </span>
                 </div>
                 <span className="text-[10px] text-amber-800 block mt-0.5">
-                  Audita los puestos de ensamblaje en tiempo real y emite el V°B° normativo para liberar las unidades.
+                  {isSupervisorMode
+                    ? 'Verifica y toma evidencias fotográficas de tus pasos asignados en cualquier PC sin cambiar de estación.'
+                    : 'Inspeccionando todos los pasos del puesto seleccionado en tiempo real.'}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {supervisedStepsSet && (
-                <button
-                  type="button"
-                  onClick={() => setFilterSupervisorOnly(!filterSupervisorOnly)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs ${
-                    filterSupervisorOnly
-                      ? 'bg-primary text-white hover:bg-primary-light ring-2 ring-emerald-400'
-                      : 'bg-white text-stone-800 border border-stone-300 hover:bg-stone-50'
-                  }`}
-                  title="Muestra únicamente los pasos que tienes asignados para supervisar"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                  <span>{filterSupervisorOnly ? `Mostrando mis pasos (${supervisedStepsSet.size})` : `Filtrar solo mis pasos (${supervisedStepsSet.size})`}</span>
-                </button>
-              )}
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-amber-900 flex-shrink-0">Puesto a Auditar:</span>
+                <span className="text-[11px] font-bold text-amber-900 flex-shrink-0">Puesto:</span>
                 <select
                   value={assignment.station_number}
                   onChange={(e) => onSelectStation && onSelectStation(parseInt(e.target.value, 10))}
                   className="text-xs font-bold border border-amber-400 bg-white text-gray-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-amber-500 shadow-xs touch-target"
                 >
+                  <option value={0}>⭐ Mis Pasos de Supervisión {isSupervisorMode ? `(${uniqueStationSteps.length} pasos)` : ''}</option>
                   {all_stations.map(st => (
                     <option key={st.station_number} value={st.station_number}>
-                      E{st.station_number}: {st.station_name} (Operario: {st.user_name}) {st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
+                      Auditar E{st.station_number}: {st.station_name} (Titular: {st.user_name}) {st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
                     </option>
                   ))}
                 </select>
@@ -421,12 +416,16 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-xs font-bold text-white px-2 py-0.5 rounded shadow-xs ${
-                assignment.is_cleaning_station ? 'bg-emerald-600' : 'bg-[#1B4332]'
+                assignment.station_number === 0 ? 'bg-amber-600' : (assignment.is_cleaning_station ? 'bg-emerald-600' : 'bg-[#1B4332]')
               }`}>
-                E{assignment.station_number}
+                {assignment.station_number === 0 ? 'SUPERVISIÓN' : `E${assignment.station_number}`}
               </span>
               <h2 className="text-sm font-bold text-gray-900 truncate">{assignment.station_name}</h2>
-              {assignment.is_cleaning_station && (
+              {assignment.station_number === 0 ? (
+                <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                  <ShieldCheck className="w-3 h-3 text-amber-700" /> Pasos Oficiales del Supervisor
+                </span>
+              ) : assignment.is_cleaning_station && (
                 <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
                   🧼 Estación de Limpieza Obligatoria
                 </span>
@@ -453,7 +452,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           <div className="flex items-center justify-between mb-1.5 px-0.5">
             <span className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-primary" />
-              <span>Selección libre de PCs en tu estación ({units_in_station.length}):</span>
+              <span>
+                {isSupervisorMode 
+                  ? `Todas las PCs de la Orden (${units_in_station.length}):` 
+                  : `Selección libre de PCs en tu estación (${units_in_station.length}):`}
+              </span>
             </span>
             <span className="text-[9px] font-bold text-primary bg-white px-2 py-0.5 rounded-md border border-stone-200">
               Toca para cambiar
@@ -474,13 +477,20 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                       onSelectUnit && onSelectUnit(u.unit_number);
                     }
                   }}
-                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1 ${
+                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1.5 ${
                     isCurrent
                       ? "bg-[#1B4332] text-white shadow-md scale-105"
                       : "bg-white hover:bg-stone-200 text-gray-700 border border-gray-200"
                   }`}
                 >
                   <span>#{u.unit_number.toString().padStart(2, '0')}</span>
+                  {isSupervisorMode && u.current_station && (
+                    <span className={`text-[9px] px-1 rounded font-bold ${
+                      isCurrent ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600 border border-stone-200'
+                    }`}>
+                      E{u.current_station}
+                    </span>
+                  )}
                   {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>}
                 </button>
               );
@@ -514,7 +524,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     >
                       {units_in_station.map(u => (
                         <option key={u.unit_number} value={u.unit_number} className="text-gray-900 font-semibold">
-                          PC #{u.unit_number.toString().padStart(2, '0')} {u.unit_number === active_unit.unit_number ? '(Activa)' : ''}
+                          PC #{u.unit_number.toString().padStart(2, '0')} {isSupervisorMode && u.current_station ? `[Estación ${u.current_station}]` : ''} {u.unit_number === active_unit.unit_number ? '(Activa)' : ''}
                         </option>
                       ))}
                     </select>
@@ -908,6 +918,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                               #{st.step_number}
                             </span>
                             {st.operation}
+                            {st.station_number && (
+                              <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded ml-1.5 inline-block">
+                                Estación {st.station_number} {st.station_name ? `· ${st.station_name}` : ''}
+                              </span>
+                            )}
                             {st.is_delegated_in && (
                               <span className="text-[9px] font-bold bg-stone-200 text-stone-800 px-1.5 py-0.5 rounded border border-stone-200 ml-1.5 inline-block">
                                 Recibido de E{st.delegated_from_station}
@@ -1092,9 +1107,22 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             })}
           </div>
 
-          {/* Botón finalizar */}
+          {/* Botón de V°B° para Supervisor vs Despacho de Estación para Operario */}
           <div className="p-3 pt-0">
-            {isStationComplete ? (
+            {isSupervisorMode ? (
+              <button
+                type="button"
+                onClick={() => setSupervisorAuditModalOpen(true)}
+                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                <span>
+                  {activeSupervisorAudit?.status === "APPROVED"
+                    ? `V°B° Oficial Otorgado a PC #${active_unit.unit_number} (Ver / Modificar)`
+                    : `🛡️ Emitir V°B° Oficial Normativo a PC #${active_unit.unit_number}`}
+                </span>
+              </button>
+            ) : isStationComplete ? (
               <button
                 onClick={handleFinishStation}
                 disabled={finishingUnit}

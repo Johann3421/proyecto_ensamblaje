@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Sparkles } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Sparkles, Clock } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Card from '../components/Card';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
@@ -94,6 +94,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   const hasLastStepPhoto = lastStationStep ? Boolean(stepLogsMap[lastStationStep.step_number]?.photo_url) : false;
   const allStepsDone = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
   const isStationComplete = allStepsDone && hasLastStepPhoto;
+
+  // Pasos certificados oficialmente por el supervisor
+  const supervisorVerifiedCount = useMemo(() => {
+    return uniqueStationSteps.filter(s => Boolean(stepLogsMap[s.step_number]?.is_supervisor_verified)).length;
+  }, [uniqueStationSteps, stepLogsMap]);
 
   const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
   const isSupport = is_support_operator || currentUser.id === 'OP-106' || (currentUser.email || '').toLowerCase().includes('apoyo');
@@ -570,13 +575,17 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             {/* Barra de Progreso */}
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-blue-100">Progreso PC #{active_unit.unit_number}</span>
-                <span className="font-bold text-white">{completedSteps.length}/{totalStationSteps}</span>
+                <span className="text-blue-100">
+                  {isSupervisorMode ? `Supervisión Verificada PC #${active_unit.unit_number}` : `Progreso PC #${active_unit.unit_number}`}
+                </span>
+                <span className="font-bold text-white">
+                  {isSupervisorMode ? `${supervisorVerifiedCount}/${totalStationSteps}` : `${completedSteps.length}/${totalStationSteps}`}
+                </span>
               </div>
               <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
                 <div
                   className="bg-emerald-400 h-full rounded-full transition-all duration-300 shadow-sm"
-                  style={{ width: `${(completedSteps.length / totalStationSteps) * 100}%` }}
+                  style={{ width: `${(((isSupervisorMode ? supervisorVerifiedCount : completedSteps.length) / Math.max(totalStationSteps, 1)) * 100)}%` }}
                 ></div>
               </div>
             </div>
@@ -871,20 +880,25 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               </div>
             )}
             {displayedStationSteps.map((st) => {
-              const isDone = completedSteps.includes(st.step_number);
+              const isTechnicianDone = completedSteps.includes(st.step_number);
               const isSubmitting = submittingStep === st.step_number;
               const stepLog = stepLogsMap[st.step_number];
+              const isSupervisorVerified = Boolean(stepLog?.is_supervisor_verified);
+              // Para el supervisor, el paso SOLO es verde ("hecho") si ÉL lo verificó oficialmente
+              const isStepComplete = isSupervisorMode ? isSupervisorVerified : isTechnicianDone;
               const isSupervisedByRole = isSupervisorUser && (!supervisedStepsSet || supervisedStepsSet.has(st.step_number));
 
               return (
                 <div
                   key={st.step_number}
                   className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all duration-200 select-none ${
-                    isDone
-                      ? 'bg-emerald-50 border-emerald-400 shadow-sm'
-                      : isSubmitting
-                        ? 'bg-stone-100 border-stone-300 scale-[0.99] opacity-80'
-                        : 'bg-white border-stone-200 hover:border-stone-300 hover:shadow-md shadow-sm'
+                    isStepComplete
+                      ? 'bg-emerald-50/70 border-emerald-400 shadow-sm'
+                      : isSupervisorMode
+                        ? 'bg-stone-50/90 border-stone-300 hover:border-amber-400 shadow-xs'
+                        : isSubmitting
+                          ? 'bg-stone-100 border-stone-300 scale-[0.99] opacity-80'
+                          : 'bg-white border-stone-200 hover:border-stone-300 hover:shadow-md shadow-sm'
                   }`}
                 >
                   <div className="flex items-stretch">
@@ -892,16 +906,35 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     <div 
                       onClick={() => handleToggleStep(st)}
                       className={`w-14 sm:w-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 py-4 transition-colors cursor-pointer ${
-                        isDone ? 'bg-emerald-500 hover:bg-emerald-600' : isSubmitting ? 'bg-stone-400' : 'bg-stone-100 hover:bg-stone-200'
+                        isStepComplete
+                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                          : isSupervisorMode
+                            ? 'bg-stone-100 hover:bg-amber-50 text-stone-600 border-r border-stone-200'
+                            : isSubmitting
+                              ? 'bg-stone-400 text-white'
+                              : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
                       }`}
                     >
                       {isSubmitting ? (
                         <Loader2 className="w-7 h-7 text-white animate-spin" />
-                      ) : isDone ? (
+                      ) : isStepComplete ? (
                         <>
                           <CheckCircle className="w-7 h-7 text-white" />
-                          <span className="text-[9px] font-bold text-emerald-100 uppercase">Hecho</span>
-                          <span className="text-[8px] text-emerald-200 opacity-90 font-mono">(Quitar)</span>
+                          <span className="text-[9px] font-bold text-emerald-100 uppercase">
+                            {isSupervisorMode ? "V°B° OK" : "Hecho"}
+                          </span>
+                          <span className="text-[8px] text-emerald-200 opacity-90 font-mono">
+                            {isSupervisorMode ? "(Editar)" : "(Quitar)"}
+                          </span>
+                        </>
+                      ) : isSupervisorMode ? (
+                        <>
+                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-amber-500 bg-white flex items-center justify-center shadow-xs">
+                            <Clock className="w-4 h-4 text-amber-600" />
+                          </div>
+                          <span className="text-[9px] font-extrabold text-amber-800 uppercase tracking-tight">
+                            Pendiente
+                          </span>
                         </>
                       ) : (
                         <>
@@ -923,10 +956,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                           onClick={() => handleToggleStep(st)}
                         >
                           <p className={`text-sm font-bold leading-snug mb-1 ${
-                            isDone ? 'text-emerald-800' : 'text-stone-900'
+                            isStepComplete ? 'text-emerald-900' : 'text-stone-900'
                           }`}>
                             <span className={`text-[10px] font-bold mr-1.5 px-1.5 py-0.5 rounded ${
-                              isDone ? 'bg-emerald-200 text-emerald-700' : 'bg-stone-200 text-stone-600'
+                              isStepComplete ? 'bg-emerald-200 text-emerald-800' : 'bg-stone-200 text-stone-700'
                             }`}>
                               #{st.step_number}
                             </span>
@@ -945,19 +978,33 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 Recibido de E{st.delegated_from_station}
                               </span>
                             )}
-                            {isSupervisorUser && (
-                              supervisedStepsSet ? (
-                                supervisedStepsSet.has(st.step_number) ? (
-                                  <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded ml-1.5 inline-flex items-center gap-1">
-                                    <ShieldCheck className="w-3 h-3 text-emerald-700" />
-                                    <span>Supervisión Asignada</span>
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] text-stone-400 font-medium ml-1.5 hidden sm:inline">
-                                    (Sin supervisión requerida)
-                                  </span>
-                                )
-                              ) : null
+                            {isSupervisorMode ? (
+                              isSupervisorVerified ? (
+                                <span className="text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-full ml-1.5 inline-flex items-center gap-1 shadow-2xs">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-700" />
+                                  <span>V°B° Supervisor Aprobado</span>
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full ml-1.5 inline-flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-amber-600" />
+                                  <span>{isTechnicianDone ? "Operario completó · Falta tu V°B°" : "Pendiente de verificación"}</span>
+                                </span>
+                              )
+                            ) : (
+                              isSupervisorUser && (
+                                supervisedStepsSet ? (
+                                  supervisedStepsSet.has(st.step_number) ? (
+                                    <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded ml-1.5 inline-flex items-center gap-1">
+                                      <ShieldCheck className="w-3 h-3 text-emerald-700" />
+                                      <span>Supervisión Asignada</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] text-stone-400 font-medium ml-1.5 hidden sm:inline">
+                                      (Sin supervisión requerida)
+                                    </span>
+                                  )
+                                ) : null
+                              )
                             )}
                           </p>
 
@@ -976,13 +1023,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">{st.description}</p>
                           )}
                           <div className={`flex items-start gap-1.5 rounded-lg px-2 py-1.5 ${
-                            isDone ? 'bg-emerald-100/70' : 'bg-stone-100 border border-stone-200'
+                            isStepComplete ? 'bg-emerald-100/60' : 'bg-stone-100 border border-stone-200'
                           }`}>
                             <AlertCircle className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${
-                              isDone ? 'text-emerald-700' : 'text-primary'
+                              isStepComplete ? 'text-emerald-700' : 'text-stone-500'
                             }`} />
                             <p className={`text-xs ${
-                              isDone ? 'text-emerald-900 font-medium' : 'text-stone-900'
+                              isStepComplete ? 'text-emerald-950 font-medium' : 'text-stone-800'
                             }`}>
                               <strong>Criterio de Calidad:</strong> {st.qc_criteria || "Verificación estándar de ensamblaje"}
                             </p>
@@ -994,7 +1041,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                               <img
                                 src={stepLog.media_url || stepLog.photo_url}
                                 alt={`Evidencia paso #${st.step_number}`}
-                                className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shadow-2xs cursor-pointer hover:opacity-90"
+                                className={`w-12 h-12 rounded-lg object-cover shadow-2xs cursor-pointer hover:opacity-90 ${
+                                  isSupervisorVerified ? 'border-2 border-emerald-400' : 'border border-stone-300'
+                                }`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onPreviewPhoto && onPreviewPhoto({
@@ -1012,41 +1061,52 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 }}
                               />
                               <div className="text-[10px]">
-                                <span className="font-bold text-emerald-800 flex items-center gap-1">
+                                <span className={`font-bold flex items-center gap-1 ${
+                                  isSupervisorVerified ? 'text-emerald-800' : 'text-stone-700'
+                                }`}>
                                   <Check className="w-3 h-3 text-emerald-600" />
-                                  <span>{stepLog.is_supervisor_verified ? "Certificado por Supervisor" : "Foto registrada"}</span>
+                                  <span>{stepLog.is_supervisor_verified ? "Certificado por Supervisor" : `Foto del técnico (${stepLog.user_name || 'Operario'})`}</span>
                                 </span>
                                 <span className={`text-[9px] block ${
-                                  stepLog.is_supervisor_verified ? 'text-amber-800' : 'text-emerald-700'
+                                  stepLog.is_supervisor_verified ? 'text-emerald-700' : 'text-amber-800 font-semibold'
                                 }`}>
-                                  {stepLog.is_supervisor_verified ? `Por ${stepLog.user_name} · ` : ''}Toca para ampliar foto
+                                  {stepLog.is_supervisor_verified ? `Verificado por ${stepLog.user_name} · Toca para ampliar` : "⚠️ Falta foto oficial de cumplimiento del supervisor"}
                                 </span>
                               </div>
                             </div>
                           )}
 
                           {/* Botón de Acción Directo de Supervisor para Tomar Foto de Cumplimiento */}
-                          {isSupervisedByRole && (
-                            <div className="mt-2.5 pt-2 border-t border-amber-100 flex items-center gap-2 flex-wrap">
+                          {(isSupervisedByRole || isSupervisorMode) && (
+                            <div className="mt-2.5 pt-2 border-t border-stone-200 flex items-center gap-2 flex-wrap">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSupervisorPhotoStepModal(st);
                                 }}
-                                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition touch-target"
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target ${
+                                  isSupervisorVerified
+                                    ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300"
+                                    : "bg-amber-600 hover:bg-amber-700 text-white shadow-sm font-extrabold"
+                                }`}
                                 title="Supervisor: Tomar foto oficial evidenciando que ya se cumplió"
                               >
                                 <Camera className="w-3.5 h-3.5" />
-                                <span>Foto Cumplimiento (Supervisor)</span>
+                                <span>{isSupervisorVerified ? "Actualizar Foto Cumplimiento" : "📸 Verificar y Tomar Foto (Supervisor)"}</span>
                               </button>
-                              <span className="text-[10px] text-amber-800 font-medium">
-                                {isDone ? "Actualiza o valida cumplimiento" : "Valida con foto y aprueba paso"}
+                              <span className="text-[10px] text-stone-600 font-medium">
+                                {isSupervisorVerified ? `V°B° emitido por ${stepLog?.user_name || 'Supervisor'}` : "Valida con foto para aprobar este paso"}
                               </span>
                             </div>
                           )}
 
-                          {isDone ? (
+                          {isSupervisorMode ? (
+                            <p className="text-[9px] text-stone-500 mt-2 flex items-center gap-1">
+                              <Camera className="w-2.5 h-2.5 text-amber-600" />
+                              <span>{isSupervisorVerified ? "Paso certificado. Toca para volver a capturar si requieres corregir." : "Toca el paso para tomar la foto de cumplimiento y otorgar V°B°."}</span>
+                            </p>
+                          ) : isTechnicianDone ? (
                             <p className="text-[9px] text-emerald-600 mt-2 flex items-center gap-1 font-medium">
                               <span>↩</span> Toca la casilla izquierda si deseas desmarcar
                             </p>

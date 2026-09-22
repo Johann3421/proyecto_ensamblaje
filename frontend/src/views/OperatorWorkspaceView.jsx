@@ -854,8 +854,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 e.stopPropagation();
                                 onPreviewPhoto && onPreviewPhoto({
                                   url: stepLog.photo_url,
-                                  title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
-                                  subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
+                                  title: `PC #${active_unit?.unit_number ? active_unit.unit_number.toString().padStart(2, '0') : '??'} · Paso #${st.step_number}: ${st.operation}`,
+                                  subtitle: `Estación ${assignment?.station_number ?? 0} · ${st.operation}`,
                                   operation: st.operation,
                                   user_name: stepLog.user_name,
                                   timestamp: stepLog.timestamp,
@@ -1145,11 +1145,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                       e.stopPropagation();
                                       onPreviewPhoto && onPreviewPhoto({
                                         url: mediaUrl,
-                                        title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
-                                        subtitle: `Estación ${assignment.station_number} · Técnico: ${opLog.user_name}`,
+                                        title: `PC #${active_unit?.unit_number ? active_unit.unit_number.toString().padStart(2, '0') : '??'} · Paso #${st.step_number}: ${st.operation}`,
+                                        subtitle: `Estación ${assignment?.station_number ?? 0} · Técnico: ${opLog?.user_name || 'Operario'}`,
                                         operation: st.operation,
-                                        user_name: opLog.user_name,
-                                        timestamp: opLog.timestamp,
+                                        user_name: opLog?.user_name || 'Operario',
+                                        timestamp: opLog?.timestamp,
                                         order_id: order?.order_id,
                                         unit_number: active_unit?.unit_number,
                                         step_number: st.step_number,
@@ -1174,7 +1174,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                       <span>{isVid ? "Video (8s)" : "Foto"} del técnico</span>
                                     </span>
                                     <span className="text-[9px] text-stone-600 block">
-                                      {opLog.user_name || 'Operario'}
+                                      {opLog?.user_name || 'Operario'}
                                     </span>
                                   </div>
                                 </div>
@@ -1193,11 +1193,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                       e.stopPropagation();
                                       onPreviewPhoto && onPreviewPhoto({
                                         url: mediaUrl,
-                                        title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
+                                        title: `PC #${active_unit?.unit_number ? active_unit.unit_number.toString().padStart(2, '0') : '??'} · Paso #${st.step_number}: ${st.operation}`,
                                         subtitle: `Supervisión de Calidad · ${st.operation}`,
                                         operation: st.operation,
-                                        user_name: supLog.user_name,
-                                        timestamp: supLog.timestamp,
+                                        user_name: supLog?.user_name || 'Supervisor',
+                                        timestamp: supLog?.timestamp,
                                         order_id: order?.order_id,
                                         unit_number: active_unit?.unit_number,
                                         step_number: st.step_number,
@@ -1222,7 +1222,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                       <span>V°B° Supervisor</span>
                                     </span>
                                     <span className="text-[9px] text-stone-600 block">
-                                      {supLog.user_name}
+                                      {supLog?.user_name || 'Supervisor'}
                                     </span>
                                   </div>
                                 </div>
@@ -1250,7 +1250,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 <span>{isSupervisorVerified ? "Actualizar Foto Cumplimiento" : "📸 Verificar y Tomar Foto (Supervisor)"}</span>
                               </button>
                               <span className="text-[10px] text-stone-600 font-medium">
-                                {isSupervisorVerified ? `V°B° emitido por ${stepLog?.user_name || 'Supervisor'}` : "Valida con foto para aprobar este paso"}
+                                {isSupervisorVerified ? `V°B° emitido por ${supLog?.user_name || 'Supervisor'}` : "Valida con foto para aprobar este paso"}
                               </span>
                             </div>
                           )}

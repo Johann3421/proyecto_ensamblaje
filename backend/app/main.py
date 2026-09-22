@@ -2602,12 +2602,14 @@ async def capture_camera_photo(data: dict):
 
 def transcode_evidence_video(input_path: str, output_path: str, max_duration_sec: float = 8.5) -> bool:
     """
-    Transcodifica video a H.264 MP4 ultra-optimizado:
-    - Escala máxima: 720p manteniendo relación de aspecto
+    Transcodifica video a H.264 MP4 ultra-compatible y optimizado:
+    - Escala segura dentro de caja 1280x1280 manteniendo relación de aspecto y dimensiones estrictamente pares
+    - Pixel format yuv420p y perfil main universal para compatibilidad total en iOS, Android y navegadores web
     - Sin pista de audio (-an) para ahorrar espacio y eliminar ruidos de taller
-    - CRF 28 + preset veryfast para compresión máxima sin perder nitidez de inspección
-    - -movflags +faststart para streaming web instantáneo
-    - Trunca estrictamente a max_duration_sec (8 segundos)
+    - CRF 28 + preset veryfast para compresión sin pérdida visual de inspección (~100KB-400KB)
+    - -movflags +faststart para reproducción web instantánea sin esperar descarga completa
+    - -fflags +genpts y -avoid_negative_ts make_zero para normalizar WebM de MediaRecorder
+    - Trunca estrictamente a max_duration_sec
     """
     import subprocess
     ffmpeg_exe = None
@@ -2621,15 +2623,19 @@ def transcode_evidence_video(input_path: str, output_path: str, max_duration_sec
         ffmpeg_exe = shutil.which("ffmpeg")
 
     if not ffmpeg_exe:
-        print("[WARN] ffmpeg no encontrado; se conservará el archivo original")
+        print("[WARN] ffmpeg no encontrado en el sistema; se mantendrá archivo original")
         return False
 
     cmd = [
         ffmpeg_exe, "-y",
+        "-fflags", "+genpts",
         "-i", input_path,
         "-t", str(max_duration_sec),
-        "-vf", "scale='min(1280,iw)':-2",
+        "-avoid_negative_ts", "make_zero",
+        "-vf", "scale=w=1280:h=1280:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
         "-c:v", "libx264",
+        "-profile:v", "main",
+        "-pix_fmt", "yuv420p",
         "-preset", "veryfast",
         "-crf", "28",
         "-an",
@@ -2642,7 +2648,7 @@ def transcode_evidence_video(input_path: str, output_path: str, max_duration_sec
             return True
         else:
             err_msg = res.stderr.decode("utf-8", errors="ignore")
-            print(f"[ERROR] Fallo transcodificación ffmpeg: {err_msg[:200]}")
+            print(f"[ERROR] Fallo transcodificación ffmpeg (code {res.returncode}): {err_msg[-400:]}")
             return False
     except Exception as e:
         print(f"[ERROR] Excepción ejecutando ffmpeg: {e}")
@@ -2656,37 +2662,55 @@ async def upload_camera_video(
     """
     Recibe video grabado por cámara o subido como evidencia,
     lo transcodifica profesionalmente a MP4 H.264 (máx 8.5s, sin audio, 720p CRF 28)
-    para un consumo mínimo de disco en el VPS (~400KB - 600KB).
+    para un consumo mínimo de disco en el VPS (~100KB - 400KB).
+    Si la transcodificación no se puede realizar, conserva la extensión original real
+    sin corromper el contenedor.
     """
     import tempfile
 
+    contents = await file.read()
+    if not contents or len(contents) == 0:
+        raise HTTPException(status_code=400, detail="El archivo de video recibido está vacío.")
+
     timestamp = int(datetime.utcnow().timestamp())
     random_part = int(time.time() * 1000) % 1000
-    out_filename = f"{prefix}_vid_{timestamp}_{random_part}.mp4"
-    out_filepath = os.path.join(UPLOAD_DIR, out_filename)
 
-    # Guardar temporal para transcodificación
+    # Determinar extensión original real
+    orig_name = (file.filename or "").lower()
+    in_ext = ".mp4" if orig_name.endswith(".mp4") else ".webm"
+
     temp_dir = tempfile.gettempdir()
-    in_temp = os.path.join(temp_dir, f"raw_{timestamp}_{random_part}_{file.filename or 'clip.webm'}")
+    in_temp = os.path.join(temp_dir, f"raw_{timestamp}_{random_part}{in_ext}")
+
+    mp4_filename = f"{prefix}_vid_{timestamp}_{random_part}.mp4"
+    mp4_filepath = os.path.join(UPLOAD_DIR, mp4_filename)
+
     try:
         with open(in_temp, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(contents)
 
-        success = transcode_evidence_video(in_temp, out_filepath, max_duration_sec=8.5)
-        if not success:
-            # Fallback si ffmpeg falló
-            if not os.path.exists(out_filepath):
-                shutil.copyfile(in_temp, out_filepath)
+        success = transcode_evidence_video(in_temp, mp4_filepath, max_duration_sec=8.5)
+        if success and os.path.exists(mp4_filepath) and os.path.getsize(mp4_filepath) > 0:
+            final_filename = mp4_filename
+            final_filepath = mp4_filepath
+        else:
+            # Fallback seguro: conservar la extensión real de entrada para que el navegador
+            # y el servidor sirvan el MIME type correcto sin corromper el contenedor
+            final_filename = f"{prefix}_vid_{timestamp}_{random_part}{in_ext}"
+            final_filepath = os.path.join(UPLOAD_DIR, final_filename)
+            shutil.copyfile(in_temp, final_filepath)
 
-        file_size_kb = round(os.path.getsize(out_filepath) / 1024, 1) if os.path.exists(out_filepath) else 0
+        file_size_kb = round(os.path.getsize(final_filepath) / 1024, 1) if os.path.exists(final_filepath) else 0
 
         return {
-            "url": f"/uploads/{out_filename}",
-            "filename": out_filename,
+            "url": f"/uploads/{final_filename}",
+            "filename": final_filename,
             "type": "video",
             "size_kb": file_size_kb,
             "duration": 8
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error procesando video de evidencia: {str(e)}")
     finally:

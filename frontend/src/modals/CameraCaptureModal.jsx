@@ -585,6 +585,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                     src={capturedVideoUrl}
                     controls
                     autoPlay
+                    muted
                     loop
                     playsInline
                     className="w-full h-full object-contain"

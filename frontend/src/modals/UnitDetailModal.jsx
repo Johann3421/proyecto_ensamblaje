@@ -160,7 +160,7 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                       >
                         {isVid ? (
                           <div className="w-full h-full relative flex items-center justify-center bg-black">
-                            <video src={l.photo_url} className="w-full h-full object-cover group-hover:scale-105 transition duration-200" muted playsInline />
+                            <video src={`${l.photo_url}#t=0.001`} className="w-full h-full object-cover group-hover:scale-105 transition duration-200" muted playsInline preload="metadata" />
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                               <Play className="w-5 h-5 text-white fill-white" />
                             </div>
@@ -224,7 +224,7 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                           >
                             {isIssueVid ? (
                               <div className="w-full h-36 relative flex items-center justify-center">
-                                <video src={iss.photo_url} className="w-full h-full object-cover group-hover:scale-105 transition duration-200" muted playsInline />
+                                <video src={`${iss.photo_url}#t=0.001`} className="w-full h-full object-cover group-hover:scale-105 transition duration-200" muted playsInline preload="metadata" />
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                   <Play className="w-6 h-6 text-white fill-white" />
                                 </div>

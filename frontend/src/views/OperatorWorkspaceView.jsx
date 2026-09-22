@@ -1076,7 +1076,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 >
                                   {isVid ? (
                                     <>
-                                      <video src={mediaUrl} className="w-full h-full object-cover" muted playsInline />
+                                      <video src={`${mediaUrl}#t=0.001`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
                                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                         <Play className="w-4 h-4 text-white fill-white" />
                                       </div>

@@ -49,6 +49,7 @@ export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhoto
                 src={url} 
                 controls 
                 autoPlay 
+                muted
                 loop 
                 playsInline 
                 className="max-h-[60vh] sm:max-h-[68vh] w-auto max-w-full rounded-lg shadow-md" 

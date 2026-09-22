@@ -1571,6 +1571,9 @@ def get_operator_workspace(
 
         completed_steps_ids = []
         completed_step_logs = []
+        technician_step_numbers = []
+        supervisor_step_numbers = []
+        supervisor_step_logs = []
         if active_unit:
             step_ops = {s.step_number: s.operation for s in all_steps}
             logs = db.query(QCStepLog).filter(
@@ -1578,23 +1581,49 @@ def get_operator_workspace(
                 QCStepLog.unit_number == active_unit.unit_number,
                 QCStepLog.status == "PASS"
             ).order_by(QCStepLog.id.asc()).all()
-            logs_by_step = {}
-            for l in logs:
-                existing = logs_by_step.get(l.step_number)
+
+            op_logs = [l for l in logs if not l.is_supervisor_verified]
+            sup_logs = [l for l in logs if l.is_supervisor_verified]
+
+            op_by_step = {}
+            for l in op_logs:
+                existing = op_by_step.get(l.step_number)
                 if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
-                    logs_by_step[l.step_number] = l
-            deduped_logs = sorted(logs_by_step.values(), key=lambda x: x.step_number)
-            completed_steps_ids = [l.step_number for l in deduped_logs]
+                    op_by_step[l.step_number] = l
+            deduped_op_logs = sorted(op_by_step.values(), key=lambda x: x.step_number)
+
+            sup_by_step = {}
+            for l in sup_logs:
+                existing = sup_by_step.get(l.step_number)
+                if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+                    sup_by_step[l.step_number] = l
+            deduped_sup_logs = sorted(sup_by_step.values(), key=lambda x: x.step_number)
+
+            technician_step_numbers = [l.step_number for l in deduped_op_logs]
+            supervisor_step_numbers = [l.step_number for l in deduped_sup_logs]
+            completed_steps_ids = supervisor_step_numbers
+
             completed_step_logs = [
                 {
                     "step_number": l.step_number,
                     "photo_url": l.photo_url,
                     "user_name": l.user_name,
-                    "is_supervisor_verified": bool(l.is_supervisor_verified),
+                    "is_supervisor_verified": False,
                     "timestamp": l.timestamp.isoformat() if l.timestamp else None,
                     "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
                 }
-                for l in deduped_logs
+                for l in deduped_op_logs
+            ]
+            supervisor_step_logs = [
+                {
+                    "step_number": l.step_number,
+                    "photo_url": l.photo_url,
+                    "user_name": l.user_name,
+                    "is_supervisor_verified": True,
+                    "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+                    "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
+                }
+                for l in deduped_sup_logs
             ]
 
         supervisor_audit = None
@@ -1653,7 +1682,10 @@ def get_operator_workspace(
             "active_unit": active_unit,
             "units_in_station": all_order_units,
             "completed_step_numbers": completed_steps_ids,
+            "technician_step_numbers": technician_step_numbers,
+            "supervisor_step_numbers": supervisor_step_numbers,
             "completed_step_logs": completed_step_logs,
+            "supervisor_step_logs": supervisor_step_logs,
             "queue_units": [u for u in all_order_units if active_unit and u.unit_number != active_unit.unit_number],
             "completed_units": [u for u in all_order_units if u.overall_status == "PASSED"],
             "is_support_operator": False,
@@ -1874,6 +1906,9 @@ def get_operator_workspace(
 
     completed_steps_ids = []
     completed_step_logs = []
+    technician_step_numbers = []
+    supervisor_step_numbers = []
+    supervisor_step_logs = []
     pending_prior_steps = []
     if active_unit:
         # Consultar ítems del checklist para enriquecer logs con nombre de la operación
@@ -1885,38 +1920,58 @@ def get_operator_workspace(
             QCStepLog.status == "PASS"
         ).order_by(QCStepLog.id.asc()).all()
 
-        # Deduplicar por step_number priorizando el registro con photo_url o el más reciente
-        logs_by_step = {}
-        for l in logs:
-            existing = logs_by_step.get(l.step_number)
-            if not existing:
-                logs_by_step[l.step_number] = l
-            else:
-                if l.photo_url and not existing.photo_url:
-                    logs_by_step[l.step_number] = l
-                elif (not existing.photo_url or l.photo_url) and l.id > existing.id:
-                    logs_by_step[l.step_number] = l
+        op_logs = [l for l in logs if not l.is_supervisor_verified]
+        sup_logs = [l for l in logs if l.is_supervisor_verified]
 
-        deduped_logs = sorted(logs_by_step.values(), key=lambda x: x.step_number)
-        completed_steps_ids = [l.step_number for l in deduped_logs]
+        op_by_step = {}
+        for l in op_logs:
+            existing = op_by_step.get(l.step_number)
+            if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+                op_by_step[l.step_number] = l
+        deduped_op_logs = sorted(op_by_step.values(), key=lambda x: x.step_number)
+
+        sup_by_step = {}
+        for l in sup_logs:
+            existing = sup_by_step.get(l.step_number)
+            if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+                sup_by_step[l.step_number] = l
+        deduped_sup_logs = sorted(sup_by_step.values(), key=lambda x: x.step_number)
+
+        technician_step_numbers = [l.step_number for l in deduped_op_logs]
+        supervisor_step_numbers = [l.step_number for l in deduped_sup_logs]
+
+        # Para el TÉCNICO, sus pasos completados son ESTRICTAMENTE los del técnico:
+        completed_steps_ids = technician_step_numbers
         completed_step_logs = [
             {
                 "step_number": l.step_number,
                 "photo_url": l.photo_url,
                 "user_name": l.user_name,
-                "is_supervisor_verified": bool(l.is_supervisor_verified),
+                "is_supervisor_verified": False,
                 "timestamp": l.timestamp.isoformat() if l.timestamp else None,
                 "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
             }
-            for l in deduped_logs
+            for l in deduped_op_logs
         ]
-        # Identificar si hay pasos de estaciones previas que aún falten completar (Deduplicados)
+        supervisor_step_logs = [
+            {
+                "step_number": l.step_number,
+                "photo_url": l.photo_url,
+                "user_name": l.user_name,
+                "is_supervisor_verified": True,
+                "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+                "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
+            }
+            for l in deduped_sup_logs
+        ]
+
+        # Identificar si hay pasos de estaciones previas que aún falten completar por técnicos
         current_station_step_nums = {s["step_number"] for s in station_steps}
         min_own_step = min(assigned_step_numbers) if assigned_step_numbers else assignment.start_step
         seen_prior_step_nums = set()
         for s in all_steps:
             if (s.step_number < min_own_step 
-                and s.step_number not in completed_steps_ids 
+                and s.step_number not in technician_step_numbers 
                 and s.step_number not in current_station_step_nums
                 and s.step_number not in seen_prior_step_nums):
                 pending_prior_steps.append(s)
@@ -1970,7 +2025,10 @@ def get_operator_workspace(
         "active_unit": active_unit,
         "units_in_station": units_in_station,
         "completed_step_numbers": completed_steps_ids,
+        "technician_step_numbers": technician_step_numbers,
+        "supervisor_step_numbers": supervisor_step_numbers,
         "completed_step_logs": completed_step_logs,
+        "supervisor_step_logs": supervisor_step_logs,
         "queue_units": queue_units,
         "completed_units": completed_units,
         "is_support_operator": is_support,
@@ -1992,12 +2050,13 @@ def supervisor_verify_step_photo(req: SupervisorStepPhotoVerify, db: Session = D
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad de PC no encontrada")
 
-    # Eliminar log de PASS previo para este paso si existiese, para sustituirlo por la validación oficial del supervisor
+    # Eliminar SOLO logs previos de supervisión para este paso, respetando intacto el registro del técnico
     db.query(QCStepLog).filter(
         QCStepLog.order_id == req.order_id,
         QCStepLog.unit_number == req.unit_number,
         QCStepLog.step_number == req.step_number,
-        QCStepLog.status == "PASS"
+        QCStepLog.status == "PASS",
+        QCStepLog.is_supervisor_verified == True
     ).delete()
 
     supervisor_log = QCStepLog(
@@ -2018,7 +2077,6 @@ def supervisor_verify_step_photo(req: SupervisorStepPhotoVerify, db: Session = D
     if unit.overall_status == "PENDING":
         unit.overall_status = "IN_PROGRESS"
         unit.started_at = datetime.utcnow()
-    unit.current_step_progress = max(unit.current_step_progress, req.step_number)
 
     db.commit()
     db.refresh(supervisor_log)
@@ -2134,12 +2192,13 @@ def get_unit_supervisor_audit(order_id: str, unit_number: int, db: Session = Dep
 @api_router.post("/operator/submit-step")
 def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
     if req.status == "PASS":
-        # Limpiar logs PASS previos para esta unidad y paso, garantizando unicidad estricta de fotos
+        # Limpiar únicamente logs del TÉCNICO previos para este paso (respetando certificaciones del supervisor)
         db.query(QCStepLog).filter(
             QCStepLog.order_id == req.order_id,
             QCStepLog.unit_number == req.unit_number,
             QCStepLog.step_number == req.step_number,
-            QCStepLog.status == "PASS"
+            QCStepLog.status == "PASS",
+            QCStepLog.is_supervisor_verified == False
         ).delete()
 
     new_log = QCStepLog(
@@ -2151,6 +2210,7 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
         user_name=req.user_name,
         status=req.status,
         photo_url=req.photo_url,
+        is_supervisor_verified=False,
         notes=req.notes,
         timestamp=datetime.utcnow()
     )
@@ -2176,13 +2236,21 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
 @api_router.post("/operator/uncheck-step")
 def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
     """Desmarcar un proceso previamente aprobado para permitir correcciones inmediatas"""
-    # 1. Eliminar o invalidar el registro de PASS de este paso para esta PC
-    db.query(QCStepLog).filter(
+    # 1. Determinar si quien solicita desmarcar es supervisor o técnico
+    req_user = db.query(QCUser).filter(QCUser.id == req.user_id).first()
+    is_sup = req_user and req_user.role in ["SUPERVISOR", "ADMIN"]
+
+    q = db.query(QCStepLog).filter(
         QCStepLog.order_id == req.order_id,
         QCStepLog.unit_number == req.unit_number,
         QCStepLog.step_number == req.step_number,
         QCStepLog.status == "PASS"
-    ).delete()
+    )
+    if is_sup:
+        q = q.filter(QCStepLog.is_supervisor_verified == True)
+    else:
+        q = q.filter(QCStepLog.is_supervisor_verified == False)
+    q.delete()
 
     # 2. Registrar log de desmarcado en la auditoría
     uncheck_log = QCStepLog(
@@ -2198,7 +2266,7 @@ def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
     )
     db.add(uncheck_log)
 
-    # 3. Recalcular el progreso acumulado de la PC
+    # 3. Recalcular el progreso acumulado de la PC basado en pasos reales del técnico
     unit = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == req.order_id,
         QCPCUnit.unit_number == req.unit_number
@@ -2208,7 +2276,8 @@ def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
         remaining_logs = db.query(QCStepLog).filter(
             QCStepLog.order_id == req.order_id,
             QCStepLog.unit_number == req.unit_number,
-            QCStepLog.status == "PASS"
+            QCStepLog.status == "PASS",
+            QCStepLog.is_supervisor_verified == False
         ).all()
         unit.current_step_progress = max([l.step_number for l in remaining_logs], default=0)
         
@@ -2257,28 +2326,29 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
     effective_steps = sorted(list((set(assigned_steps) - out_steps) | in_steps))
 
     if effective_steps:
-        # 1. Comprobar que todos los pasos de la estación estén aprobados (PASS)
+        # 1. Comprobar que todos los pasos de la estación estén completados por el TÉCNICO (is_supervisor_verified == False)
         completed_logs = db.query(QCStepLog).filter(
             QCStepLog.order_id == order_id,
             QCStepLog.unit_number == unit_number,
             QCStepLog.step_number.in_(effective_steps),
-            QCStepLog.status == "PASS"
+            QCStepLog.status == "PASS",
+            QCStepLog.is_supervisor_verified == False
         ).all()
         completed_set = {l.step_number for l in completed_logs}
         missing = [s for s in effective_steps if s not in completed_set]
         if missing:
             raise HTTPException(
                 status_code=400,
-                detail=f"No se puede avanzar: Faltan completar {len(missing)} paso(s) en la Estación {station_number} (Pasos: {', '.join(map(str, missing[:5]))})."
+                detail=f"No se puede avanzar: El técnico debe completar {len(missing)} paso(s) en la Estación {station_number} (Pasos: {', '.join(map(str, missing[:5]))})."
             )
 
-        # 2. VALIDACIÓN ESTRICTA: El último paso de la estación DEBE tener fotografía de evidencia
+        # 2. VALIDACIÓN ESTRICTA: El último paso de la estación DEBE tener fotografía de evidencia tomada por el técnico
         last_step = effective_steps[-1]
         last_log = next((l for l in completed_logs if l.step_number == last_step), None)
         if not last_log or not last_log.photo_url or not last_log.photo_url.strip():
             raise HTTPException(
                 status_code=400,
-                detail=f"No se puede avanzar de estación: El último paso de la estación (Paso #{last_step}) requiere fotografía de evidencia obligatoria antes de despachar."
+                detail=f"No se puede avanzar de estación: El último paso de la estación (Paso #{last_step}) requiere fotografía de evidencia obligatoria del técnico antes de despachar."
             )
 
     next_station = station_number + 1

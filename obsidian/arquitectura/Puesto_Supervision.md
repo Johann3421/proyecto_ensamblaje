@@ -26,3 +26,9 @@ A diferencia de los puestos de operario (Estaciones 1 a 5), la Estación 0:
      3. Hardware, BIOS y POST a la primera.
      4. Trazabilidad de número de serie y marca KENYA.
    - Genera registro en `QCSupervisorAudit` (`APPROVED` / `REJECTED`).
+
+## 3. Desacoplamiento Estricto: Operario vs Supervisor
+- **Separación de Obligaciones**: La verificación de un supervisor (`is_supervisor_verified: True`) no sustituye el trabajo ni la responsabilidad del técnico de la estación (`is_supervisor_verified: False`).
+- **Independencia de Tiempos**: Si el supervisor audita un paso antes de que el técnico llegue a él, el paso **permanece pendiente e incompleto para el técnico**, requiriendo que el técnico lo realice y verifique obligatoriamente.
+- **Validación de Despacho**: Ninguna estación puede ser despachada sin que el técnico haya completado todos los pasos asignados a su puesto y tomado la foto obligatoria del último paso.
+- **Trazabilidad Doble**: Cada paso puede registrar evidencia de ambas partes simultáneamente sin sobreescritura de datos.

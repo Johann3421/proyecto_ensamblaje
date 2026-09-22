@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-09-22** | Separación estricta de verificación entre Técnico y Supervisor (auditoría previa no convalida paso al técnico) | `fix` | ✅ Completado | [[2026-09-22-separacion-estricta-verificacion-tecnico-supervisor]] |
 | **2026-09-22** | Fix de corrupción de videos en carga y reproducción (YUV420p, dimensiones pares, fallback seguro) | `fix` | ✅ Completado | [[2026-09-22-fix-corrupcion-videos-yuv420p-fallback]] |
 | **2026-09-22** | Grabación y subida de videos de evidencia de 8s (sin audio, optimizados H.264) | `feat` | ✅ Completado | [[2026-09-22-subida-videos-optimizados-8s]] |
 | **2026-09-17** | Color neutro para pasos pendientes de supervisor y verde solo al validar | `feat` | ✅ Completado | [[2026-09-17-diferenciacion-visual-pasos-supervisor]] |

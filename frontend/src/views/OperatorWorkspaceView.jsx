@@ -43,6 +43,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
   const [completedSteps, setCompletedSteps] = useState(completed_step_numbers || []);
   const [stepLogsMap, setStepLogsMap] = useState({});
+  const [operatorStepLogsMap, setOperatorStepLogsMap] = useState({});
+  const [supervisorStepLogsMap, setSupervisorStepLogsMap] = useState({});
+  const [technicianDoneSteps, setTechnicianDoneSteps] = useState([]);
+  const [supervisorDoneSteps, setSupervisorDoneSteps] = useState([]);
   const [submittingStep, setSubmittingStep] = useState(null);
   const [finishingUnit, setFinishingUnit] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -53,18 +57,42 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   const [supervisorAuditModalOpen, setSupervisorAuditModalOpen] = useState(false);
   const [activeSupervisorAudit, setActiveSupervisorAudit] = useState(supervisor_audit);
 
+  const isSupervisorMode = Boolean(workspace.is_supervisor_mode || assignment.is_supervisor_station || assignment.station_number === 0);
+
   useEffect(() => {
     setActiveSupervisorAudit(supervisor_audit || null);
   }, [supervisor_audit, active_unit?.unit_number]);
 
   useEffect(() => {
-    setCompletedSteps(completed_step_numbers || []);
-    const map = {};
+    // Si estamos en modo supervisor, completedSteps refleja los pasos certificados por el supervisor.
+    // Si estamos en modo técnico, completedSteps refleja estrictamente los pasos verificados por el técnico.
+    const techSteps = workspace.technician_step_numbers || (isSupervisorMode ? [] : (completed_step_numbers || []));
+    const supSteps = workspace.supervisor_step_numbers || (isSupervisorMode ? (completed_step_numbers || []) : []);
+    
+    setTechnicianDoneSteps(techSteps);
+    setSupervisorDoneSteps(supSteps);
+    setCompletedSteps(isSupervisorMode ? supSteps : techSteps);
+
+    const opMap = {};
     (completed_step_logs || []).forEach(l => {
-      map[l.step_number] = l;
+      if (!l.is_supervisor_verified) {
+        opMap[l.step_number] = l;
+      }
     });
-    setStepLogsMap(map);
-  }, [completed_step_numbers, completed_step_logs, active_unit?.unit_number]);
+    setOperatorStepLogsMap(opMap);
+
+    const supMap = {};
+    (workspace.supervisor_step_logs || []).forEach(l => {
+      supMap[l.step_number] = l;
+    });
+    (completed_step_logs || []).forEach(l => {
+      if (l.is_supervisor_verified) {
+        supMap[l.step_number] = l;
+      }
+    });
+    setSupervisorStepLogsMap(supMap);
+    setStepLogsMap({ ...supMap, ...opMap });
+  }, [completed_step_numbers, completed_step_logs, workspace.supervisor_step_logs, workspace.technician_step_numbers, workspace.supervisor_step_numbers, active_unit?.unit_number, isSupervisorMode]);
 
   // Deduplicación reactiva infalible de pasos de la estación
   const uniqueStationSteps = useMemo(() => {
@@ -91,14 +119,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
   const totalStationSteps = uniqueStationSteps.length;
   const lastStationStep = uniqueStationSteps[uniqueStationSteps.length - 1];
-  const hasLastStepPhoto = lastStationStep ? Boolean(stepLogsMap[lastStationStep.step_number]?.photo_url) : false;
-  const allStepsDone = totalStationSteps > 0 && completedSteps.length >= totalStationSteps;
+  const hasLastStepPhoto = lastStationStep ? Boolean(operatorStepLogsMap[lastStationStep.step_number]?.photo_url) : false;
+  const allStepsDone = totalStationSteps > 0 && uniqueStationSteps.every(s => technicianDoneSteps.includes(s.step_number));
   const isStationComplete = allStepsDone && hasLastStepPhoto;
 
   // Pasos certificados oficialmente por el supervisor
   const supervisorVerifiedCount = useMemo(() => {
-    return uniqueStationSteps.filter(s => Boolean(stepLogsMap[s.step_number]?.is_supervisor_verified)).length;
-  }, [uniqueStationSteps, stepLogsMap]);
+    return uniqueStationSteps.filter(s => supervisorDoneSteps.includes(s.step_number) || Boolean(supervisorStepLogsMap[s.step_number])).length;
+  }, [uniqueStationSteps, supervisorDoneSteps, supervisorStepLogsMap]);
 
   const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
   const isSupport = is_support_operator || currentUser.id === 'OP-106' || (currentUser.email || '').toLowerCase().includes('apoyo');
@@ -111,7 +139,6 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   }, [order?.supervisor_steps]);
 
   const [filterSupervisorOnly, setFilterSupervisorOnly] = useState(false);
-  const isSupervisorMode = Boolean(workspace.is_supervisor_mode || assignment.is_supervisor_station || assignment.station_number === 0);
 
   // Pasos de la estación filtrados si el supervisor activa su filtro personal
   const displayedStationSteps = useMemo(() => {
@@ -125,9 +152,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       setSupervisorPhotoStepModal(step);
       return;
     }
-    const isDone = completedSteps.includes(step.step_number);
+    const isDone = technicianDoneSteps.includes(step.step_number);
     if (isDone) {
-      // Desmarcar paso
+      // Desmarcar paso del técnico
       try {
         setSubmittingStep(step.step_number);
         const res = await fetch(`${API_BASE}/operator/uncheck-step`, {
@@ -144,10 +171,18 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           })
         });
         if (!res.ok) throw new Error("Error al desmarcar el paso");
+        setTechnicianDoneSteps(prev => prev.filter(num => num !== step.step_number));
         setCompletedSteps(prev => prev.filter(num => num !== step.step_number));
-        setStepLogsMap(prev => {
+        setOperatorStepLogsMap(prev => {
           const updated = { ...prev };
           delete updated[step.step_number];
+          return updated;
+        });
+        setStepLogsMap(prev => {
+          const updated = { ...prev };
+          if (!supervisorStepLogsMap[step.step_number]) {
+            delete updated[step.step_number];
+          }
           return updated;
         });
         notify(`↩ Paso #${step.step_number} desmarcado`);
@@ -157,12 +192,12 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         setSubmittingStep(null);
       }
     } else {
-      // El último paso de la estación SIEMPRE exige foto obligatoria
+      // El último paso de la estación SIEMPRE exige foto obligatoria del técnico
       const isLastStep = lastStationStep && step.step_number === lastStationStep.step_number;
       if (requirePhotoVerification || isLastStep) {
         setPhotoStepModal(step);
       } else {
-        // Marcar paso conforme sin foto
+        // Marcar paso conforme sin foto por el técnico
         try {
           setSubmittingStep(step.step_number);
           const res = await fetch(`${API_BASE}/operator/submit-step`, {
@@ -180,9 +215,24 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             })
           });
           if (!res.ok) throw new Error("Error registrando el paso");
-          setCompletedSteps(prev => [...prev, step.step_number]);
+          setTechnicianDoneSteps(prev => [...new Set([...prev, step.step_number])]);
+          setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
+          const newOpLog = {
+            step_number: step.step_number,
+            user_name: currentUser.name,
+            is_supervisor_verified: false,
+            timestamp: new Date().toISOString()
+          };
+          setOperatorStepLogsMap(prev => ({
+            ...prev,
+            [step.step_number]: newOpLog
+          }));
+          setStepLogsMap(prev => ({
+            ...prev,
+            [step.step_number]: newOpLog
+          }));
           notify(`✓ Paso #${step.step_number} verificado`);
-          if (completedSteps.length + 1 >= totalStationSteps && confetti) {
+          if (technicianDoneSteps.length + 1 >= totalStationSteps && confetti) {
             confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
           }
         } catch (err) {
@@ -214,20 +264,26 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       });
       if (!res.ok) throw new Error("Error registrando el paso con foto");
       
+      setTechnicianDoneSteps(prev => [...new Set([...prev, step.step_number])]);
       setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
+      const newOpLog = {
+        step_number: step.step_number,
+        photo_url: photoUrl,
+        user_name: currentUser.name,
+        is_supervisor_verified: false,
+        timestamp: new Date().toISOString()
+      };
+      setOperatorStepLogsMap(prev => ({
+        ...prev,
+        [step.step_number]: newOpLog
+      }));
       setStepLogsMap(prev => ({
         ...prev,
-        [step.step_number]: {
-          step_number: step.step_number,
-          photo_url: photoUrl,
-          user_name: currentUser.name,
-          is_supervisor_verified: false,
-          timestamp: new Date().toISOString()
-        }
+        [step.step_number]: newOpLog
       }));
       setPhotoStepModal(null);
       notify(`📸 ✓ Paso #${step.step_number} verificado con foto`);
-      if (completedSteps.length + 1 >= totalStationSteps && confetti) {
+      if (technicianDoneSteps.length + 1 >= totalStationSteps && confetti) {
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
       }
     } catch (err) {
@@ -258,20 +314,28 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         const err = await res.json();
         throw new Error(err.detail || "Error registrando foto de cumplimiento por supervisor");
       }
-      setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
+      setSupervisorDoneSteps(prev => [...new Set([...prev, step.step_number])]);
+      if (isSupervisorMode) {
+        setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
+      }
+      const newSupLog = {
+        step_number: step.step_number,
+        photo_url: photoUrl,
+        user_name: `${currentUser.name} (Supervisor)`,
+        is_supervisor_verified: true,
+        timestamp: new Date().toISOString()
+      };
+      setSupervisorStepLogsMap(prev => ({
+        ...prev,
+        [step.step_number]: newSupLog
+      }));
       setStepLogsMap(prev => ({
         ...prev,
-        [step.step_number]: {
-          step_number: step.step_number,
-          photo_url: photoUrl,
-          user_name: `${currentUser.name} (Supervisor)`,
-          is_supervisor_verified: true,
-          timestamp: new Date().toISOString()
-        }
+        [step.step_number]: newSupLog
       }));
       setSupervisorPhotoStepModal(null);
       notify(`🛡️ 📸 Cumplimiento del Paso #${step.step_number} verificado con foto por el supervisor`);
-      if (completedSteps.length + 1 >= totalStationSteps && confetti) {
+      if (confetti) {
         confetti({ particleCount: 70, spread: 70, origin: { y: 0.8 } });
       }
     } catch (err) {
@@ -892,11 +956,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               </div>
             )}
             {displayedStationSteps.map((st) => {
-              const isTechnicianDone = completedSteps.includes(st.step_number);
+              const isTechnicianDone = technicianDoneSteps.includes(st.step_number);
               const isSubmitting = submittingStep === st.step_number;
-              const stepLog = stepLogsMap[st.step_number];
-              const isSupervisorVerified = Boolean(stepLog?.is_supervisor_verified);
+              const opLog = operatorStepLogsMap[st.step_number];
+              const supLog = supervisorStepLogsMap[st.step_number];
+              const isSupervisorVerified = supervisorDoneSteps.includes(st.step_number) || Boolean(supLog);
               // Para el supervisor, el paso SOLO es verde ("hecho") si ÉL lo verificó oficialmente
+              // Para el técnico, el paso SOLO es verde ("hecho") si el TÉCNICO completó su propio paso
               const isStepComplete = isSupervisorMode ? isSupervisorVerified : isTechnicianDone;
               const isDone = isStepComplete;
               const isSupervisedByRole = isSupervisorUser && (!supervisedStepsSet || supervisedStepsSet.has(st.step_number));
@@ -1048,69 +1114,121 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                             </p>
                           </div>
 
-                          {/* Miniatura y Badge de Foto/Video de Evidencia Verificada */}
-                          {(stepLog?.media_url || stepLog?.photo_url) && (() => {
-                            const mediaUrl = stepLog.media_url || stepLog.photo_url;
-                            const isVid = mediaUrl.toLowerCase().endsWith('.mp4') || mediaUrl.toLowerCase().endsWith('.webm');
-                            return (
-                              <div className="mt-2 flex items-center gap-2">
-                                <div
-                                  className={`w-12 h-12 rounded-lg bg-black relative flex items-center justify-center shadow-2xs cursor-pointer overflow-hidden group hover:opacity-90 ${
-                                    isSupervisorVerified ? 'border-2 border-emerald-400' : 'border border-stone-300'
-                                  }`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onPreviewPhoto && onPreviewPhoto({
-                                      url: mediaUrl,
-                                      title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
-                                      subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
-                                      operation: st.operation,
-                                      user_name: stepLog.user_name,
-                                      timestamp: stepLog.timestamp,
-                                      order_id: order?.order_id,
-                                      unit_number: active_unit?.unit_number,
-                                      step_number: st.step_number,
-                                      station_number: assignment?.station_number
-                                    });
-                                  }}
-                                >
-                                  {isVid ? (
-                                    <>
-                                      <video src={`${mediaUrl}#t=0.001`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                        <Play className="w-4 h-4 text-white fill-white" />
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <img
-                                      src={mediaUrl}
-                                      alt={`Evidencia paso #${st.step_number}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  )}
-                                </div>
-                                <div className="text-[10px]">
-                                  <span className={`font-bold flex items-center gap-1 ${
-                                    isSupervisorVerified ? 'text-emerald-800' : 'text-stone-700'
-                                  }`}>
-                                    <Check className="w-3 h-3 text-emerald-600" />
-                                    <span>
-                                      {stepLog.is_supervisor_verified 
-                                        ? (isVid ? "Video certificado por Supervisor" : "Certificado por Supervisor") 
-                                        : `${isVid ? "Video (8s)" : "Foto"} del técnico (${stepLog.user_name || 'Operario'})`}
-                                    </span>
-                                  </span>
-                                  <span className={`text-[9px] block ${
-                                    stepLog.is_supervisor_verified ? 'text-emerald-700' : 'text-amber-800 font-semibold'
-                                  }`}>
-                                    {stepLog.is_supervisor_verified 
-                                      ? `Verificado por ${stepLog.user_name} · Toca para reproducir` 
-                                      : `⚠️ Falta ${isVid ? 'video/foto oficial' : 'foto oficial'} de cumplimiento del supervisor`}
-                                  </span>
+                          {/* Alerta contextual para el técnico cuando el supervisor revisó antes */}
+                          {isSupervisorVerified && !isTechnicianDone && !isSupervisorMode && (
+                            <div className="mt-2.5 p-2 bg-amber-50/90 border border-amber-300 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                                <div>
+                                  <p className="text-xs font-bold text-amber-900 leading-tight">
+                                    Supervisión Registrada Previamente ({supLog?.user_name || 'Supervisor'})
+                                  </p>
+                                  <p className="text-[10px] text-amber-700 leading-tight mt-0.5">
+                                    ⚠️ El técnico de la estación debe ejecutar y verificar su propio paso de forma obligatoria.
+                                  </p>
                                 </div>
                               </div>
-                            );
-                          })()}
+                            </div>
+                          )}
+
+                          {/* Miniaturas de Evidencias (Técnico y Supervisor totalmente separados) */}
+                          <div className="mt-2 flex items-center gap-3 flex-wrap">
+                            {/* Evidencia tomada por el TÉCNICO */}
+                            {(opLog?.photo_url || opLog?.media_url) && (() => {
+                              const mediaUrl = opLog.photo_url || opLog.media_url;
+                              const isVid = mediaUrl.toLowerCase().endsWith('.mp4') || mediaUrl.toLowerCase().endsWith('.webm');
+                              return (
+                                <div className="flex items-center gap-2 bg-emerald-50/60 p-1.5 rounded-xl border border-emerald-200">
+                                  <div
+                                    className="w-11 h-11 rounded-lg bg-black relative flex items-center justify-center shadow-2xs cursor-pointer overflow-hidden group hover:opacity-90 border-2 border-emerald-400 flex-shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPreviewPhoto && onPreviewPhoto({
+                                        url: mediaUrl,
+                                        title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
+                                        subtitle: `Estación ${assignment.station_number} · Técnico: ${opLog.user_name}`,
+                                        operation: st.operation,
+                                        user_name: opLog.user_name,
+                                        timestamp: opLog.timestamp,
+                                        order_id: order?.order_id,
+                                        unit_number: active_unit?.unit_number,
+                                        step_number: st.step_number,
+                                        station_number: assignment?.station_number
+                                      });
+                                    }}
+                                  >
+                                    {isVid ? (
+                                      <>
+                                        <video src={`${mediaUrl}#t=0.001`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                          <Play className="w-4 h-4 text-white fill-white" />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <img src={mediaUrl} alt={`Evidencia técnico #${st.step_number}`} className="w-full h-full object-cover" />
+                                    )}
+                                  </div>
+                                  <div className="text-[10px]">
+                                    <span className="font-bold flex items-center gap-1 text-emerald-800">
+                                      <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                                      <span>{isVid ? "Video (8s)" : "Foto"} del técnico</span>
+                                    </span>
+                                    <span className="text-[9px] text-stone-600 block">
+                                      {opLog.user_name || 'Operario'}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Evidencia tomada por el SUPERVISOR */}
+                            {(supLog?.photo_url || supLog?.media_url) && (() => {
+                              const mediaUrl = supLog.photo_url || supLog.media_url;
+                              const isVid = mediaUrl.toLowerCase().endsWith('.mp4') || mediaUrl.toLowerCase().endsWith('.webm');
+                              return (
+                                <div className="flex items-center gap-2 bg-indigo-50/70 p-1.5 rounded-xl border border-indigo-200">
+                                  <div
+                                    className="w-11 h-11 rounded-lg bg-black relative flex items-center justify-center shadow-2xs cursor-pointer overflow-hidden group hover:opacity-90 border-2 border-indigo-400 flex-shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPreviewPhoto && onPreviewPhoto({
+                                        url: mediaUrl,
+                                        title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
+                                        subtitle: `Supervisión de Calidad · ${st.operation}`,
+                                        operation: st.operation,
+                                        user_name: supLog.user_name,
+                                        timestamp: supLog.timestamp,
+                                        order_id: order?.order_id,
+                                        unit_number: active_unit?.unit_number,
+                                        step_number: st.step_number,
+                                        station_number: 0
+                                      });
+                                    }}
+                                  >
+                                    {isVid ? (
+                                      <>
+                                        <video src={`${mediaUrl}#t=0.001`} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                          <Play className="w-4 h-4 text-white fill-white" />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <img src={mediaUrl} alt={`Evidencia supervisor #${st.step_number}`} className="w-full h-full object-cover" />
+                                    )}
+                                  </div>
+                                  <div className="text-[10px]">
+                                    <span className="font-bold flex items-center gap-1 text-indigo-900">
+                                      <ShieldCheck className="w-3 h-3 text-indigo-600 flex-shrink-0" />
+                                      <span>V°B° Supervisor</span>
+                                    </span>
+                                    <span className="text-[9px] text-stone-600 block">
+                                      {supLog.user_name}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
 
                           {/* Botón de Acción Directo de Supervisor para Tomar Foto de Cumplimiento */}
                           {(isSupervisedByRole || isSupervisorMode) && (

@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-09-22** | Grabación y subida de videos de evidencia de 8s (sin audio, optimizados H.264) | `feat` | ✅ Completado | [[2026-09-22-subida-videos-optimizados-8s]] |
 | **2026-09-17** | Color neutro para pasos pendientes de supervisor y verde solo al validar | `feat` | ✅ Completado | [[2026-09-17-diferenciacion-visual-pasos-supervisor]] |
 | **2026-09-17** | Integración de Bóveda Obsidian para memoria automática ante compactación | `feat` | ✅ Completado | [[2026-09-17-integracion-obsidian-memoria]] |
 | **2026-09-17** | Puesto independiente de Supervisión (Estación 0) sin saltos a E1 ni filtros por estación física | `fix` | ✅ Completado | [[2026-09-17-estacion-supervision-independiente]] |

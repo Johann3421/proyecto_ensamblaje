@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, CheckCircle, AlertTriangle, Shield, Cpu, X, ShieldCheck, ArrowRightCircle, Trash2, RotateCcw, Trash, Camera } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, Shield, Cpu, X, ShieldCheck, ArrowRightCircle, Trash2, RotateCcw, Trash, Camera, Play, Video } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import TransferUnitModal from '../modals/TransferUnitModal';
@@ -139,37 +139,49 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {unitPhotos.map((l, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => onPreviewPhoto && onPreviewPhoto({
-                        url: l.photo_url,
-                        order_id: order.order_id,
-                        unit_number: unit.unit_number,
-                        step_number: l.step_number,
-                        station_number: l.station_number,
-                        title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
-                        subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
-                        operation: l.operation,
-                        user_name: l.user_name,
-                        timestamp: l.timestamp
-                      })}
-                      className="group relative rounded-xl overflow-hidden border border-emerald-200 bg-slate-900 cursor-pointer shadow-xs aspect-square"
-                    >
-                      <img
-                        src={l.photo_url}
-                        alt={`Paso ${l.step_number}`}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-1.5 text-white">
-                        <span className="text-[10px] font-bold block leading-tight truncate">
-                          #{l.step_number} {l.operation || `Paso ${l.step_number}`}
-                        </span>
-                        <span className="text-[8px] text-slate-300 block truncate mt-0.5">E{l.station_number} · {l.user_name}</span>
+                  {unitPhotos.map((l, idx) => {
+                    const isVid = l.photo_url && (l.photo_url.toLowerCase().endsWith('.mp4') || l.photo_url.toLowerCase().endsWith('.webm'));
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => onPreviewPhoto && onPreviewPhoto({
+                          url: l.photo_url,
+                          order_id: order.order_id,
+                          unit_number: unit.unit_number,
+                          step_number: l.step_number,
+                          station_number: l.station_number,
+                          title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
+                          subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
+                          operation: l.operation,
+                          user_name: l.user_name,
+                          timestamp: l.timestamp
+                        })}
+                        className="group relative rounded-xl overflow-hidden border border-emerald-200 bg-slate-900 cursor-pointer shadow-xs aspect-square"
+                      >
+                        {isVid ? (
+                          <div className="w-full h-full relative flex items-center justify-center bg-black">
+                            <video src={l.photo_url} className="w-full h-full object-cover group-hover:scale-105 transition duration-200" muted playsInline />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <Play className="w-5 h-5 text-white fill-white" />
+                            </div>
+                          </div>
+                        ) : (
+                          <img
+                            src={l.photo_url}
+                            alt={`Paso ${l.step_number}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                            loading="lazy"
+                          />
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-1.5 text-white">
+                          <span className="text-[10px] font-bold block leading-tight truncate">
+                            #{l.step_number} {l.operation || `Paso ${l.step_number}`}
+                          </span>
+                          <span className="text-[8px] text-slate-300 block truncate mt-0.5">E{l.station_number} · {l.user_name}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -179,46 +191,60 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
               <div className="space-y-2 pt-2 border-t border-gray-200">
                 <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1">
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Incidencias / Fallas Reportadas ({unitIssues.length})</span>
+                  <span>Reportes de Falla ({unitIssues.length})</span>
                 </p>
-                {unitIssues.map((iss, idx) => (
-                  <div key={idx} className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-rose-900 text-xs">{iss.issue_title}</span>
-                      <Badge variant="danger">{iss.severity}</Badge>
-                    </div>
-                    {iss.description && (
-                      <p className="text-[11px] text-rose-800 leading-relaxed">{iss.description}</p>
-                    )}
-                    <div className="text-[10px] text-rose-600 flex items-center justify-between">
-                      <span>Reportado por: <strong>{iss.reported_by}</strong></span>
-                      <span>Estación {iss.station_number}</span>
-                    </div>
-                    {iss.photo_url && (
-                      <div className="pt-1">
-                        <span className="text-[10px] font-bold text-gray-700 block mb-1">📸 Foto de Evidencia:</span>
-                        <div 
-                          onClick={() => onPreviewPhoto && onPreviewPhoto({
-                            url: iss.photo_url,
-                            title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Falla: ${iss.issue_title}`,
-                            subtitle: `Estación ${iss.station_number} · Reportado por ${iss.reported_by}`,
-                            user_name: iss.reported_by
-                          })}
-                          className="block relative group overflow-hidden rounded-lg border border-rose-300 cursor-pointer"
-                        >
-                          <img
-                            src={iss.photo_url}
-                            alt="Foto de la falla"
-                            className="w-full h-36 object-cover group-hover:scale-105 transition duration-200"
-                          />
-                          <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-2 py-0.5 rounded backdrop-blur-sm">
-                            🔍 Clic para ampliar
-                          </span>
-                        </div>
+                {unitIssues.map((iss, idx) => {
+                  const isIssueVid = iss.photo_url && (iss.photo_url.toLowerCase().endsWith('.mp4') || iss.photo_url.toLowerCase().endsWith('.webm'));
+                  return (
+                    <div key={idx} className="bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-900">{iss.issue_title}</span>
+                        <Badge variant="danger" size="sm">{iss.status || "OPEN"}</Badge>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {iss.description && (
+                        <p className="text-[11px] text-rose-800 leading-relaxed">{iss.description}</p>
+                      )}
+                      <div className="text-[10px] text-rose-600 flex items-center justify-between">
+                        <span>Reportado por: <strong>{iss.reported_by}</strong></span>
+                        <span>Estación {iss.station_number}</span>
+                      </div>
+                      {iss.photo_url && (
+                        <div className="pt-1">
+                          <span className="text-[10px] font-bold text-gray-700 block mb-1">
+                            {isIssueVid ? "🎥 Video de Evidencia (8s):" : "📸 Foto de Evidencia:"}
+                          </span>
+                          <div 
+                            onClick={() => onPreviewPhoto && onPreviewPhoto({
+                              url: iss.photo_url,
+                              title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Falla: ${iss.issue_title}`,
+                              subtitle: `Estación ${iss.station_number} · Reportado por ${iss.reported_by}`,
+                              user_name: iss.reported_by
+                            })}
+                            className="block relative group overflow-hidden rounded-lg border border-rose-300 cursor-pointer bg-black"
+                          >
+                            {isIssueVid ? (
+                              <div className="w-full h-36 relative flex items-center justify-center">
+                                <video src={iss.photo_url} className="w-full h-full object-cover group-hover:scale-105 transition duration-200" muted playsInline />
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                  <Play className="w-6 h-6 text-white fill-white" />
+                                </div>
+                              </div>
+                            ) : (
+                              <img
+                                src={iss.photo_url}
+                                alt="Foto de la falla"
+                                className="w-full h-36 object-cover group-hover:scale-105 transition duration-200"
+                              />
+                            )}
+                            <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-2 py-0.5 rounded backdrop-blur-sm">
+                              {isIssueVid ? "▶ Reproducir video" : "🔍 Clic para ampliar"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 

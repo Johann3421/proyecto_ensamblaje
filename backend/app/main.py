@@ -4,7 +4,7 @@ import time
 import re
 from datetime import datetime
 from typing import List, Optional
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Response, Request, Query
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Request, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -2599,6 +2599,102 @@ async def capture_camera_photo(data: dict):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error procesando captura de cámara: {str(e)}")
+
+def transcode_evidence_video(input_path: str, output_path: str, max_duration_sec: float = 8.5) -> bool:
+    """
+    Transcodifica video a H.264 MP4 ultra-optimizado:
+    - Escala máxima: 720p manteniendo relación de aspecto
+    - Sin pista de audio (-an) para ahorrar espacio y eliminar ruidos de taller
+    - CRF 28 + preset veryfast para compresión máxima sin perder nitidez de inspección
+    - -movflags +faststart para streaming web instantáneo
+    - Trunca estrictamente a max_duration_sec (8 segundos)
+    """
+    import subprocess
+    ffmpeg_exe = None
+    try:
+        import imageio_ffmpeg
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        ffmpeg_exe = shutil.which("ffmpeg")
+
+    if not ffmpeg_exe or not os.path.exists(ffmpeg_exe):
+        ffmpeg_exe = shutil.which("ffmpeg")
+
+    if not ffmpeg_exe:
+        print("[WARN] ffmpeg no encontrado; se conservará el archivo original")
+        return False
+
+    cmd = [
+        ffmpeg_exe, "-y",
+        "-i", input_path,
+        "-t", str(max_duration_sec),
+        "-vf", "scale='min(1280,iw)':-2",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "28",
+        "-an",
+        "-movflags", "+faststart",
+        output_path
+    ]
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+        if res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return True
+        else:
+            err_msg = res.stderr.decode("utf-8", errors="ignore")
+            print(f"[ERROR] Fallo transcodificación ffmpeg: {err_msg[:200]}")
+            return False
+    except Exception as e:
+        print(f"[ERROR] Excepción ejecutando ffmpeg: {e}")
+        return False
+
+@api_router.post("/camera/upload-video")
+async def upload_camera_video(
+    file: UploadFile = File(...),
+    prefix: str = Form("step")
+):
+    """
+    Recibe video grabado por cámara o subido como evidencia,
+    lo transcodifica profesionalmente a MP4 H.264 (máx 8.5s, sin audio, 720p CRF 28)
+    para un consumo mínimo de disco en el VPS (~400KB - 600KB).
+    """
+    import tempfile
+
+    timestamp = int(datetime.utcnow().timestamp())
+    random_part = int(time.time() * 1000) % 1000
+    out_filename = f"{prefix}_vid_{timestamp}_{random_part}.mp4"
+    out_filepath = os.path.join(UPLOAD_DIR, out_filename)
+
+    # Guardar temporal para transcodificación
+    temp_dir = tempfile.gettempdir()
+    in_temp = os.path.join(temp_dir, f"raw_{timestamp}_{random_part}_{file.filename or 'clip.webm'}")
+    try:
+        with open(in_temp, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        success = transcode_evidence_video(in_temp, out_filepath, max_duration_sec=8.5)
+        if not success:
+            # Fallback si ffmpeg falló
+            if not os.path.exists(out_filepath):
+                shutil.copyfile(in_temp, out_filepath)
+
+        file_size_kb = round(os.path.getsize(out_filepath) / 1024, 1) if os.path.exists(out_filepath) else 0
+
+        return {
+            "url": f"/uploads/{out_filename}",
+            "filename": out_filename,
+            "type": "video",
+            "size_kb": file_size_kb,
+            "duration": 8
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando video de evidencia: {str(e)}")
+    finally:
+        if os.path.exists(in_temp):
+            try:
+                os.remove(in_temp)
+            except Exception:
+                pass
 
 @api_router.get("/orders/{order_id}/logs")
 def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):

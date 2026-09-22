@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Sparkles, Clock } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Video, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Sparkles, Clock } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Card from '../components/Card';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
@@ -782,29 +782,41 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                         <span className="text-[10px] text-gray-500 block truncate">
                           {st.qc_criteria}
                         </span>
-                        {stepLog?.photo_url && (
-                          <div 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onPreviewPhoto && onPreviewPhoto({
-                                url: stepLog.photo_url,
-                                title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
-                                subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
-                                operation: st.operation,
-                                user_name: stepLog.user_name,
-                                timestamp: stepLog.timestamp,
-                                order_id: order?.order_id,
-                                unit_number: active_unit?.unit_number,
-                                step_number: st.step_number,
-                                station_number: assignment?.station_number
-                              });
-                            }}
-                            className="mt-1.5 inline-flex items-center gap-1.5 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-900 border border-emerald-300 transition"
-                          >
-                            <img src={stepLog.photo_url} alt="Foto" className="w-4 h-4 object-cover rounded border border-emerald-400" />
-                            <span>Ver Foto</span>
-                          </div>
-                        )}
+                        {stepLog?.photo_url && (() => {
+                          const isVid = stepLog.photo_url.toLowerCase().endsWith('.mp4') || stepLog.photo_url.toLowerCase().endsWith('.webm');
+                          return (
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onPreviewPhoto && onPreviewPhoto({
+                                  url: stepLog.photo_url,
+                                  title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
+                                  subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
+                                  operation: st.operation,
+                                  user_name: stepLog.user_name,
+                                  timestamp: stepLog.timestamp,
+                                  order_id: order?.order_id,
+                                  unit_number: active_unit?.unit_number,
+                                  step_number: st.step_number,
+                                  station_number: assignment?.station_number
+                                });
+                              }}
+                              className="mt-1.5 inline-flex items-center gap-1.5 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-900 border border-emerald-300 transition cursor-pointer"
+                            >
+                              {isVid ? (
+                                <>
+                                  <Play className="w-3 h-3 fill-emerald-800 text-emerald-800" />
+                                  <span>Ver Video (8s)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <img src={stepLog.photo_url} alt="Foto" className="w-4 h-4 object-cover rounded border border-emerald-400" />
+                                  <span>Ver Foto</span>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -1036,46 +1048,69 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                             </p>
                           </div>
 
-                          {/* Miniatura y Badge de Foto de Evidencia Verificada */}
-                          {(stepLog?.media_url || stepLog?.photo_url) && (
-                            <div className="mt-2 flex items-center gap-2">
-                              <img
-                                src={stepLog.media_url || stepLog.photo_url}
-                                alt={`Evidencia paso #${st.step_number}`}
-                                className={`w-12 h-12 rounded-lg object-cover shadow-2xs cursor-pointer hover:opacity-90 ${
-                                  isSupervisorVerified ? 'border-2 border-emerald-400' : 'border border-stone-300'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onPreviewPhoto && onPreviewPhoto({
-                                    url: stepLog.media_url || stepLog.photo_url,
-                                    title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
-                                    subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
-                                    operation: st.operation,
-                                    user_name: stepLog.user_name,
-                                    timestamp: stepLog.timestamp,
-                                    order_id: order?.order_id,
-                                    unit_number: active_unit?.unit_number,
-                                    step_number: st.step_number,
-                                    station_number: assignment?.station_number
-                                  });
-                                }}
-                              />
-                              <div className="text-[10px]">
-                                <span className={`font-bold flex items-center gap-1 ${
-                                  isSupervisorVerified ? 'text-emerald-800' : 'text-stone-700'
-                                }`}>
-                                  <Check className="w-3 h-3 text-emerald-600" />
-                                  <span>{stepLog.is_supervisor_verified ? "Certificado por Supervisor" : `Foto del técnico (${stepLog.user_name || 'Operario'})`}</span>
-                                </span>
-                                <span className={`text-[9px] block ${
-                                  stepLog.is_supervisor_verified ? 'text-emerald-700' : 'text-amber-800 font-semibold'
-                                }`}>
-                                  {stepLog.is_supervisor_verified ? `Verificado por ${stepLog.user_name} · Toca para ampliar` : "⚠️ Falta foto oficial de cumplimiento del supervisor"}
-                                </span>
+                          {/* Miniatura y Badge de Foto/Video de Evidencia Verificada */}
+                          {(stepLog?.media_url || stepLog?.photo_url) && (() => {
+                            const mediaUrl = stepLog.media_url || stepLog.photo_url;
+                            const isVid = mediaUrl.toLowerCase().endsWith('.mp4') || mediaUrl.toLowerCase().endsWith('.webm');
+                            return (
+                              <div className="mt-2 flex items-center gap-2">
+                                <div
+                                  className={`w-12 h-12 rounded-lg bg-black relative flex items-center justify-center shadow-2xs cursor-pointer overflow-hidden group hover:opacity-90 ${
+                                    isSupervisorVerified ? 'border-2 border-emerald-400' : 'border border-stone-300'
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onPreviewPhoto && onPreviewPhoto({
+                                      url: mediaUrl,
+                                      title: `PC #${active_unit.unit_number.toString().padStart(2, '0')} · Paso #${st.step_number}: ${st.operation}`,
+                                      subtitle: `Estación ${assignment.station_number} · ${st.operation}`,
+                                      operation: st.operation,
+                                      user_name: stepLog.user_name,
+                                      timestamp: stepLog.timestamp,
+                                      order_id: order?.order_id,
+                                      unit_number: active_unit?.unit_number,
+                                      step_number: st.step_number,
+                                      station_number: assignment?.station_number
+                                    });
+                                  }}
+                                >
+                                  {isVid ? (
+                                    <>
+                                      <video src={mediaUrl} className="w-full h-full object-cover" muted playsInline />
+                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                        <Play className="w-4 h-4 text-white fill-white" />
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <img
+                                      src={mediaUrl}
+                                      alt={`Evidencia paso #${st.step_number}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  )}
+                                </div>
+                                <div className="text-[10px]">
+                                  <span className={`font-bold flex items-center gap-1 ${
+                                    isSupervisorVerified ? 'text-emerald-800' : 'text-stone-700'
+                                  }`}>
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <span>
+                                      {stepLog.is_supervisor_verified 
+                                        ? (isVid ? "Video certificado por Supervisor" : "Certificado por Supervisor") 
+                                        : `${isVid ? "Video (8s)" : "Foto"} del técnico (${stepLog.user_name || 'Operario'})`}
+                                    </span>
+                                  </span>
+                                  <span className={`text-[9px] block ${
+                                    stepLog.is_supervisor_verified ? 'text-emerald-700' : 'text-amber-800 font-semibold'
+                                  }`}>
+                                    {stepLog.is_supervisor_verified 
+                                      ? `Verificado por ${stepLog.user_name} · Toca para reproducir` 
+                                      : `⚠️ Falta ${isVid ? 'video/foto oficial' : 'foto oficial'} de cumplimiento del supervisor`}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            );
+                          })()}
 
                           {/* Botón de Acción Directo de Supervisor para Tomar Foto de Cumplimiento */}
                           {(isSupervisedByRole || isSupervisorMode) && (

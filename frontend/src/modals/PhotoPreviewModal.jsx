@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, X, Camera, Wrench } from 'lucide-react';
+import { Download, X, Camera, Video, Wrench } from 'lucide-react';
 import AdminPhotoCorrectionModal from './AdminPhotoCorrectionModal';
 
 export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhotoCorrected }) {
@@ -7,7 +7,9 @@ export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhoto
   if (!photo) return null;
   const { url, title, subtitle, operation, user_name, timestamp, order_id, unit_number, step_number } = photo;
 
-  let displayTitle = title || "Evidencia Fotográfica";
+  const isVideo = url && (url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.webm') || photo.type === 'video');
+
+  let displayTitle = title || (isVideo ? "Evidencia de Video (8s)" : "Evidencia Fotográfica");
   if (operation && !displayTitle.includes(operation)) {
     displayTitle = `${displayTitle}: ${operation}`;
   }
@@ -27,8 +29,8 @@ export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhoto
           <div className="bg-slate-950 px-4 py-3 flex justify-between items-start sm:items-center border-b border-slate-800 gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="p-1 rounded bg-emerald-500/10 text-emerald-400 flex-shrink-0">
-                  <Camera className="w-4 h-4" />
+                <span className={`p-1 rounded flex-shrink-0 ${isVideo ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                  {isVideo ? <Video className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
                 </span>
                 <h3 className="text-xs sm:text-sm font-bold text-white break-words">
                   {displayTitle}
@@ -42,11 +44,22 @@ export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhoto
           </div>
 
           <div className="flex-1 bg-black p-2 flex items-center justify-center min-h-[260px] overflow-hidden">
-            <img 
-              src={url} 
-              alt="Evidencia fotográfica" 
-              className="max-h-[60vh] sm:max-h-[68vh] w-auto max-w-full object-contain rounded-lg shadow-md" 
-            />
+            {isVideo ? (
+              <video 
+                src={url} 
+                controls 
+                autoPlay 
+                loop 
+                playsInline 
+                className="max-h-[60vh] sm:max-h-[68vh] w-auto max-w-full rounded-lg shadow-md" 
+              />
+            ) : (
+              <img 
+                src={url} 
+                alt="Evidencia fotográfica" 
+                className="max-h-[60vh] sm:max-h-[68vh] w-auto max-w-full object-contain rounded-lg shadow-md" 
+              />
+            )}
           </div>
 
           <div className="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">

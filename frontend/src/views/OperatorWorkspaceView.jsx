@@ -581,19 +581,66 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               );
             })}
           </div>
+
+          {/* Fila de acceso a PCs ya completadas y despachadas de la estación */}
+          {completed_units && completed_units.length > 0 && !isSupervisorMode && (
+            <div className="mt-2 pt-2 border-t border-indigo-100 flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold text-stone-600 flex items-center gap-1 mr-1">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Despachadas a siguiente estación:</span>
+              </span>
+              {completed_units.map(u => {
+                const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
+                return (
+                  <button
+                    key={u.unit_number}
+                    type="button"
+                    onClick={() => {
+                      if (!isCurrent) {
+                        setCompletedSteps([]);
+                        setStepLogsMap({});
+                        onSelectUnit && onSelectUnit(u.unit_number);
+                      }
+                    }}
+                    className={`flex-shrink-0 px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 touch-target ${
+                      isCurrent
+                        ? "bg-emerald-700 text-white shadow-xs"
+                        : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
+                    }`}
+                    title={`Ver historial de PC #${u.unit_number} (enviada a Estación ${u.current_station})`}
+                  >
+                    <span>✓ PC #{u.unit_number.toString().padStart(2, '0')}</span>
+                    <span className="text-[8px] opacity-80">(E{u.current_station})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </Card>
       )}
 
       {active_unit ? (
         <Card className="overflow-hidden border-2 border-stone-300 shadow-md">
+          {/* Banner histórico si la PC ya pasó esta estación */}
+          {!isSupervisorMode && active_unit.current_station > assignment.station_number && (
+            <div className="bg-amber-100/90 border-b border-amber-300 px-3 py-2 text-xs text-amber-950 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+              <span>
+                <strong>Registro Histórico:</strong> Esta PC ya completó tu estación y se encuentra en <strong>Estación {active_unit.current_station}</strong>. Puedes revisar todos tus pasos y fotos registrados.
+              </span>
+            </div>
+          )}
+
           {/* Header PC activa */}
           <div className="bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white p-3 space-y-2.5">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Trabajando en</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">
+                  {!isSupervisorMode && active_unit.current_station > assignment.station_number ? 'Consultando Historial' : 'Trabajando en'}
+                </span>
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-black">PC #{active_unit.unit_number.toString().padStart(2, '0')}</h3>
-                  {units_in_station.length > 1 && (
+                  {(units_in_station.length > 1 || (completed_units && completed_units.length > 0)) && (
                     <select
                       value={active_unit.unit_number}
                       onChange={(e) => {
@@ -607,11 +654,22 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                       className="text-xs bg-white/20 text-white font-bold border border-white/40 rounded-lg px-2 py-0.5 focus:outline-none touch-target"
                       title="Cambiar a otra PC disponible"
                     >
-                      {units_in_station.map(u => (
-                        <option key={u.unit_number} value={u.unit_number} className="text-gray-900 font-semibold">
-                          PC #{u.unit_number.toString().padStart(2, '0')} {isSupervisorMode && u.current_station ? `[Estación ${u.current_station}]` : ''} {u.unit_number === active_unit.unit_number ? '(Activa)' : ''}
-                        </option>
-                      ))}
+                      <optgroup label="PCs en tu estación">
+                        {units_in_station.map(u => (
+                          <option key={u.unit_number} value={u.unit_number} className="text-gray-900 font-semibold">
+                            PC #{u.unit_number.toString().padStart(2, '0')} {isSupervisorMode && u.current_station ? `[Estación ${u.current_station}]` : ''} {u.unit_number === active_unit.unit_number ? '(Activa)' : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                      {!isSupervisorMode && completed_units && completed_units.length > 0 && (
+                        <optgroup label="PCs ya despachadas">
+                          {completed_units.map(u => (
+                            <option key={u.unit_number} value={u.unit_number} className="text-emerald-900 font-semibold">
+                              ✓ PC #{u.unit_number.toString().padStart(2, '0')} (Enviada a E{u.current_station})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   )}
                 </div>

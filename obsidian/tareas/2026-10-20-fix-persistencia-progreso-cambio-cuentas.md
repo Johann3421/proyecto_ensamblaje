@@ -28,28 +28,23 @@ La investigación en base de datos (`QCStepLog`, `QCPCUnit`) demostró que los r
 ## 3. Solución Técnica Implementada
 
 ### Backend (`backend/app/main.py`)
-1. **Fallback Inteligente de Unidad Activa**:
-   - Tanto en el workspace del supervisor (`is_supervisor_mode`) como en el del técnico, si `unit_number is None`, el backend busca y prioriza automáticamente la primera unidad con estado `IN_PROGRESS` o `current_step_progress > 0` antes de hacer fallback ciego a la primera unidad.
-2. **Soporte para Técnico Secundario**:
-   - Se añadió `(QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)` en todas las consultas de resolución de asignación.
+1. **Fallback Basado en Actividad Real (`QCStepLog`)**:
+   - En lugar de basarse ciegamente en datos mockeados del seed (`current_step_progress`), el backend consulta la actividad real más reciente en `QCStepLog` para seleccionar automáticamente la PC exacta en la que se estaba trabajando (p. ej. PC #28 o PC #1).
+2. **Acceso a Unidades Despachadas**:
+   - Se permite consultar PCs que ya avanzaron de estación (`active_unit` busca en toda la orden si se especifica `unit_number`).
+   - `completed_units` prioriza en los primeros lugares las unidades que tienen registros reales en `QCStepLog`.
 
 ### Frontend (`frontend/src/App.jsx`)
-1. **Persistencia de Unidad en `localStorage`**:
-   - `loadOperatorWorkspace` consulta `localStorage.getItem('qc_active_unit')` como fallback seguro si no se especifica `unit_number`.
-   - Al recibir la respuesta del backend, guarda `data.active_unit.unit_number` en `localStorage`.
-2. **Limpieza en Logout & Login**:
-   - `handleLogout` y `handleLogin` limpian `operatorStationFilter` y limpian `localStorage.removeItem('qc_active_unit')` en logout, evitando contaminación cruzada de puestos entre turnos.
+1. **Persistencia de PC Activa sin Pérdida al Salir**:
+   - Se conserva `qc_active_unit` en `localStorage` al hacer logout para que al alternar cuentas (ej: llamar al supervisor en la misma máquina física) el sistema mantenga seleccionada la misma PC.
 
 ### Frontend (`frontend/src/views/OperatorWorkspaceView.jsx`)
-1. **Doble Métrica de Avance en Header**:
-   - **Avance de Ensamblaje (Técnicos de Planta)**: Barra esmeralda que computa `technicianVerifiedCount` (pasos realizados por técnicos). Siempre visible tanto para operarios como para supervisores.
-   - **Certificación Oficial (V°B° Supervisor)**: Barra ámbar que computa `supervisorVerifiedCount` (visados oficiales con foto del supervisor).
-2. **Diferenciación Visual en Tarjetas de Pasos**:
-   - Cuando el supervisor entra y un paso ya fue realizado por el técnico pero aún no tiene V°B° del supervisor:
-     - Borde y fondo en tono esmeralda sutil (`border-emerald-300 bg-emerald-50/30`).
-     - Botón izquierdo con check esmeralda: **Técnico OK (Falta V°B°)**.
-     - Badge de título: `✓ Operario completó (Nombre Técnico) · Falta tu V°B°`.
-     - Miniatura de la evidencia fotográfica/video del técnico visible de inmediato.
+1. **Visibilidad de PCs Despachadas en Estación**:
+   - Se añadió un carrusel interactivo de "PCs despachadas a siguiente estación" (`completed_units`) que permite al operario volver a ver cualquier PC que ya terminó (ej. PC #1) y confirmar sus 11 pasos y fotos en modo histórico.
+2. **Doble Métrica de Avance en Header**:
+   - Barra esmeralda de avance de ensamblaje (operarios) y barra ámbar de certificación (supervisor).
+3. **Diferenciación Visual en Tarjetas**:
+   - Pasos realizados por el técnico se destacan en verde suave con badge explicativo para el supervisor.
 
 ## 4. Archivos Modificados
 - `backend/app/main.py`
@@ -57,5 +52,9 @@ La investigación en base de datos (`QCStepLog`, `QCPCUnit`) demostró que los r
 - `frontend/src/views/OperatorWorkspaceView.jsx`
 
 ## 5. Verificación
-- Bundle compilado con `npm run build` sin errores de módulos ni variables no declaradas.
-- Script de prueba `test_user_switch.py` ejecutado contra SQLite: verificado que PC #28 mantiene trazabilidad de pasos [1, 2, 3] del técnico Carlos Mendoza (`OP-101`) y el supervisor (`SUP-01`) los reconoce en `technician_step_numbers` con fallback automático.
+- Bundle compilado con `npm run build` sin errores.
+- Pruebas automatizadas de 4 escenarios:
+  1. `SUP-01` login sin parámetro `unit_number`: selecciona PC #28 con pasos `[1, 2, 3]` del técnico.
+  2. `OP-101` login sin parámetro: selecciona PC #28 con pasos `[1, 2, 3]`.
+  3. `OP-101` seleccionando PC #1: abre PC #1 en modo histórico con sus 11 pasos y foto de serie intactos.
+  4. `OP-102` en PC #1: reconoce los 11 pasos previos aprobados en Estación 1.

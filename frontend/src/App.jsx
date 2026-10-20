@@ -116,7 +116,7 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('qc_token');
     localStorage.removeItem('qc_user');
-    localStorage.removeItem('qc_active_unit');
+    // Conservar qc_active_unit para que al alternar cuentas (ej: llamar al supervisor) no se pierda la PC en curso
     setOperatorStationFilter(null);
     setAuthToken(null);
     setIsAuthenticated(false);

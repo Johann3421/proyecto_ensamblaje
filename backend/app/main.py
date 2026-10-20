@@ -1567,9 +1567,17 @@ def get_operator_workspace(
         if unit_number is not None:
             active_unit = next((u for u in all_order_units if u.unit_number == unit_number), None)
         if not active_unit and all_order_units:
-            # Priorizar la primera PC con trabajo activo en la planta (IN_PROGRESS o con pasos iniciados)
-            in_prog = next((u for u in all_order_units if u.overall_status == "IN_PROGRESS" or (u.current_step_progress and u.current_step_progress > 0)), None)
-            active_unit = in_prog if in_prog else all_order_units[0]
+            # 1. Priorizar la PC que tenga actividad real más reciente registrada en QCStepLog
+            latest_real_log = db.query(QCStepLog).filter(
+                QCStepLog.order_id == order.order_id
+            ).order_by(QCStepLog.id.desc()).first()
+            if latest_real_log:
+                active_unit = next((u for u in all_order_units if u.unit_number == latest_real_log.unit_number), None)
+
+            # 2. Si no hay logs o no se encontró, buscar unidad con estado IN_PROGRESS
+            if not active_unit:
+                in_prog = next((u for u in all_order_units if u.overall_status == "IN_PROGRESS"), None)
+                active_unit = in_prog if in_prog else all_order_units[0]
 
         completed_steps_ids = []
         completed_step_logs = []
@@ -1771,14 +1779,27 @@ def get_operator_workspace(
         QCPCUnit.overall_status.in_(["PENDING", "IN_PROGRESS"])
     ).order_by(QCPCUnit.unit_number).all()
 
-    # Selección libre de PC: si el técnico especificó una PC concreta disponible en su estación, usarla
+    # Selección libre de PC: si se especificó una PC concreta, buscarla en la orden
     active_unit = None
     if unit_number is not None:
-        active_unit = next((u for u in units_in_station if u.unit_number == unit_number), None)
+        active_unit = db.query(QCPCUnit).filter(
+            QCPCUnit.order_id == order.order_id,
+            QCPCUnit.unit_number == unit_number
+        ).first()
     if not active_unit and units_in_station:
-        # Priorizar la primera PC que esté actualmente en progreso en esta estación (IN_PROGRESS o con progreso > 0)
-        in_prog = next((u for u in units_in_station if u.overall_status == "IN_PROGRESS" or (u.current_step_progress and u.current_step_progress > 0)), None)
-        active_unit = in_prog if in_prog else units_in_station[0]
+        # 1. Priorizar la unidad de esta estación con actividad real más reciente registrada en QCStepLog
+        station_unit_nums = [u.unit_number for u in units_in_station]
+        latest_station_log = db.query(QCStepLog).filter(
+            QCStepLog.order_id == order.order_id,
+            QCStepLog.unit_number.in_(station_unit_nums)
+        ).order_by(QCStepLog.id.desc()).first()
+        if latest_station_log:
+            active_unit = next((u for u in units_in_station if u.unit_number == latest_station_log.unit_number), None)
+
+        # 2. Si no hay logs en las unidades de esta estación, buscar la primera con status IN_PROGRESS
+        if not active_unit:
+            in_prog = next((u for u in units_in_station if u.overall_status == "IN_PROGRESS"), None)
+            active_unit = in_prog if in_prog else units_in_station[0]
 
     # Consultar reasignaciones / derivaciones de pasos para esta orden
     overrides = db.query(QCStepStationOverride).filter(QCStepStationOverride.order_id == order.order_id).all()
@@ -1984,10 +2005,18 @@ def get_operator_workspace(
                 seen_prior_step_nums.add(s.step_number)
 
     queue_units = [u for u in units_in_station if active_unit and u.unit_number != active_unit.unit_number]
-    completed_units = db.query(QCPCUnit).filter(
+    # Priorizar unidades despachadas que tengan actividad real de pasos registrada en QCStepLog
+    completed_units_all = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order.order_id,
         QCPCUnit.current_station > assignment.station_number
-    ).order_by(QCPCUnit.unit_number.desc()).limit(15).all()
+    ).order_by(QCPCUnit.unit_number.asc()).all()
+    units_with_logs_set = set(
+        r[0] for r in db.query(QCStepLog.unit_number).filter(QCStepLog.order_id == order.order_id).distinct().all()
+    )
+    completed_units = sorted(
+        completed_units_all,
+        key=lambda u: (0 if u.unit_number in units_with_logs_set else 1, u.unit_number)
+    )[:15]
 
     # Consultar último visto bueno de auditoría de supervisión para la unidad activa
     supervisor_audit = None

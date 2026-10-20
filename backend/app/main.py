@@ -1566,8 +1566,10 @@ def get_operator_workspace(
         active_unit = None
         if unit_number is not None:
             active_unit = next((u for u in all_order_units if u.unit_number == unit_number), None)
-        if not active_unit:
-            active_unit = all_order_units[0] if all_order_units else None
+        if not active_unit and all_order_units:
+            # Priorizar la primera PC con trabajo activo en la planta (IN_PROGRESS o con pasos iniciados)
+            in_prog = next((u for u in all_order_units if u.overall_status == "IN_PROGRESS" or (u.current_step_progress and u.current_step_progress > 0)), None)
+            active_unit = in_prog if in_prog else all_order_units[0]
 
         completed_steps_ids = []
         completed_step_logs = []
@@ -1709,7 +1711,7 @@ def get_operator_workspace(
     if not assignment and order_id:
         assignment = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == order_id,
-            QCStationAssignment.user_id == user_id
+            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
         ).first()
         if not assignment:
             # Si el usuario es de apoyo o supervisor o no tiene estación fija en esta orden
@@ -1729,15 +1731,17 @@ def get_operator_workspace(
         ).first()
 
     if not assignment:
-        # Buscar la primera orden en progreso donde el usuario tenga asignación
+        # Buscar la primera orden en progreso donde el usuario tenga asignación (titular o secundario)
         assignment = db.query(QCStationAssignment).join(QCOrder).filter(
-            QCStationAssignment.user_id == user_id,
+            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id),
             QCOrder.status == "IN_PROGRESS"
         ).first()
 
     if not assignment:
         # Fallback a cualquier asignación del usuario
-        assignment = db.query(QCStationAssignment).filter(QCStationAssignment.user_id == user_id).first()
+        assignment = db.query(QCStationAssignment).filter(
+            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
+        ).first()
 
     if not assignment:
         # Fallback general
@@ -1771,8 +1775,10 @@ def get_operator_workspace(
     active_unit = None
     if unit_number is not None:
         active_unit = next((u for u in units_in_station if u.unit_number == unit_number), None)
-    if not active_unit:
-        active_unit = units_in_station[0] if units_in_station else None
+    if not active_unit and units_in_station:
+        # Priorizar la primera PC que esté actualmente en progreso en esta estación (IN_PROGRESS o con progreso > 0)
+        in_prog = next((u for u in units_in_station if u.overall_status == "IN_PROGRESS" or (u.current_step_progress and u.current_step_progress > 0)), None)
+        active_unit = in_prog if in_prog else units_in_station[0]
 
     # Consultar reasignaciones / derivaciones de pasos para esta orden
     overrides = db.query(QCStepStationOverride).filter(QCStepStationOverride.order_id == order.order_id).all()

@@ -106,6 +106,7 @@ export default function App() {
     setAuthToken(token);
     setCurrentUser(user);
     setIsAuthenticated(true);
+    setOperatorStationFilter(null);
     const initialTab = getCurrentRouteTab(user.role);
     setActiveTab(initialTab);
     const currentParams = getRouteParams();
@@ -115,6 +116,8 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('qc_token');
     localStorage.removeItem('qc_user');
+    localStorage.removeItem('qc_active_unit');
+    setOperatorStationFilter(null);
     setAuthToken(null);
     setIsAuthenticated(false);
     setCurrentUser({ id: '', name: '', role: '', avatar: '' });
@@ -169,8 +172,11 @@ export default function App() {
 
   const loadOperatorWorkspace = (unitNumber = null, orderId = null, stationNumber = null) => {
     if (!currentUser?.id) return;
+    const targetUnit = (unitNumber !== null && unitNumber !== undefined)
+      ? unitNumber
+      : (localStorage.getItem('qc_active_unit') ? parseInt(localStorage.getItem('qc_active_unit'), 10) : null);
     const params = new URLSearchParams();
-    if (unitNumber) params.append('unit_number', unitNumber);
+    if (targetUnit) params.append('unit_number', targetUnit);
     if (orderId) params.append('order_id', orderId);
     else if (selectedOrder) params.append('order_id', selectedOrder);
     const targetStation = (stationNumber !== null && stationNumber !== undefined) ? stationNumber : operatorStationFilter;
@@ -183,6 +189,9 @@ export default function App() {
       .then(data => {
         if (data) {
           setOperatorWorkspace(data);
+          if (data.active_unit?.unit_number) {
+            localStorage.setItem('qc_active_unit', data.active_unit.unit_number);
+          }
           if (data.order?.order_id && data.order.order_id !== selectedOrder) {
             setSelectedOrder(data.order.order_id);
           }

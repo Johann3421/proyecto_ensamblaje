@@ -128,6 +128,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
     return uniqueStationSteps.filter(s => supervisorDoneSteps.includes(s.step_number) || Boolean(supervisorStepLogsMap[s.step_number])).length;
   }, [uniqueStationSteps, supervisorDoneSteps, supervisorStepLogsMap]);
 
+  // Pasos completados por los técnicos de planta
+  const technicianVerifiedCount = useMemo(() => {
+    return uniqueStationSteps.filter(s => technicianDoneSteps.includes(s.step_number)).length;
+  }, [uniqueStationSteps, technicianDoneSteps]);
+
   const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
   const isSupport = is_support_operator || currentUser.id === 'OP-106' || (currentUser.email || '').toLowerCase().includes('apoyo');
 
@@ -637,21 +642,44 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
 
             {/* Barra de Progreso */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-blue-100">
-                  {isSupervisorMode ? `Supervisión Verificada PC #${active_unit.unit_number}` : `Progreso PC #${active_unit.unit_number}`}
-                </span>
-                <span className="font-bold text-white">
-                  {isSupervisorMode ? `${supervisorVerifiedCount}/${totalStationSteps}` : `${completedSteps.length}/${totalStationSteps}`}
-                </span>
+            <div className="space-y-2">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-blue-100 flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>{isSupervisorMode ? `Avance de Ensamblaje (Técnicos de Planta)` : `Progreso PC #${active_unit.unit_number}`}</span>
+                  </span>
+                  <span className="font-extrabold text-white font-mono">
+                    {technicianVerifiedCount}/{totalStationSteps}
+                  </span>
+                </div>
+                <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-400 h-full rounded-full transition-all duration-300 shadow-sm"
+                    style={{ width: `${((technicianVerifiedCount / Math.max(totalStationSteps, 1)) * 100)}%` }}
+                  ></div>
+                </div>
               </div>
-              <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-emerald-400 h-full rounded-full transition-all duration-300 shadow-sm"
-                  style={{ width: `${(((isSupervisorMode ? supervisorVerifiedCount : completedSteps.length) / Math.max(totalStationSteps, 1)) * 100)}%` }}
-                ></div>
-              </div>
+
+              {isSupervisorMode && (
+                <div className="pt-1 border-t border-white/10">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-amber-200 flex items-center gap-1 text-[11px] font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Certificación Oficial (V°B° Supervisor)</span>
+                    </span>
+                    <span className="font-extrabold text-amber-300 font-mono text-[11px]">
+                      {supervisorVerifiedCount}/{totalStationSteps}
+                    </span>
+                  </div>
+                  <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-amber-400 h-full rounded-full transition-all duration-300 shadow-sm"
+                      style={{ width: `${((supervisorVerifiedCount / Math.max(totalStationSteps, 1)) * 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Switch de Verificación con Foto */}
@@ -974,7 +1002,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     isStepComplete
                       ? 'bg-emerald-50/70 border-emerald-400 shadow-sm'
                       : isSupervisorMode
-                        ? 'bg-stone-50/90 border-stone-300 hover:border-amber-400 shadow-xs'
+                        ? isTechnicianDone
+                          ? 'bg-emerald-50/30 border-emerald-300 hover:border-emerald-400 shadow-xs'
+                          : 'bg-stone-50/90 border-stone-300 hover:border-amber-400 shadow-xs'
                         : isSubmitting
                           ? 'bg-stone-100 border-stone-300 scale-[0.99] opacity-80'
                           : 'bg-white border-stone-200 hover:border-stone-300 hover:shadow-md shadow-sm'
@@ -988,7 +1018,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                         isStepComplete
                           ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
                           : isSupervisorMode
-                            ? 'bg-stone-100 hover:bg-amber-50 text-stone-600 border-r border-stone-200'
+                            ? isTechnicianDone
+                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-r border-emerald-200'
+                              : 'bg-stone-100 hover:bg-amber-50 text-stone-600 border-r border-stone-200'
                             : isSubmitting
                               ? 'bg-stone-400 text-white'
                               : 'bg-stone-100 hover:bg-stone-200 text-stone-600'
@@ -1007,14 +1039,28 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                           </span>
                         </>
                       ) : isSupervisorMode ? (
-                        <>
-                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-amber-500 bg-white flex items-center justify-center shadow-xs">
-                            <Clock className="w-4 h-4 text-amber-600" />
-                          </div>
-                          <span className="text-[9px] font-extrabold text-amber-800 uppercase tracking-tight">
-                            Pendiente
-                          </span>
-                        </>
+                        isTechnicianDone ? (
+                          <>
+                            <div className="w-8 h-8 rounded-full border-2 border-emerald-500 bg-white flex items-center justify-center shadow-xs">
+                              <Check className="w-4 h-4 text-emerald-600" />
+                            </div>
+                            <span className="text-[9px] font-extrabold text-emerald-800 uppercase tracking-tight text-center leading-tight">
+                              Técnico OK
+                            </span>
+                            <span className="text-[7px] text-amber-700 font-bold tracking-tight">
+                              (Falta V°B°)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-8 h-8 rounded-full border-2 border-dashed border-amber-500 bg-white flex items-center justify-center shadow-xs">
+                              <Clock className="w-4 h-4 text-amber-600" />
+                            </div>
+                            <span className="text-[9px] font-extrabold text-amber-800 uppercase tracking-tight">
+                              Pendiente
+                            </span>
+                          </>
+                        )
                       ) : (
                         <>
                           <div className="w-8 h-8 rounded-full border-2 border-dashed border-stone-400 bg-white flex items-center justify-center">
@@ -1063,10 +1109,15 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                   <ShieldCheck className="w-3 h-3 text-emerald-700" />
                                   <span>V°B° Supervisor Aprobado</span>
                                 </span>
+                              ) : isTechnicianDone ? (
+                                <span className="text-[9px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-full ml-1.5 inline-flex items-center gap-1 shadow-2xs">
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>Operario completó ({opLog?.user_name || 'Técnico'}) · Falta tu V°B°</span>
+                                </span>
                               ) : (
                                 <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full ml-1.5 inline-flex items-center gap-1">
                                   <Clock className="w-3 h-3 text-amber-600" />
-                                  <span>{isTechnicianDone ? "Operario completó · Falta tu V°B°" : "Pendiente de verificación"}</span>
+                                  <span>Pendiente de verificación</span>
                                 </span>
                               )
                             ) : (

@@ -15,7 +15,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       <Card className="p-8 text-center max-w-sm mx-auto">
         <Coffee className="w-12 h-12 text-amber-500 mx-auto mb-3" />
         <h3 className="text-sm font-bold text-gray-900">Sin Tareas Asignadas</h3>
-        <p className="text-xs text-gray-500 mt-1">El administrador no ha lanzado un lote o no estás asignado.</p>
+        <p className="text-xs text-gray-500 mt-1">{workspace?.message || 'El administrador no ha lanzado un lote o no estás asignado.'}</p>
         <button onClick={onRefresh} className="mt-4 text-xs bg-primary text-white px-4 py-2 rounded-lg font-semibold touch-target">
           Comprobar Nuevamente
         </button>

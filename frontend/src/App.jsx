@@ -107,6 +107,7 @@ export default function App() {
     setCurrentUser(user);
     setIsAuthenticated(true);
     setOperatorStationFilter(null);
+    setSelectedOrder('');
     const initialTab = getCurrentRouteTab(user.role);
     setActiveTab(initialTab);
     const currentParams = getRouteParams();
@@ -121,6 +122,7 @@ export default function App() {
     setAuthToken(null);
     setIsAuthenticated(false);
     setCurrentUser({ id: '', name: '', role: '', avatar: '' });
+    setSelectedOrder('');
     setOrders([]);
     setMatrixData(null);
     setOperatorWorkspace(null);
@@ -133,10 +135,11 @@ export default function App() {
 
   const loadInitialData = async () => {
     try {
+      const ordersUrl = currentUser?.id ? `${API_BASE}/orders?user_id=${currentUser.id}` : `${API_BASE}/orders`;
       const [resUsers, resModels, resOrders] = await Promise.all([
         fetch(`${API_BASE}/users`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`${API_BASE}/models`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(ordersUrl).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
       if (Array.isArray(resUsers) && resUsers.length > 0) {
         setUsers(resUsers);
@@ -147,13 +150,17 @@ export default function App() {
         }
       }
       if (Array.isArray(resModels)) setModels(resModels);
-      if (Array.isArray(resOrders) && resOrders.length > 0) {
+      if (Array.isArray(resOrders)) {
         setOrders(resOrders);
         const urlParams = getRouteParams();
         if (urlParams.order && resOrders.some(o => o.order_id === urlParams.order)) {
           setSelectedOrder(urlParams.order);
-        } else if (!selectedOrder || !resOrders.some(o => o.order_id === selectedOrder)) {
-          setSelectedOrder(resOrders[0].order_id);
+        } else if (resOrders.length > 0) {
+          if (!selectedOrder || !resOrders.some(o => o.order_id === selectedOrder)) {
+            setSelectedOrder(resOrders[0].order_id);
+          }
+        } else {
+          setSelectedOrder('');
         }
       }
     } catch (err) {
@@ -200,7 +207,7 @@ export default function App() {
       .catch(err => console.error('Error workspace operario:', err));
   };
 
-  useEffect(() => { if (isAuthenticated) loadInitialData(); }, [isAuthenticated]);
+  useEffect(() => { if (isAuthenticated && currentUser?.id) loadInitialData(); }, [isAuthenticated, currentUser?.id]);
   useEffect(() => { loadMatrixData(); }, [selectedOrder]);
   useEffect(() => {
     if (activeTab === 'operator' || currentUser.role === 'OPERATOR') {
@@ -392,7 +399,7 @@ export default function App() {
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
               onPreviewPhoto={(p) => setActivePhotoPreview(p)}
               onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, operatorStationFilter)}
-              onSelectOrder={(ordId) => { handleSelectOrder(ordId); loadOperatorWorkspace(null, ordId, operatorStationFilter); }}
+              onSelectOrder={(ordId) => { setOperatorStationFilter(null); handleSelectOrder(ordId); loadOperatorWorkspace(null, ordId, null); }}
               onSelectStation={(stNum) => { setOperatorStationFilter(stNum); loadOperatorWorkspace(null, selectedOrder, stNum); }}
               onRefresh={() => loadOperatorWorkspace(null, selectedOrder, operatorStationFilter)}
               notify={notify}

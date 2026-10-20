@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-10-20** | Aislamiento estricto de órdenes de trabajo por usuario y tareas asignadas | `fix` | ✅ Completado | [[2026-10-20-aislamiento-estricto-ordenes-por-usuario]] |
 | **2026-10-20** | Fix persistencia y visualización de progreso al alternar cuentas (supervisor/operarios) | `fix` | ✅ Completado | [[2026-10-20-fix-persistencia-progreso-cambio-cuentas]] |
 | **2026-09-22** | Fix pantalla blanca en cuenta supervisor (`ReferenceError: stepLog is not defined`) | `fix` | ✅ Completado | [[2026-09-22-fix-pantalla-blanca-supervisor-steplog]] |
 | **2026-09-22** | Separación estricta de verificación entre Técnico y Supervisor (auditoría previa no convalida paso al técnico) | `fix` | ✅ Completado | [[2026-09-22-separacion-estricta-verificacion-tecnico-supervisor]] |

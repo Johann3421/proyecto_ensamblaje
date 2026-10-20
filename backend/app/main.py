@@ -887,8 +887,33 @@ async def import_model_excel(
         }
 
 @api_router.get("/orders")
-def list_orders(db: Session = Depends(get_db)):
-    orders = db.query(QCOrder).order_by(QCOrder.created_at.desc()).all()
+def list_orders(user_id: Optional[str] = None, db: Session = Depends(get_db)):
+    q = db.query(QCOrder)
+    if user_id:
+        req_u = db.query(QCUser).filter(QCUser.id == user_id).first()
+        if req_u and req_u.role != "ADMIN":
+            is_support = (user_id == "OP-106") or ("apoyo" in (req_u.email or "").lower())
+            if not is_support:
+                if req_u.role == "SUPERVISOR":
+                    # Supervisor: órdenes donde sea el supervisor asignado, o la orden no tenga supervisor específico asignado, o esté en estaciones
+                    assigned_st_orders = [
+                        sa.order_id for sa in db.query(QCStationAssignment.order_id).filter(
+                            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
+                        ).distinct().all()
+                    ]
+                    q = q.filter(
+                        (QCOrder.supervisor_id == user_id) | (QCOrder.supervisor_id.is_(None)) | (QCOrder.supervisor_id == "") | (QCOrder.order_id.in_(assigned_st_orders))
+                    )
+                else:
+                    # Operario común: SOLO órdenes donde tenga una estación asignada (titular o secundario)
+                    assigned_st_orders = [
+                        sa.order_id for sa in db.query(QCStationAssignment.order_id).filter(
+                            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
+                        ).distinct().all()
+                    ]
+                    q = q.filter(QCOrder.order_id.in_(assigned_st_orders))
+
+    orders = q.order_by(QCOrder.created_at.desc()).all()
     results = []
     for o in orders:
         total = o.total_units
@@ -1465,26 +1490,63 @@ def get_operator_workspace(
     all_orders = db.query(QCOrder).order_by(QCOrder.created_at.desc()).all()
     available_orders_info = []
     for ord_item in all_orders:
-        user_asgn = next((a for a in ord_item.stations if a.user_id == user_id), None)
+        user_asgn = next((a for a in ord_item.stations if a.user_id == user_id or a.secondary_user_id == user_id), None)
+        is_order_sup = (ord_item.supervisor_id == user_id) or (is_supervisor and not ord_item.supervisor_id)
+
+        # Regla estricta de aislamiento de órdenes:
+        # - ADMIN y Apoyo tienen visión total de planta
+        # - SUPERVISOR solo ve órdenes donde es supervisor o técnico asignado
+        # - OPERARIO solo ve órdenes donde tiene estación asignada (titular o secundario)
+        can_access = (
+            (requesting_user and requesting_user.role == "ADMIN")
+            or is_support
+            or (is_supervisor and (is_order_sup or user_asgn is not None))
+            or (user_asgn is not None)
+        )
+        if not can_access:
+            continue
+
         available_orders_info.append({
             "order_id": ord_item.order_id,
             "model_name": ord_item.model_name,
             "total_units": ord_item.total_units,
             "status": ord_item.status,
-            "is_assigned": user_asgn is not None,
-            "assigned_station": user_asgn.station_number if user_asgn else (station_number or 1),
-            "assigned_station_name": user_asgn.station_name if user_asgn else f"Estación {station_number or 1}",
+            "is_assigned": user_asgn is not None or is_order_sup,
+            "assigned_station": user_asgn.station_number if user_asgn else (0 if is_order_sup else 1),
+            "assigned_station_name": user_asgn.station_name if user_asgn else ("Supervisión" if is_order_sup else "Estación 1"),
             "is_support": is_support
         })
 
-    # Determinar orden base
+    # Si el usuario es un operario común y no tiene ninguna orden asignada
+    if not available_orders_info and requesting_user and requesting_user.role != "ADMIN" and not is_support:
+        return {
+            "active": False,
+            "message": f"Hola {requesting_user.name if requesting_user else user_id}, no tienes órdenes de trabajo asignadas en este momento."
+        }
+
+    # Determinar orden base: SOLO entre las órdenes a las que el usuario tiene acceso legítimo
+    allowed_order_ids = {o["order_id"] for o in available_orders_info}
     target_order = None
-    if order_id:
+    if order_id and order_id in allowed_order_ids:
         target_order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    elif order_id and ((requesting_user and requesting_user.role == "ADMIN") or is_support):
+        target_order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+
     if not target_order:
-        target_order = db.query(QCOrder).filter(QCOrder.status == "IN_PROGRESS").order_by(QCOrder.created_at.desc()).first()
+        # Priorizar la primera orden asignada al usuario que esté en progreso
+        first_in_prog = next((o["order_id"] for o in available_orders_info if o["status"] == "IN_PROGRESS"), None)
+        if first_in_prog:
+            target_order = db.query(QCOrder).filter(QCOrder.order_id == first_in_prog).first()
+        elif available_orders_info:
+            target_order = db.query(QCOrder).filter(QCOrder.order_id == available_orders_info[0]["order_id"]).first()
+        elif requesting_user and requesting_user.role == "ADMIN":
+            target_order = db.query(QCOrder).order_by(QCOrder.created_at.desc()).first()
+
     if not target_order:
-        target_order = db.query(QCOrder).order_by(QCOrder.created_at.desc()).first()
+        return {
+            "active": False,
+            "message": "No hay órdenes de trabajo disponibles para tu usuario."
+        }
 
     # Identificar si la solicitud es para el Puesto de Supervisión (Estación 0)
     is_supervisor_role = (requesting_user and requesting_user.role in ["SUPERVISOR", "ADMIN"]) or (target_order and target_order.supervisor_id == user_id)
@@ -1707,63 +1769,49 @@ def get_operator_workspace(
             "supervisor_audit": supervisor_audit
         }
 
-    # Si se especificó station_number explícitamente (ej: por Supervisor, Apoyo o Admin para seleccionar puesto de trabajo)
+    order = target_order
     assignment = None
-    if order_id and station_number is not None and station_number > 0:
-        assignment = db.query(QCStationAssignment).filter(
-            QCStationAssignment.order_id == order_id,
+
+    if station_number is not None and station_number > 0:
+        # Si se especificó station_number, solo permitirlo si es admin, apoyo o si el usuario está asignado a ese puesto
+        asgn_candidate = db.query(QCStationAssignment).filter(
+            QCStationAssignment.order_id == order.order_id,
             QCStationAssignment.station_number == station_number
         ).first()
+        if asgn_candidate:
+            if is_support or (requesting_user and requesting_user.role == "ADMIN") or asgn_candidate.user_id == user_id or asgn_candidate.secondary_user_id == user_id:
+                assignment = asgn_candidate
 
-    # Si se especificó un order_id, buscar la asignación directa del usuario en esa orden específica
-    if not assignment and order_id:
+    if not assignment:
+        # Buscar la asignación directa del usuario en esta orden específica
         assignment = db.query(QCStationAssignment).filter(
-            QCStationAssignment.order_id == order_id,
+            QCStationAssignment.order_id == order.order_id,
             (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
         ).first()
+
+    if not assignment and (is_support or (requesting_user and requesting_user.role in ["ADMIN", "SUPERVISOR"])):
+        # Solo apoyo, admin o supervisor pueden caer en un puesto genérico si no tienen estación fija en esta orden
+        target_st = station_number or 1
+        assignment = db.query(QCStationAssignment).filter(
+            QCStationAssignment.order_id == order.order_id,
+            QCStationAssignment.station_number == target_st
+        ).first()
         if not assignment:
-            # Si el usuario es de apoyo o supervisor o no tiene estación fija en esta orden
-            target_st = station_number or 1
             assignment = db.query(QCStationAssignment).filter(
-                QCStationAssignment.order_id == order_id,
-                QCStationAssignment.station_number == target_st
+                QCStationAssignment.order_id == order.order_id
             ).first()
-            if not assignment:
-                assignment = db.query(QCStationAssignment).filter(
-                    QCStationAssignment.order_id == order_id
-                ).first()
-
-    if not assignment and station_number:
-        assignment = db.query(QCStationAssignment).filter(
-            QCStationAssignment.station_number == station_number
-        ).first()
 
     if not assignment:
-        # Buscar la primera orden en progreso donde el usuario tenga asignación (titular o secundario)
-        assignment = db.query(QCStationAssignment).join(QCOrder).filter(
-            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id),
-            QCOrder.status == "IN_PROGRESS"
-        ).first()
-
-    if not assignment:
-        # Fallback a cualquier asignación del usuario
-        assignment = db.query(QCStationAssignment).filter(
-            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
-        ).first()
-
-    if not assignment:
-        # Fallback general
-        assignment = db.query(QCStationAssignment).first()
-        if not assignment:
-            return {"active": False, "message": "No hay órdenes ni asignaciones registradas"}
+        return {
+            "active": False,
+            "message": f"No tienes una estación de trabajo asignada en la orden {order.order_id}."
+        }
 
     # Sincronizar nombre únicamente con el titular asignado a la estación (NUNCA pisar con el nombre de apoyo o supervisor)
     u_latest = db.query(QCUser).filter(QCUser.id == assignment.user_id).first()
     if u_latest and u_latest.id == assignment.user_id and u_latest.name != assignment.user_name:
         assignment.user_name = u_latest.name
         db.commit()
-
-    order = db.query(QCOrder).filter(QCOrder.order_id == assignment.order_id).first()
     
     # DEDUPLICAR all_steps por step_number para evitar duplicados en checklists importados o modificados
     all_steps_raw = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).order_by(QCChecklistItem.step_number, QCChecklistItem.id).all()

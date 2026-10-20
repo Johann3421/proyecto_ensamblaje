@@ -176,7 +176,7 @@ export function getRouteParams() {
 
   return {
     model: model ? decodeURIComponent(model) : null,
-    order: order ? decodeURIComponent(order) : null,
+    order: order ? decodeURIComponent(order).replace(/\+/g, ' ') : null,
     section: section
   };
 }

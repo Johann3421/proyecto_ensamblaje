@@ -886,6 +886,41 @@ async def import_model_excel(
             "category": "ALL"
         }
 
+def resolve_order(db: Session, raw_order_id: Optional[str]) -> Optional[QCOrder]:
+    """
+    Busca una orden de trabajo de forma tolerante y canónica (Ley de Tesler).
+    Maneja:
+    1. Coincidencia exacta
+    2. Reemplazo de '+' como espacios (form-urlencoded)
+    3. Normalización de espacios múltiples repetidos
+    """
+    if not raw_order_id:
+        return None
+    raw = str(raw_order_id).strip()
+    if not raw:
+        return None
+
+    # 1. Coincidencia exacta
+    exact = db.query(QCOrder).filter(QCOrder.order_id == raw).first()
+    if exact:
+        return exact
+
+    # 2. Deshacer '+' de form-urlencoded (ej: 'OCAM-2026-1443-13-0+++++---2' -> 'OCAM-2026-1443-13-0     ---2')
+    plus_replaced = raw.replace("+", " ")
+    with_spaces = db.query(QCOrder).filter(QCOrder.order_id == plus_replaced).first()
+    if with_spaces:
+        return with_spaces
+
+    # 3. Comparación canónica normalizando espacios múltiples
+    clean_target = re.sub(r"\s+", " ", plus_replaced).strip().upper()
+    all_orders = db.query(QCOrder).all()
+    for o in all_orders:
+        o_clean = re.sub(r"\s+", " ", o.order_id.replace("+", " ")).strip().upper()
+        if o_clean == clean_target:
+            return o
+
+    return None
+
 @api_router.get("/orders")
 def list_orders(user_id: Optional[str] = None, db: Session = Depends(get_db)):
     q = db.query(QCOrder)
@@ -1318,34 +1353,36 @@ def update_order_stations(order_id: str, stations_data: List[StationAssignmentCr
 
 @api_router.get("/orders/{order_id}")
 def get_order_detail(order_id: str, db: Session = Depends(get_db)):
-    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    order = resolve_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    stations = db.query(QCStationAssignment).filter(QCStationAssignment.order_id == order_id).order_by(QCStationAssignment.station_number).all()
+    real_order_id = order.order_id
+    stations = db.query(QCStationAssignment).filter(QCStationAssignment.order_id == real_order_id).order_by(QCStationAssignment.station_number).all()
     for st in stations:
         u = db.query(QCUser).filter(QCUser.id == st.user_id).first()
         if u and u.name != st.user_name:
             st.user_name = u.name
             db.commit()
-    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).order_by(QCPCUnit.unit_number).all()
+    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == real_order_id).order_by(QCPCUnit.unit_number).all()
     return {"order": order, "stations": stations, "units": units}
 
 @api_router.get("/orders/{order_id}/matrix")
 def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
-    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    order = resolve_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
+    real_order_id = order.order_id
     
-    stations = db.query(QCStationAssignment).filter(QCStationAssignment.order_id == order_id).order_by(QCStationAssignment.station_number).all()
+    stations = db.query(QCStationAssignment).filter(QCStationAssignment.order_id == real_order_id).order_by(QCStationAssignment.station_number).all()
     for st in stations:
         u = db.query(QCUser).filter(QCUser.id == st.user_id).first()
         if u and u.name != st.user_name:
             st.user_name = u.name
             db.commit()
 
-    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).order_by(QCPCUnit.unit_number).all()
-    logs = db.query(QCStepLog).filter(QCStepLog.order_id == order_id).all()
-    issues = db.query(QCIssue).filter(QCIssue.order_id == order_id).all()
+    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == real_order_id).order_by(QCPCUnit.unit_number).all()
+    logs = db.query(QCStepLog).filter(QCStepLog.order_id == real_order_id).all()
+    issues = db.query(QCIssue).filter(QCIssue.order_id == real_order_id).all()
 
     return {
         "order": {
@@ -1367,16 +1404,17 @@ def get_order_matrix(order_id: str, db: Session = Depends(get_db)):
 
 @api_router.post("/orders/{order_id}/reset")
 def reset_order(order_id: str, db: Session = Depends(get_db)):
-    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    order = resolve_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
+    real_order_id = order.order_id
     
     # Limpiar logs e incidencias de esta orden
-    db.query(QCStepLog).filter(QCStepLog.order_id == order_id).delete()
-    db.query(QCIssue).filter(QCIssue.order_id == order_id).delete()
+    db.query(QCStepLog).filter(QCStepLog.order_id == real_order_id).delete()
+    db.query(QCIssue).filter(QCIssue.order_id == real_order_id).delete()
     
     # Reiniciar todas las unidades al estado inicial
-    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).all()
+    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == real_order_id).all()
     for u in units:
         u.current_station = 1
         u.overall_status = "PENDING"
@@ -1386,25 +1424,26 @@ def reset_order(order_id: str, db: Session = Depends(get_db)):
     
     order.status = "IN_PROGRESS"
     db.commit()
-    return {"message": f"Orden {order_id} reiniciada por completo. {len(units)} PCs listas en Estación 1."}
+    return {"message": f"Orden {real_order_id} reiniciada por completo. {len(units)} PCs listas en Estación 1."}
 
 @api_router.delete("/orders/{order_id}")
 def delete_order(order_id: str, db: Session = Depends(get_db)):
-    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    order = resolve_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
+    real_order_id = order.order_id
     
-    db.query(QCStepLog).filter(QCStepLog.order_id == order_id).delete()
-    db.query(QCIssue).filter(QCIssue.order_id == order_id).delete()
-    db.query(QCStationAssignment).filter(QCStationAssignment.order_id == order_id).delete()
-    db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).delete()
+    db.query(QCStepLog).filter(QCStepLog.order_id == real_order_id).delete()
+    db.query(QCIssue).filter(QCIssue.order_id == real_order_id).delete()
+    db.query(QCStationAssignment).filter(QCStationAssignment.order_id == real_order_id).delete()
+    db.query(QCPCUnit).filter(QCPCUnit.order_id == real_order_id).delete()
     db.delete(order)
     db.commit()
-    return {"message": f"Orden {order_id} y todos sus registros han sido eliminados"}
+    return {"message": f"Orden {real_order_id} y todos sus registros han sido eliminados"}
 
 @api_router.post("/orders/{order_id}/units")
 def add_units_to_order(order_id: str, req: AddUnitsRequest, db: Session = Depends(get_db)):
-    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    order = resolve_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     
@@ -1527,10 +1566,11 @@ def get_operator_workspace(
     # Determinar orden base: SOLO entre las órdenes a las que el usuario tiene acceso legítimo
     allowed_order_ids = {o["order_id"] for o in available_orders_info}
     target_order = None
-    if order_id and order_id in allowed_order_ids:
-        target_order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
-    elif order_id and ((requesting_user and requesting_user.role == "ADMIN") or is_support):
-        target_order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
+    if order_id:
+        resolved_cand = resolve_order(db, order_id)
+        if resolved_cand:
+            if resolved_cand.order_id in allowed_order_ids or (requesting_user and requesting_user.role == "ADMIN") or is_support:
+                target_order = resolved_cand
 
     if not target_order:
         # Priorizar la primera orden asignada al usuario que esté en progreso
@@ -1766,31 +1806,56 @@ def get_operator_workspace(
                 "name": requesting_user.name if requesting_user else (order.supervisor_name or "Supervisor"),
                 "role": requesting_user.role if requesting_user else "SUPERVISOR"
             },
-            "supervisor_audit": supervisor_audit
+            "supervisor_audit": supervisor_audit,
+            "user_assigned_stations": []
         }
 
     order = target_order
     assignment = None
 
+    # Obtener todas las estaciones asignadas al usuario en esta orden
+    user_assignments = db.query(QCStationAssignment).filter(
+        QCStationAssignment.order_id == order.order_id,
+        (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
+    ).order_by(QCStationAssignment.station_number.asc()).all()
+    user_st_numbers = {a.station_number: a for a in user_assignments}
+
+    # 1. Si el usuario solicitó explícitamente una estación válida
     if station_number is not None and station_number > 0:
-        # Si se especificó station_number, solo permitirlo si es admin, apoyo o si el usuario está asignado a ese puesto
-        asgn_candidate = db.query(QCStationAssignment).filter(
-            QCStationAssignment.order_id == order.order_id,
-            QCStationAssignment.station_number == station_number
-        ).first()
-        if asgn_candidate:
-            if is_support or (requesting_user and requesting_user.role == "ADMIN") or asgn_candidate.user_id == user_id or asgn_candidate.secondary_user_id == user_id:
-                assignment = asgn_candidate
+        if station_number in user_st_numbers:
+            assignment = user_st_numbers[station_number]
+        elif is_support or (requesting_user and requesting_user.role == "ADMIN"):
+            assignment = db.query(QCStationAssignment).filter(
+                QCStationAssignment.order_id == order.order_id,
+                QCStationAssignment.station_number == station_number
+            ).first()
 
-    if not assignment:
-        # Buscar la asignación directa del usuario en esta orden específica
-        assignment = db.query(QCStationAssignment).filter(
-            QCStationAssignment.order_id == order.order_id,
-            (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
+    # 2. Auto-Resolución Inteligente (Ley de Tesler):
+    # Si no se pasó estación, pero sí se solicitó una unidad específica (unit_number),
+    # verificar en qué estación está esa PC y si el usuario está asignado a ella.
+    if not assignment and unit_number is not None and user_assignments:
+        req_unit_obj = db.query(QCPCUnit).filter(
+            QCPCUnit.order_id == order.order_id,
+            QCPCUnit.unit_number == unit_number
         ).first()
+        if req_unit_obj and req_unit_obj.current_station in user_st_numbers:
+            assignment = user_st_numbers[req_unit_obj.current_station]
 
+    # 3. Si aún no hay asignación y el usuario tiene múltiples estaciones:
+    # Buscar cuál de sus estaciones tiene PCs pendientes de ensamblar
+    if not assignment and user_assignments:
+        st_with_work = db.query(QCPCUnit.current_station).filter(
+            QCPCUnit.order_id == order.order_id,
+            QCPCUnit.current_station.in_(list(user_st_numbers.keys())),
+            QCPCUnit.overall_status.in_(["IN_PROGRESS", "PENDING"])
+        ).order_by(QCPCUnit.current_station.asc()).first()
+        if st_with_work and st_with_work[0] in user_st_numbers:
+            assignment = user_st_numbers[st_with_work[0]]
+        else:
+            assignment = user_assignments[0]
+
+    # 4. Fallback para personal de apoyo o admin sin asignación fija
     if not assignment and (is_support or (requesting_user and requesting_user.role in ["ADMIN", "SUPERVISOR"])):
-        # Solo apoyo, admin o supervisor pueden caer en un puesto genérico si no tienen estación fija en esta orden
         target_st = station_number or 1
         assignment = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == order.order_id,
@@ -2120,7 +2185,15 @@ def get_operator_workspace(
             "name": requesting_user.name if requesting_user else user_id,
             "role": requesting_user.role if requesting_user else "OPERATOR"
         },
-        "supervisor_audit": supervisor_audit
+        "supervisor_audit": supervisor_audit,
+        "user_assigned_stations": [
+            {
+                "station_number": a.station_number,
+                "station_name": a.station_name,
+                "is_cleaning_station": bool(a.is_cleaning_station)
+            }
+            for a in user_assignments
+        ] if user_assignments else []
     }
 
 @api_router.post("/supervisor/verify-step-photo")
@@ -2274,10 +2347,13 @@ def get_unit_supervisor_audit(order_id: str, unit_number: int, db: Session = Dep
 
 @api_router.post("/operator/submit-step")
 def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
+    order = resolve_order(db, req.order_id)
+    real_order_id = order.order_id if order else req.order_id
+
     if req.status == "PASS":
         # Limpiar únicamente logs del TÉCNICO previos para este paso (respetando certificaciones del supervisor)
         db.query(QCStepLog).filter(
-            QCStepLog.order_id == req.order_id,
+            QCStepLog.order_id == real_order_id,
             QCStepLog.unit_number == req.unit_number,
             QCStepLog.step_number == req.step_number,
             QCStepLog.status == "PASS",
@@ -2285,7 +2361,7 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
         ).delete()
 
     new_log = QCStepLog(
-        order_id=req.order_id,
+        order_id=real_order_id,
         unit_number=req.unit_number,
         step_number=req.step_number,
         station_number=req.station_number,
@@ -2300,7 +2376,7 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
     db.add(new_log)
 
     unit = db.query(QCPCUnit).filter(
-        QCPCUnit.order_id == req.order_id,
+        QCPCUnit.order_id == real_order_id,
         QCPCUnit.unit_number == req.unit_number
     ).first()
     
@@ -2319,12 +2395,15 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
 @api_router.post("/operator/uncheck-step")
 def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
     """Desmarcar un proceso previamente aprobado para permitir correcciones inmediatas"""
+    order = resolve_order(db, req.order_id)
+    real_order_id = order.order_id if order else req.order_id
+
     # 1. Determinar si quien solicita desmarcar es supervisor o técnico
     req_user = db.query(QCUser).filter(QCUser.id == req.user_id).first()
     is_sup = req_user and req_user.role in ["SUPERVISOR", "ADMIN"]
 
     q = db.query(QCStepLog).filter(
-        QCStepLog.order_id == req.order_id,
+        QCStepLog.order_id == real_order_id,
         QCStepLog.unit_number == req.unit_number,
         QCStepLog.step_number == req.step_number,
         QCStepLog.status == "PASS"
@@ -2337,7 +2416,7 @@ def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
 
     # 2. Registrar log de desmarcado en la auditoría
     uncheck_log = QCStepLog(
-        order_id=req.order_id,
+        order_id=real_order_id,
         unit_number=req.unit_number,
         step_number=req.step_number,
         station_number=req.station_number,
@@ -2351,13 +2430,13 @@ def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
 
     # 3. Recalcular el progreso acumulado de la PC basado en pasos reales del técnico
     unit = db.query(QCPCUnit).filter(
-        QCPCUnit.order_id == req.order_id,
+        QCPCUnit.order_id == real_order_id,
         QCPCUnit.unit_number == req.unit_number
     ).first()
     
     if unit:
         remaining_logs = db.query(QCStepLog).filter(
-            QCStepLog.order_id == req.order_id,
+            QCStepLog.order_id == real_order_id,
             QCStepLog.unit_number == req.unit_number,
             QCStepLog.status == "PASS",
             QCStepLog.is_supervisor_verified == False
@@ -2369,9 +2448,14 @@ def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
 
 @api_router.post("/operator/finish-station")
 def finish_station(data: dict, db: Session = Depends(get_db)):
-    order_id = data.get("order_id")
+    raw_order_id = data.get("order_id")
     unit_number = data.get("unit_number")
     station_number = data.get("station_number")
+
+    order = resolve_order(db, raw_order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    order_id = order.order_id
 
     unit = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order_id,
@@ -2380,10 +2464,6 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
     
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
-
-    order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
 
     # Obtener los pasos asignados a esta estación
     assignment = db.query(QCStationAssignment).filter(

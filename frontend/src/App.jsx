@@ -170,7 +170,7 @@ export default function App() {
 
   const loadMatrixData = () => {
     if (selectedOrder) {
-      fetch(`${API_BASE}/orders/${selectedOrder}/matrix`)
+      fetch(`${API_BASE}/orders/${encodeURIComponent(selectedOrder)}/matrix`)
         .then(r => r.ok ? r.json() : null)
         .then(data => { if (data) setMatrixData(data); })
         .catch(err => console.error('Error matriz:', err));
@@ -186,7 +186,9 @@ export default function App() {
     if (targetUnit) params.append('unit_number', targetUnit);
     if (orderId) params.append('order_id', orderId);
     else if (selectedOrder) params.append('order_id', selectedOrder);
-    const targetStation = (stationNumber !== null && stationNumber !== undefined) ? stationNumber : operatorStationFilter;
+    const targetStation = (stationNumber !== null && stationNumber !== undefined) 
+      ? stationNumber 
+      : ((unitNumber !== null && unitNumber !== undefined) ? null : operatorStationFilter);
     if (targetStation !== null && targetStation !== undefined) {
       params.append('station_number', targetStation);
     }
@@ -196,6 +198,9 @@ export default function App() {
       .then(data => {
         if (data) {
           setOperatorWorkspace(data);
+          if (data.assignment?.station_number !== undefined && currentUser.role === 'OPERATOR') {
+            setOperatorStationFilter(data.assignment.station_number);
+          }
           if (data.active_unit?.unit_number) {
             localStorage.setItem('qc_active_unit', data.active_unit.unit_number);
           }
@@ -398,7 +403,7 @@ export default function App() {
               onOpenMedia={(item) => setActiveMediaModal(item)}
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
               onPreviewPhoto={(p) => setActivePhotoPreview(p)}
-              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, operatorStationFilter)}
+              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, null)}
               onSelectOrder={(ordId) => { setOperatorStationFilter(null); handleSelectOrder(ordId); loadOperatorWorkspace(null, ordId, null); }}
               onSelectStation={(stNum) => { setOperatorStationFilter(stNum); loadOperatorWorkspace(null, selectedOrder, stNum); }}
               onRefresh={() => loadOperatorWorkspace(null, selectedOrder, operatorStationFilter)}

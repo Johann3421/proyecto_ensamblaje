@@ -38,7 +38,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
     queue_units = [], 
     completed_units = [],
     is_support_operator = false,
-    supervisor_audit = null
+    supervisor_audit = null,
+    user_assigned_stations = []
   } = workspace;
 
   const [completedSteps, setCompletedSteps] = useState(completed_step_numbers || []);
@@ -417,7 +418,52 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         </Card>
       )}
 
-      {/* Selector de Inspección para Supervisor y Admin (Nunca se muestra para Apoyo) */}
+      {/* Selector de Estaciones para Operadores con Múltiples Puestos Asignados */}
+      {!isSupport && !isSupervisorMode && user_assigned_stations && user_assigned_stations.length > 1 && (
+        <Card className="p-3 bg-emerald-50/80 border border-emerald-300 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
+                <Layers className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-emerald-950 block leading-tight">
+                  Puestos asignados a tu usuario ({user_assigned_stations.length})
+                </span>
+                <span className="text-[10px] text-emerald-800 block mt-0.5">
+                  Estás en <strong>E{assignment.station_number}: {assignment.station_name}</strong>. Cambia de puesto cuando sea necesario:
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {user_assigned_stations.map(st => {
+                const isCurrent = assignment.station_number === st.station_number;
+                return (
+                  <button
+                    key={st.station_number}
+                    type="button"
+                    onClick={() => {
+                      if (!isCurrent && onSelectStation) {
+                        onSelectStation(st.station_number);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1.5 ${
+                      isCurrent
+                        ? "bg-emerald-800 text-white shadow-xs"
+                        : "bg-white text-emerald-900 border border-emerald-300 hover:bg-emerald-100"
+                    }`}
+                  >
+                    <span>E{st.station_number}: {st.station_name}</span>
+                    {st.is_cleaning_station && <span className="text-[9px] opacity-80">[Limpieza]</span>}
+                    {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Selector de Inspección para Supervisor y Admin (Nunca se muestra para Apoyo) */}
       {!isSupport && isSupervisorUser && all_stations && all_stations.length > 0 && (
         <Card className="p-3 bg-amber-50/80 border border-amber-300 shadow-sm">
@@ -532,7 +578,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       </Card>
 
       {/* SELECTOR RÁPIDO DE PCs (Libre Selección por el Técnico) */}
-      {units_in_station.length > 1 && (
+      {((units_in_station && units_in_station.length > 0) || (completed_units && completed_units.length > 0) || isSupervisorMode) && (
         <Card className="p-2.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-stone-200 shadow-sm">
           <div className="flex items-center justify-between mb-1.5 px-0.5">
             <span className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
@@ -540,7 +586,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               <span>
                 {isSupervisorMode 
                   ? `Todas las PCs de la Orden (${units_in_station.length}):` 
-                  : `Selección libre de PCs en tu estación (${units_in_station.length}):`}
+                  : `PCs en tu estación (${units_in_station.length}):`}
               </span>
             </span>
             <span className="text-[9px] font-bold text-primary bg-white px-2 py-0.5 rounded-md border border-stone-200">
@@ -549,6 +595,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           </div>
 
           <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {units_in_station.length === 0 && (
+              <span className="text-[11px] text-stone-500 italic py-1 px-1">
+                No hay PCs pendientes en esta estación.
+              </span>
+            )}
             {units_in_station.map(u => {
               const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
               return (

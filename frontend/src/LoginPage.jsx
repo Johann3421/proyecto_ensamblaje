@@ -295,11 +295,11 @@ export default function LoginPage({ onLogin }) {
                     );
                   })()}
 
-                  {/* Operarios 1 a 5 */}
-                  {[1, 2, 3, 4, 5].map((stNum) => {
+                  {/* Operarios 1 a 6 */}
+                  {[1, 2, 3, 4, 5, 6].map((stNum) => {
                     const opId = `OP-10${stNum}`;
                     const u = availableUsers.find(x => x.id === opId);
-                    const uEmail = u?.email || `estacion${stNum}@sekaitech.com.pe`;
+                    const uEmail = u?.email || (stNum === 6 ? 'apoyo@sekaitech.com.pe' : `estacion${stNum}@sekaitech.com.pe`);
                     const uName = u?.name || `Operario ${stNum}`;
                     return (
                       <button
@@ -320,28 +320,6 @@ export default function LoginPage({ onLogin }) {
                     );
                   })}
                 </div>
-                {/* Apoyo / Suplente */}
-                {(() => {
-                  const u = availableUsers.find(x => x.id === 'OP-106');
-                  const uEmail = u?.email || 'apoyo@sekaitech.com.pe';
-                  const uName = u?.name || 'Jorge Valdivia';
-                  return (
-                    <div className="mt-1.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmail(uEmail);
-                          setPassword('kenya123');
-                        }}
-                        className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-xs text-stone-700 transition"
-                      >
-                        <User className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" />
-                        <span className="font-semibold text-[11px] truncate text-stone-900">{uName}</span>
-                        <span className="text-[10px] text-stone-500 truncate">(Apoyo) · {uEmail}</span>
-                      </button>
-                    </div>
-                  );
-                })()}
               </div>
             )}
           </form>

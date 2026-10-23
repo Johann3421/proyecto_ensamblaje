@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-10-23** | Aislamiento estricto de estaciones y órdenes: eliminación del bypass de apoyo | `fix` / `refactor` | ✅ Completado | [[2026-10-23-aislamiento-estricto-estaciones-eliminacion-bypass-apoyo]] |
 | **2026-10-20** | Reestructuración vista de estación, resolución URL y soporte multiestación (Ley de Tesler) | `refactor` | ✅ Completado | [[2026-10-20-reestructuracion-vista-estacion-tesler-multiestacion]] |
 | **2026-10-20** | Aislamiento estricto de órdenes de trabajo por usuario y tareas asignadas | `fix` | ✅ Completado | [[2026-10-20-aislamiento-estricto-ordenes-por-usuario]] |
 | **2026-10-20** | Fix persistencia y visualización de progreso al alternar cuentas (supervisor/operarios) | `fix` | ✅ Completado | [[2026-10-20-fix-persistencia-progreso-cambio-cuentas]] |

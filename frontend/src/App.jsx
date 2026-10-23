@@ -238,8 +238,6 @@ export default function App() {
     updateBrowserRoute(tab, params);
   };
 
-  const isSupportUser = currentUser?.id === 'OP-106' || (currentUser?.email || '').includes('apoyo');
-
   const ADMIN_TABS = [
     { id: 'matrix', label: 'Pipeline', shortLabel: 'Pipeline', icon: Grid },
     { id: 'create-order', label: 'Nueva Orden', shortLabel: 'Orden', icon: PlusCircle },
@@ -254,7 +252,7 @@ export default function App() {
     { id: 'audit', label: 'Auditoría', shortLabel: 'Auditor', icon: ShieldCheck },
   ];
   const OPERATOR_TABS = [
-    { id: 'operator', label: isSupportUser ? 'Puesto de Apoyo' : 'Mi Estación', shortLabel: isSupportUser ? 'Apoyo' : 'Trabajo', icon: CheckSquare },
+    { id: 'operator', label: 'Mi Estación', shortLabel: 'Trabajo', icon: CheckSquare },
   ];
 
   const tabs = currentUser.role === 'ADMIN' ? ADMIN_TABS

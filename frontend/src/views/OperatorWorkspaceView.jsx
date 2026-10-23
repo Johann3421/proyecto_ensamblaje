@@ -135,7 +135,6 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   }, [uniqueStationSteps, technicianDoneSteps]);
 
   const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
-  const isSupport = is_support_operator || currentUser.id === 'OP-106' || (currentUser.email || '').toLowerCase().includes('apoyo');
 
   // Pasos específicos asignados para supervisión en esta orden
   const supervisedStepsSet = useMemo(() => {
@@ -378,48 +377,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
   return (
     <div className="max-w-xl mx-auto space-y-3.5 fade-in pb-4">
-      {/* Banner y Selector de Estación Exclusivo para Técnico de Apoyo / Refuerzo */}
-      {isSupport && all_stations && all_stations.length > 0 && (
-        <Card className="p-3 bg-stone-50 border border-stone-200 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
-                <Zap className="w-4 h-4 text-emerald-300" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-stone-900 block leading-tight">
-                    Modo Técnico de Apoyo / Refuerzo ({currentUser.name})
-                  </span>
-                  <span className="text-[9px] font-bold bg-stone-200 text-stone-800 px-1.5 py-0.5 rounded-md">
-                    Operario Multiestación
-                  </span>
-                </div>
-                <span className="text-[10px] text-stone-500 block mt-0.5">
-                  Refuerza temporalmente cualquier estación según la demanda de la línea sin alterar la titularidad del puesto.
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-stone-900 flex-shrink-0">Puesto a Reforzar:</span>
-              <select
-                value={assignment.station_number}
-                onChange={(e) => onSelectStation && onSelectStation(parseInt(e.target.value, 10))}
-                className="text-xs font-bold border border-stone-300 bg-white text-stone-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-primary/20 shadow-xs touch-target"
-              >
-                {all_stations.map(st => (
-                  <option key={st.station_number} value={st.station_number}>
-                    E{st.station_number}: {st.station_name} (Titular: {st.user_name}) {st.is_cleaning_station ? '[Limpieza]' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {/* Selector de Estaciones para Operadores con Múltiples Puestos Asignados */}
-      {!isSupport && !isSupervisorMode && user_assigned_stations && user_assigned_stations.length > 1 && (
+      {!isSupervisorMode && user_assigned_stations && user_assigned_stations.length > 1 && (
         <Card className="p-3 bg-emerald-50/80 border border-emerald-300 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5">
@@ -464,8 +423,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         </Card>
       )}
 
-      {/* Selector de Inspección para Supervisor y Admin (Nunca se muestra para Apoyo) */}
-      {!isSupport && isSupervisorUser && all_stations && all_stations.length > 0 && (
+      {/* Selector de Inspección para Supervisor y Admin */}
+      {isSupervisorUser && all_stations && all_stations.length > 0 && (
         <Card className="p-3 bg-amber-50/80 border border-amber-300 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5">
@@ -832,7 +791,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   </span>
                 </div>
               </div>
-              {!isSupport && isSupervisorUser && (
+              {isSupervisorUser && (
                 <button
                   type="button"
                   onClick={() => setSupervisorAuditModalOpen(true)}
@@ -845,7 +804,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           )}
 
           {/* PROTOCOLO OFICIAL DE VERIFICACIÓN DEL SUPERVISOR QC (VISIBLE SOLO PARA SUPERVISOR/ADMIN) */}
-          {!isSupport && isSupervisorUser && (
+          {isSupervisorUser && (
             <div className="p-3.5 bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-white border-b-2 border-amber-300 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">

@@ -108,6 +108,11 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
     ).length;
   }, [stationsList]);
 
+  // Detección reactiva de si el modelo seleccionado requiere pasos de limpieza
+  const hasCleaningSteps = useMemo(() => {
+    return (modelSteps || []).some(s => isStepCleaning(s));
+  }, [modelSteps]);
+
   // Handlers para técnicos
   const handlePrimaryTechChange = (idx, newUserId) => {
     const u = users.find(x => x.id === newUserId);
@@ -320,7 +325,6 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const hasCleaningSteps = (modelSteps || []).some(s => isStepCleaning(s));
     if (hasCleaningSteps && cleaningCount < 1) {
       if (notify) notify("Regla de Calidad: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.", "warning");
       else alert("Regla de Calidad: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.");

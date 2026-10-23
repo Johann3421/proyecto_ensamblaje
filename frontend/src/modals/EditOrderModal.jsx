@@ -322,13 +322,15 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
     e.preventDefault();
     const hasCleaningSteps = (modelSteps || []).some(s => isStepCleaning(s));
     if (hasCleaningSteps && cleaningCount < 1) {
-      alert(`Regla de Calidad Obligatoria: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.`);
+      if (notify) notify("Regla de Calidad: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.", "warning");
+      else alert("Regla de Calidad: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.");
       return;
     }
 
     for (const st of stationsList) {
       if (!st.user_id) {
-        alert(`La Estación ${st.station_number} (${st.station_name}) requiere un 1er Técnico (titular) asignado.`);
+        if (notify) notify(`La Estación ${st.station_number} (${st.station_name}) requiere un 1er Técnico (titular) asignado.`, "warning");
+        else alert(`La Estación ${st.station_number} (${st.station_name}) requiere un 1er Técnico (titular) asignado.`);
         return;
       }
     }
@@ -373,7 +375,8 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
 
       onSuccess(data.message || "Orden actualizada exitosamente");
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "No se pudo actualizar la orden", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -849,15 +852,15 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {cleaningCount >= 2 ? (
+                {(!hasCleaningSteps || cleaningCount >= 1) ? (
                   <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{cleaningCount} Estaciones Limpieza (Válido)</span>
+                    <span>{cleaningCount} {cleaningCount === 1 ? "Estación" : "Estaciones"} Limpieza (Válido)</span>
                   </span>
                 ) : (
                   <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1 animate-pulse">
                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                    <span>{cleaningCount}/2 Estaciones Limpieza (Faltan {2 - cleaningCount})</span>
+                    <span>0/1 Estaciones Limpieza (Falta designar limpieza)</span>
                   </span>
                 )}
 
@@ -945,15 +948,15 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
           {/* Footer de Acciones */}
           <div className="pt-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sticky bottom-0 bg-white/95 backdrop-blur-sm p-2">
             <div>
-              {cleaningCount < 2 ? (
+              {hasCleaningSteps && cleaningCount < 1 ? (
                 <p className="text-rose-600 font-bold text-xs flex items-center gap-1">
                   <AlertCircle className="w-4 h-4" />
-                  <span>Requiere mínimo 2 estaciones de limpieza para poder guardar.</span>
+                  <span>Requiere al menos 1 estación de limpieza para poder guardar.</span>
                 </p>
               ) : (
                 <p className="text-emerald-700 font-bold text-xs flex items-center gap-1">
                   <CheckCircle className="w-4 h-4" />
-                  <span>Cumple con las 2 estaciones de limpieza obligatorias.</span>
+                  <span>Configuración válida ({stationsList.length} estaciones, {cleaningCount} de limpieza).</span>
                 </p>
               )}
             </div>

@@ -586,7 +586,7 @@ def get_model_diagnostics(model_name: str, db: Session = Depends(get_db)):
         if duplicates:
             recommendations.append(f"Hay números de paso duplicados ({', '.join(map(str, duplicates))}).")
         if not has_cleaning:
-            recommendations.append("Atención de Calidad: No se encontraron pasos de limpieza (la línea exige 2 estaciones de limpieza obligatorias).")
+            recommendations.append("Atención de Calidad: No se encontraron pasos de limpieza (la línea exige al menos 1 estación de limpieza para el lote).")
         if not has_bios:
             recommendations.append("Sugerencia: Falta paso de configuración y actualización de BIOS.")
         if not has_os:
@@ -1250,11 +1250,23 @@ def update_order(order_id: str, req: OrderUpdateRequest, db: Session = Depends(g
 
     # Actualizar estaciones si se enviaron
     if req.stations:
-        cleaning_count = sum(1 for st in req.stations if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower())
-        if cleaning_count < 2:
+        cleaning_stations = [
+            st for st in req.stations
+            if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower()
+        ]
+        cleaning_count = len(cleaning_stations)
+
+        # Consultar si el modelo tiene pasos de limpieza
+        model_to_check = req.model_name or order.model_name
+        model_clean_steps = db.query(QCChecklistItem).filter(
+            QCChecklistItem.model_name == model_to_check,
+            QCChecklistItem.is_cleaning == True
+        ).count()
+
+        if model_clean_steps > 0 and cleaning_count < 1:
             raise HTTPException(
                 status_code=400,
-                detail=f"Regla de Calidad Obligatoria: La línea debe incluir al menos 2 estaciones designadas para Limpieza. Actualmente: {cleaning_count}."
+                detail=f"Regla de Calidad: El modelo '{model_to_check}' contiene pasos de limpieza QC y requiere al menos 1 estación designada para Limpieza."
             )
 
         for st_in in req.stations:
@@ -1314,12 +1326,22 @@ def update_order_stations(order_id: str, stations_data: List[StationAssignmentCr
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     
-    # Validar mínimo 2 estaciones de limpieza
-    cleaning_count = sum(1 for st in stations_data if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower())
-    if cleaning_count < 2:
+    # Validar mínimo 1 estación de limpieza si el modelo contiene pasos de limpieza
+    cleaning_stations = [
+        st for st in stations_data
+        if st.is_cleaning_station or st.station_type == "CLEANING" or "limpieza" in (st.station_name or "").lower()
+    ]
+    cleaning_count = len(cleaning_stations)
+
+    model_clean_steps = db.query(QCChecklistItem).filter(
+        QCChecklistItem.model_name == order.model_name,
+        QCChecklistItem.is_cleaning == True
+    ).count()
+
+    if model_clean_steps > 0 and cleaning_count < 1:
         raise HTTPException(
             status_code=400,
-            detail=f"Regla de Calidad Obligatoria: La línea debe incluir al menos 2 estaciones designadas para Limpieza. Actualmente: {cleaning_count}."
+            detail=f"Regla de Calidad: El modelo '{order.model_name}' contiene pasos de limpieza QC y requiere al menos 1 estación designada para Limpieza."
         )
 
     for st_in in stations_data:

@@ -26,6 +26,9 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
   const [expandedStep, setExpandedStep] = useState(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [modelToDelete, setModelToDelete] = useState(null);
+  const [stepToDelete, setStepToDelete] = useState(null);
+  const [isDeletingStep, setIsDeletingStep] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importCategory, setImportCategory] = useState("ALL"); // "ALL" | "ASSEMBLY" | "CLEANING"
   const [createModelModalOpen, setCreateModelModalOpen] = useState(false);
@@ -149,18 +152,17 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
   };
 
   // Handler: Eliminar modelo completo
-  const handleDeleteModel = async () => {
-    if (!window.confirm(`¿Estás seguro de eliminar permanentemente el modelo '${selectedModel}' y todos sus pasos asociados? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+  const executeDeleteModel = async () => {
+    if (!modelToDelete) return;
     try {
       setProcessingAction("delete-model");
-      const res = await fetch(`${API_BASE}/models/${selectedModel}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/models/${modelToDelete}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Error al eliminar modelo");
-      notify?.(data.message || `Modelo '${selectedModel}' eliminado`, "success");
+      notify?.(data.message || `Modelo '${modelToDelete}' eliminado`, "success");
+      setModelToDelete(null);
       onRefreshModels?.();
-      const remaining = models.filter(m => m.name !== selectedModel);
+      const remaining = models.filter(m => m.name !== modelToDelete);
       if (remaining.length > 0) {
         handleSelectModel(remaining[0].name);
       }
@@ -190,19 +192,22 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
     }
   };
 
-  const handleDeleteSingleStep = async (stepId, stepNum) => {
-    if (!stepId) return;
-    if (!window.confirm(`¿Eliminar el paso #${stepNum}?`)) return;
+  const executeDeleteSingleStep = async () => {
+    if (!stepToDelete || !stepToDelete.id) return;
     try {
-      const res = await fetch(`${API_BASE}/models/${selectedModel}/checklist/${stepId}`, {
+      setIsDeletingStep(true);
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/checklist/${stepToDelete.id}`, {
         method: "DELETE"
       });
       if (!res.ok) throw new Error("Error al eliminar el paso");
-      notify(`Paso #${stepNum} eliminado`);
+      notify?.(`Paso #${stepToDelete.step_number} eliminado`, "success");
+      setStepToDelete(null);
       loadSteps();
       onRefreshModels?.();
     } catch (err) {
-      notify("Error: " + err.message);
+      notify?.("Error: " + err.message, "danger");
+    } finally {
+      setIsDeletingStep(false);
     }
   };
 
@@ -352,7 +357,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 <span>Editar Paso</span>
               </button>
               <button
-                onClick={() => handleDeleteSingleStep(st.id, st.step_number)}
+                onClick={() => setStepToDelete(st)}
                 className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition touch-target"
                 title="Eliminar este paso"
               >
@@ -460,7 +465,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 {models.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => { setToolsMenuOpen(false); handleDeleteModel(); }}
+                    onClick={() => { setToolsMenuOpen(false); setModelToDelete(selectedModel); }}
                     className="w-full text-left px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition"
                   >
                     <Trash className="w-3.5 h-3.5 text-rose-500" />
@@ -795,7 +800,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
         <div className="space-y-6">
           {/* BLOQUE 1: PASOS NORMALES DE ENSAMBLAJE */}
           <div className="space-y-3">
-            <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-stone-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center flex-shrink-0 shadow-xs">
                   <Wrench className="w-5 h-5" />
@@ -837,38 +842,6 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   <Plus className="w-4 h-4" />
                   <span>+ Nuevo Paso</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => openImportModal("ASSEMBLY")}
-                  className="text-xs bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition"
-                  title="Importar exclusivamente pasos de ensamblaje desde archivo Excel"
-                >
-                  <Upload className="w-3.5 h-3.5 text-stone-600" />
-                  <span>Importar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=ASSEMBLY`, "_blank")}
-                  disabled={filteredAssembly.length === 0}
-                  className={`text-xs border font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition ${
-                    filteredAssembly.length === 0
-                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                      : "bg-white hover:bg-stone-100 text-stone-800 border-stone-300"
-                  }`}
-                  title="Exportar pasos de ensamblaje a Excel"
-                >
-                  <Download className="w-3.5 h-3.5 text-stone-600" />
-                  <span>Exportar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=ASSEMBLY`, "_blank")}
-                  className="text-xs bg-white hover:bg-stone-100 text-stone-700 border border-stone-300 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition"
-                  title="Descargar plantilla Excel para pasos de ensamblaje"
-                >
-                  <FileText className="w-3.5 h-3.5 text-stone-600" />
-                  <span>Plantilla</span>
-                </button>
               </div>
             </div>
 
@@ -885,7 +858,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
 
           {/* BLOQUE 2: BLOQUE EXCLUSIVO DE PASOS DE LIMPIEZA */}
           <div className="space-y-3">
-            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+            <div className="bg-emerald-50/30 border border-emerald-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
                   <Sparkles className="w-5 h-5" />
@@ -930,38 +903,6 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 >
                   <Plus className="w-4 h-4" />
                   <span>+ Nuevo Paso</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openImportModal("CLEANING")}
-                  className="text-xs bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition"
-                  title="Importar pasos exclusivamente al bloque de Limpieza desde Excel"
-                >
-                  <Upload className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Importar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=CLEANING`, "_blank")}
-                  disabled={filteredCleaning.length === 0}
-                  className={`text-xs border font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition ${
-                    filteredCleaning.length === 0
-                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                      : "bg-white hover:bg-emerald-50 text-emerald-900 border-emerald-300"
-                  }`}
-                  title="Exportar pasos de limpieza a Excel"
-                >
-                  <Download className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Exportar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=CLEANING`, "_blank")}
-                  className="text-xs bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-2xs transition"
-                  title="Descargar plantilla Excel exclusiva para pasos de limpieza"
-                >
-                  <FileText className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Plantilla</span>
                 </button>
               </div>
             </div>
@@ -1069,7 +1010,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                         className="px-2 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] font-bold shadow-2xs transition"
                         title="Renumerar para que sea continuo"
                       >
-                        🛠️ Re-secuenciar
+                        <span className="flex items-center gap-1"><RotateCcw className="w-3 h-3 text-stone-600" /> Re-secuenciar</span>
                       </button>
                       <button
                         type="button"
@@ -1078,7 +1019,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                         className="px-2 py-1 bg-primary hover:bg-primary text-white rounded-lg text-[10px] font-bold shadow-2xs transition"
                         title="Rellenar los pasos estándar correspondientes"
                       >
-                        ⚡ Rellenar
+                        <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-white" /> Rellenar</span>
                       </button>
                     </div>
                   </div>
@@ -1189,6 +1130,90 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
         existingModels={models}
         notify={notify}
       />
+
+      {/* Modal Confirmar Eliminar Paso */}
+      {stepToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-gray-100 p-5 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">¿Eliminar el paso #{stepToDelete.step_number}?</h3>
+              <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                {stepToDelete.operation || stepToDelete.description}
+              </p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setStepToDelete(null)}
+                disabled={isDeletingStep}
+                className="flex-1 py-2.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteSingleStep}
+                disabled={isDeletingStep}
+                className="flex-1 py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5"
+              >
+                {isDeletingStep ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Eliminando...</span>
+                  </>
+                ) : (
+                  <span>Eliminar</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Eliminar Modelo */}
+      {modelToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 fade-in backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-gray-100 p-5 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">¿Eliminar modelo '{modelToDelete}'?</h3>
+              <p className="text-xs text-rose-600 font-semibold mt-1">
+                Esta acción eliminará permanentemente el modelo y todos sus pasos asociados.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setModelToDelete(null)}
+                disabled={processingAction === 'delete-model'}
+                className="flex-1 py-2.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition touch-target"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteModel}
+                disabled={processingAction === 'delete-model'}
+                className="flex-1 py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5"
+              >
+                {processingAction === 'delete-model' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Eliminando...</span>
+                  </>
+                ) : (
+                  <span>Eliminar permanentemente</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

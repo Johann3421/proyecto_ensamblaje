@@ -43,7 +43,8 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
       if (!res.ok) throw new Error(data.detail || "Error al reiniciar");
       onSuccess(data.message || `PC #${unit.unit_number} reiniciada`);
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error al reiniciar unidad", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -57,17 +58,15 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
       if (!res.ok) throw new Error(data.detail || "Error al reanudar PC");
       onSuccess(data.message || `PC #${unit.unit_number} reincorporada`);
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error al reanudar unidad", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteUnit = async () => {
-    if (currentUser?.role !== "ADMIN") {
-      alert("La eliminación definitiva de unidades está reservada exclusivamente para el Administrador del Sistema.");
-      return;
-    }
+    if (currentUser?.role !== "ADMIN") return;
     if (!window.confirm(`¿ELIMINAR definitivamente la PC #${unit.unit_number} de la orden? Esta acción reducirá el total de unidades del lote.`)) return;
     try {
       setLoading(true);
@@ -76,7 +75,8 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
       if (!res.ok) throw new Error(data.detail || "Error al eliminar");
       onSuccess(data.message || `PC #${unit.unit_number} eliminada`);
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error al eliminar unidad", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }

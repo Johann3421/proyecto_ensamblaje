@@ -295,30 +295,38 @@ export default function LoginPage({ onLogin }) {
                     );
                   })()}
 
-                  {/* Operarios 1 a 6 */}
-                  {[1, 2, 3, 4, 5, 6].map((stNum) => {
-                    const opId = `OP-10${stNum}`;
-                    const u = availableUsers.find(x => x.id === opId);
-                    const uEmail = u?.email || (stNum === 6 ? 'apoyo@sekaitech.com.pe' : `estacion${stNum}@sekaitech.com.pe`);
-                    const uName = u?.name || `Operario ${stNum}`;
-                    return (
-                      <button
-                        key={opId}
-                        type="button"
-                        onClick={() => {
-                          setEmail(uEmail);
-                          setPassword('kenya123');
-                        }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-left text-xs transition"
-                      >
-                        <User className="w-3.5 h-3.5 text-stone-600 flex-shrink-0" />
-                        <div className="truncate">
-                          <div className="font-bold text-stone-900 text-[11px] truncate">{uName}</div>
-                          <div className="text-[9px] text-stone-500 truncate">{opId} · {uEmail}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                  {/* Operarios Dinámicos desde API (Ley de Tesler) */}
+                  {(() => {
+                    const dbOperators = availableUsers.filter(u => u.role === 'OPERATOR');
+                    const opsToRender = dbOperators.length > 0
+                      ? dbOperators.slice(0, 8)
+                      : [1, 2, 3, 4, 5, 6].map(stNum => ({
+                          id: `OP-10${stNum}`,
+                          name: `Operario ${stNum}`,
+                          email: stNum === 6 ? 'apoyo@sekaitech.com.pe' : `estacion${stNum}@sekaitech.com.pe`
+                        }));
+
+                    return opsToRender.map((op) => {
+                      const uEmail = op.email || `${op.id.toLowerCase()}@sekaitech.com.pe`;
+                      return (
+                        <button
+                          key={op.id}
+                          type="button"
+                          onClick={() => {
+                            setEmail(uEmail);
+                            setPassword('kenya123');
+                          }}
+                          className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-left text-xs transition"
+                        >
+                          <User className="w-3.5 h-3.5 text-stone-600 flex-shrink-0" />
+                          <div className="truncate">
+                            <div className="font-bold text-stone-900 text-[11px] truncate">{op.name}</div>
+                            <div className="text-[9px] text-stone-500 truncate">{op.id} · {uEmail}</div>
+                          </div>
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}

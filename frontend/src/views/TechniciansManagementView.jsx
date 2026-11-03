@@ -9,7 +9,19 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
   const [filterRole, setFilterRole] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [modalUser, setModalUser] = useState(null); // null = cerrado, { isNew: true } o { isNew: false, ...user }
+  const [userToDelete, setUserToDelete] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Generar siguiente ID correlativo para nuevo técnico (Ley de Tesler)
+  const getNextOperatorId = () => {
+    const maxNum = (users || [])
+      .map(u => {
+        const m = (u.id || '').match(/OP-(\d+)/);
+        return m ? parseInt(m[1], 10) : 100;
+      })
+      .reduce((max, val) => Math.max(max, val), 100);
+    return `OP-${maxNum + 1}`;
+  };
 
   const filteredUsers = useMemo(() => {
     return (users || []).filter(u => {
@@ -54,22 +66,28 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
       setModalUser(null);
       onRefreshUsers();
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error al procesar técnico", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteUser = async (user) => {
-    if (!window.confirm(`¿Deseas eliminar o desactivar al técnico ${user.name} (${user.id})?`)) return;
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
     try {
-      const res = await fetch(`${API_BASE}/users/${user.id}`, { method: "DELETE" });
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/users/${userToDelete.id}`, { method: "DELETE" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Error al eliminar");
-      notify(data.message || "Técnico eliminado");
+      if (!res.ok) throw new Error(data.detail || "Error al eliminar técnico");
+      if (notify) notify(data.message || `Técnico ${userToDelete.name} eliminado`, "success");
+      setUserToDelete(null);
       onRefreshUsers();
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error al eliminar técnico", "danger");
+      else alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -89,7 +107,7 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
           </div>
 
           <button
-            onClick={() => setModalUser({ isNew: true, id: `OP-${Math.floor(100 + Math.random() * 900)}`, name: "", role: "OPERATOR", avatar: "" })}
+            onClick={() => setModalUser({ isNew: true, id: getNextOperatorId(), name: "", role: "OPERATOR", avatar: "" })}
             className="bg-primary hover:bg-primary-light text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow transition touch-target"
           >
             <UserPlus className="w-4 h-4" />
@@ -167,7 +185,7 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
                   <span>Editar Nombre</span>
                 </button>
                 <button
-                  onClick={() => handleDeleteUser(user)}
+                  onClick={() => setUserToDelete(user)}
                   className="p-2 bg-gray-50 hover:bg-rose-50 text-gray-400 hover:text-rose-600 rounded-lg border border-gray-200 transition touch-target"
                   title="Eliminar técnico"
                 >
@@ -193,6 +211,44 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
           onClose={() => setModalUser(null)}
           onSave={handleSaveUser}
         />
+      )}
+      {/* Diálogo Ergonómico de Confirmación para Eliminar Técnico (Sin window.confirm) */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 fade-in">
+          <Card className="max-w-sm w-full p-5 space-y-4 shadow-xl border border-stone-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-stone-900">¿Eliminar personal técnico?</h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Estás por eliminar a <strong>{userToDelete.name}</strong> ({userToDelete.id}).
+                </p>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-600 bg-stone-50 p-2.5 rounded-lg border border-stone-200">
+              Esta acción revocará sus accesos y desasignará sus estaciones en las órdenes activas.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                className="px-3.5 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-lg transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={confirmDeleteUser}
+                className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition shadow-xs flex items-center gap-1.5"
+              >
+                <span>Sí, eliminar técnico</span>
+              </button>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

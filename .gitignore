@@ -39,3 +39,8 @@ Thumbs.db
 # Obsidian workspace local
 obsidian/.obsidian/workspace*
 obsidian/.obsidian/cache*
+
+# Scratch scripts temporales
+scratch/
+scratch_*.py
+prototype_design.html

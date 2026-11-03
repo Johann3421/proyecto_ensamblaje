@@ -192,14 +192,16 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         });
         notify(`↩ Paso #${step.step_number} desmarcado`);
       } catch (err) {
-        alert("Error: " + err.message);
+        if (notify) notify(err.message || "Error al desmarcar paso", "danger");
+        else alert("Error: " + err.message);
       } finally {
         setSubmittingStep(null);
       }
     } else {
-      // El último paso de la estación SIEMPRE exige foto obligatoria del técnico
+      // Exigencia técnica de foto: definida por ingeniería (step.requires_photo) o hito final de estación
       const isLastStep = lastStationStep && step.step_number === lastStationStep.step_number;
-      if (requirePhotoVerification || isLastStep) {
+      const requiresPhotoForStep = Boolean(step.requires_photo || isLastStep);
+      if (requiresPhotoForStep) {
         setPhotoStepModal(step);
       } else {
         // Marcar paso conforme sin foto por el técnico
@@ -241,7 +243,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
           }
         } catch (err) {
-          alert("Error: " + err.message);
+          if (notify) notify(err.message || "Error registrando paso", "danger");
+          else alert("Error: " + err.message);
         } finally {
           setSubmittingStep(null);
         }
@@ -292,7 +295,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
       }
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error subiendo evidencia", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setSubmittingStep(null);
     }
@@ -344,7 +348,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         confetti({ particleCount: 70, spread: 70, origin: { y: 0.8 } });
       }
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error registrando supervisión", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setSubmittingStep(null);
     }
@@ -369,7 +374,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       setCompletedSteps([]);
       onRefresh();
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify(err.message || "Error al despachar estación", "danger");
+      else alert("Error: " + err.message);
     } finally {
       setFinishingUnit(false);
     }
@@ -750,29 +756,21 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               )}
             </div>
 
-            {/* Switch de Verificación con Foto */}
+            {/* Indicador Normativo de Evidencias de Calidad (Ley de Tesler) */}
             <div className="flex items-center justify-between pt-2 border-t border-white/20">
-              <label className="text-[11px] font-bold text-blue-100 flex items-center gap-1.5 cursor-pointer">
+              <span className="text-[11px] font-bold text-white/90 flex items-center gap-1.5">
                 <Camera className="w-3.5 h-3.5 text-emerald-300" />
-                <span>Foto de verificación:</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setRequirePhotoVerification(prev => !prev)}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 shadow-sm ${
-                  requirePhotoVerification
-                    ? "bg-emerald-400 text-slate-950 font-black"
-                    : "bg-white/20 text-white hover:bg-white/30"
-                }`}
-              >
-                <span>{requirePhotoVerification ? "OBLIGATORIA (Activa)" : "LIBRE / OPCIONAL"}</span>
-              </button>
+                <span>Control de Calidad Fotográfica:</span>
+              </span>
+              <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-white/20 text-white flex items-center gap-1 shadow-2xs">
+                <span>Norma QC Oficial</span>
+              </span>
             </div>
           </div>
 
           {/* BANNER DE CERTIFICACIÓN / V°B° OFICIAL SI YA ESTÁ APROBADA */}
           {activeSupervisorAudit?.status === "APPROVED" && (
-            <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
+            <div className="p-3 bg-emerald-50/90 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0">
                   <ShieldCheck className="w-4 h-4" />

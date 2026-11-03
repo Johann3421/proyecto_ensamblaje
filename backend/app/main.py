@@ -608,8 +608,24 @@ def get_model_diagnostics(model_name: str, db: Session = Depends(get_db)):
         "has_stress_tests": has_stress_tests,
         "has_packaging": has_packaging,
         "recommendations": recommendations,
-        "is_healthy": len(missing_in_sequence) == 0 and len(duplicates) == 0 and total_steps >= 20 and has_cleaning
+        "is_healthy": len(missing_in_sequence) == 0 and len(duplicates) == 0 and total_steps > 0
     }
+
+def infer_step_is_cleaning(operation: str, description: str, qc_criteria: str) -> bool:
+    """Infiere automáticamente si un paso pertenece al bloque de limpieza QC (Ley de Tesler)"""
+    combined = f"{(operation or '').lower()} {(description or '').lower()} {(qc_criteria or '').lower()}"
+    is_hardware = any(k in combined for k in [
+        "bomba", "cooler", "disipador", "socket", "cpu", "procesador", "ram", "memoria",
+        "placa madre", "motherboard", "tarjeta", "gpu", "nvme", "disco", "ssd", "hdd",
+        "fuente de poder", "conectar cable", "bios", "uefi", "windows", "driver", "sistema operativo"
+    ])
+    if is_hardware:
+        return False
+    return any(k in combined for k in [
+        "limpieza", "limpiar", "microfibra", "alcohol isoprop", "soplado", "polvo",
+        "aire comprimido", "película", "pelicula", "adhesivo de transporte", "sello de seguridad",
+        "sellos qc", "embalaje", "empaque", "caja del case", "tapa frontal"
+    ])
 
 @api_router.get("/models/{model_name}/checklist", response_model=List[ChecklistItemSchema])
 def get_model_checklist(model_name: str, db: Session = Depends(get_db)):
@@ -618,6 +634,10 @@ def get_model_checklist(model_name: str, db: Session = Depends(get_db)):
 
 @api_router.post("/models/{model_name}/checklist")
 def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session = Depends(get_db)):
+    clean_val = bool(item.is_cleaning) if item.is_cleaning is not None else infer_step_is_cleaning(item.operation, item.description, item.qc_criteria)
+    if not clean_val and infer_step_is_cleaning(item.operation, item.description, item.qc_criteria):
+        clean_val = True
+
     if item.id:
         existing = db.query(QCChecklistItem).filter(QCChecklistItem.id == item.id).first()
         if existing:
@@ -627,7 +647,7 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
             existing.qc_criteria = item.qc_criteria
             existing.media_url = item.media_url
             existing.media_type = item.media_type
-            existing.is_cleaning = bool(item.is_cleaning)
+            existing.is_cleaning = clean_val
             db.commit()
             db.refresh(existing)
             return existing
@@ -640,7 +660,7 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
         qc_criteria=item.qc_criteria,
         media_url=item.media_url,
         media_type=item.media_type,
-        is_cleaning=bool(item.is_cleaning)
+        is_cleaning=clean_val
     )
     db.add(new_item)
     db.commit()
@@ -652,9 +672,15 @@ def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(g
     item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == model_name).first()
     if not item:
         raise HTTPException(status_code=404, detail="Paso no encontrado")
+    deleted_num = item.step_number
     db.delete(item)
+    db.flush()
+    # Auto-renumerar en backend para garantizar secuencia continua 1..N sin huecos (Ley de Tesler)
+    remaining = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number).all()
+    for new_idx, it in enumerate(remaining, start=1):
+        it.step_number = new_idx
     db.commit()
-    return {"message": "Paso eliminado correctamente"}
+    return {"message": f"Paso #{deleted_num} eliminado y secuencia renumerada automáticamente"}
 
 @api_router.post("/models/{model_name}/checklist/{step_id}/toggle-cleaning")
 def toggle_step_cleaning(model_name: str, step_id: int, db: Session = Depends(get_db)):
@@ -869,6 +895,7 @@ async def import_model_excel(
         # Importación completa de todo el modelo (reemplazo general)
         db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).delete()
         for idx, it in enumerate(parsed_items, start=1):
+            is_clean_auto = bool(it.get("is_cleaning", False)) or infer_step_is_cleaning(it["operation"], it.get("description", ""), it.get("qc_criteria", ""))
             db.add(QCChecklistItem(
                 model_name=model_name,
                 step_number=idx,
@@ -877,7 +904,7 @@ async def import_model_excel(
                 qc_criteria=it["qc_criteria"],
                 media_url=it.get("media_url", ""),
                 media_type=it.get("media_type", "image"),
-                is_cleaning=bool(it.get("is_cleaning", False))
+                is_cleaning=is_clean_auto
             ))
         db.commit()
         return {

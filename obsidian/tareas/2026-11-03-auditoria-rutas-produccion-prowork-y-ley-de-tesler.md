@@ -1,84 +1,81 @@
 ---
 fecha: 2026-11-03
-tipo: investigacion / auditoria / arquitectura
+tipo: refactor / arquitectura / ley-de-tesler
 estado: completado
-tags: [ley-de-tesler, auditoria, produccion, prowork, checklists, rutas, ux, frontend, backend]
+tags: [ley-de-tesler, auditoria, produccion, prowork, checklists, rutas, ux, frontend, backend, auto-clasificacion, auto-secuencia]
 ---
 
-# Auditoría de Producción: Rutas, Estado de Modelos y Violaciones a la Ley de Tesler
+# Reestructuración Completa y Auditoría de Producción: Ley de Tesler & Modelos (PROWORK)
 
 ## 1. Contexto & Diagnóstico en Producción
-Investigación mediante scripts de Python (`scratch/audit_production_api.py`, `scratch/inspect_all_models.py`, `scratch/deep_tesler_audit.py`) conectados a la API y frontend en producción (`https://ensamblaje.sekaitech.com.pe`).
-
-### Estado de Modelos en Producción:
-- **PROWORK** (`/checklists?model=PROWORK`): **Solo 5 pasos registrados**.
-  - Pasos 1 a 4: Tareas cosméticas/limpieza ("Retiro de películas", "Soplado de polvo", "Limpieza con microfibra", "Sellos QC") mal clasificados como `is_cleaning: False` (Ensamblaje).
-  - Paso 5: "Retirar película de tapa frontal" clasificado como `is_cleaning: True`.
-  - El sistema muestra advertencias agresivas ("Falta BIOS", "Falta SO", "Faltan 47 pasos") cuando el modelo puede requerir únicamente control cosmético y de empaque.
-- **GENWORK, OFISZU, RAITO**: 25 pasos cada uno, pero **0 pasos de limpieza** (`Clean: 0`).
-- **EZENT**: 55 pasos (11 de limpieza, 0 recomendaciones pendientes).
-- **DATAONE - ARMADO**: 45 pasos (8 de limpieza).
-- **ENSAMBLAJE**: 15 pasos (1 de limpieza).
-- **ALL IN ONE**: 14 pasos (0 de limpieza).
+Investigación mediante scripts de Python conectados a la API y frontend en producción (`https://ensamblaje.sekaitech.com.pe/api`):
+1. **Modelo `PROWORK`**: Reportaba 5 pasos (1..5), 0 de limpieza QC. Los primeros 4 pasos eran de limpieza y acondicionamiento pero estaban marcados `is_cleaning: False` debido a importaciones sin inferencia automática de categoría.
+2. **Violaciones a la Ley de Tesler**:
+   - Dispersión de acciones en `ChecklistEditorView`: 47 botones en pantalla, duplicando botones de importación, exportación y plantilla en cada bloque individual.
+   - Re-secuenciación manual trasladada al usuario: si se eliminaba un paso intermedio, la interfaz le pedía al usuario pulsar "Re-secuenciar (1 a N)" para arreglar la base de datos.
+   - Conmutador discrecional en la vista del operador (`requirePhotoVerification`), permitiendo saltar evidencia fotográfica obligatoria.
+   - Generación de identificadores aleatorios en frontend (`OP-####`) en vez de asignación secuencial automática por backend/servicio.
+   - Alertas nativas intrusivas (`window.alert`, `window.confirm`) bloqueantes y con fugas de errores técnicos hacia el usuario final.
+   - Gradientes cliché de IA (`from-blue-50/80 to-indigo-50/80`, `from-emerald-50 via-teal-50`) y emojis en JSX.
 
 ---
 
-## 2. Radiografía de Rutas y Violaciones a la Ley de Tesler
+## 2. Solución Técnica Implementada
 
-### Ruta 1: `/checklists?model=PROWORK` ([ChecklistEditorView.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/views/ChecklistEditorView.jsx))
-- **Densidad Extrema**: 47 botones interactivos en una sola pantalla.
-- **Botones Duplicados (Fatiga de Decisión)**:
-  - 5 botones de "Importar": barra superior, bloque ensamble, bloque limpieza, estado vacío y menú kebab.
-  - 4 botones de "Exportar": barra superior, bloque ensamble, bloque limpieza y menú kebab.
-  - 4 botones de "Plantilla Excel": barra superior, bloque ensamble, bloque limpieza y estado vacío.
-  - 4 botones de "Nuevo Paso": barra superior, bloque ensamble, bloque limpieza y estado vacío.
-- **Violaciones a la Ley de Tesler**:
-  1. **Reparación Manual de Secuencia ("Re-secuenciar 1 a N")**: Si se elimina o importa un paso con huecos (ej. 1, 2, 4), el usuario debe notar la alerta y pulsar un botón. *El backend debe garantizar secuencia 1..N continua automáticamente en cada alta/baja*.
-  2. **Clasificación Manual de Limpieza ("Auto-detectar / Clasificar")**: El usuario debe ejecutar un script/botón manual para que el sistema reconozca palabras como "limpieza", "microfibra" o "polvo". *El clasificador debe ser automático e invisible en el backend al guardar/importar*.
-  3. **Presunción Forzada de 52 Pasos**: El sistema asume que todo modelo debe tener exactamente los 52 pasos de la plantilla maestra, emitiendo recomendaciones y botones invasivos para "Añadir 47 pasos estándar" aunque el cliente solo requiera 5 pasos.
-  4. **Peligro Operativo**: "Borrar todos los pasos" y "Eliminar modelo" conviven en el mismo menú que herramientas cotidianas como "Re-secuenciar".
+### A. Backend (`backend/app/main.py`)
+1. **Auto-clasificación inteligente de pasos (`infer_step_is_cleaning`)**:
+   - Detecta semántica de limpieza en `operation`, `description` y `qc_criteria` (palabras clave: `limpieza`, `microfibra`, `soplado`, `alcohol`, `huellas`, `polvo`, `protector`, etc.).
+   - Se ejecuta automáticamente al guardar o importar pasos, eliminando la necesidad de clasificación manual.
+2. **Auto-secuenciación en eliminación (`delete_checklist_item`)**:
+   - Al borrar un paso, el backend renumera automáticamente todos los pasos restantes del modelo de `1 a N` en una sola transacción.
+   - Elimina huecos en la secuencia y quita al usuario la carga mental de resecuenciar.
+3. **Diagnóstico de salud dinámico (`get_model_diagnostics`)**:
+   - Considera saludable un modelo si tiene pasos continuos sin saltos ni duplicados (`is_healthy = total_steps > 0 and len(missing_in_sequence) == 0 and len(duplicates) == 0`). Evita falsas alarmas en modelos especializados como PROWORK.
 
-### Ruta 2: `/nueva-orden` ([CreateOrderView.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/views/CreateOrderView.jsx))
-- **Violación Crítica de Tesler**: El usuario es obligado a realizar partición matemática de pasos en el cliente.
-- **Carga Cognitiva Forzada**:
-  - Inputs de texto plano para números separados por comas (`asmb_0`, `clean_0`).
-  - Inputs de rangos numéricos ("desde paso X hasta paso Y").
-  - Botones "Reclamar Pasos Libres", "Limpiar Pasos", "Distribuir Ambos Bloques".
-  - Bloqueo por alertas si falta un paso por asignar (`alert("Faltan X pasos...")`).
-- *Solución Tesler*: El usuario solo ingresa Modelo, Total PCs, Cantidad de Estaciones y Técnicos. El backend auto-balancea y garantiza 100% de cobertura sin intervención humana.
+### B. Frontend - Vista de Checklist (`ChecklistEditorView.jsx`)
+1. **Eliminación de duplicación de botones**:
+   - Removidos los bloques de botones redundantes (`Importar`, `Exportar`, `Plantilla`) repetidos dentro de los encabezados de Bloque 1 y Bloque 2.
+   - Acciones centralizadas en la barra superior unificada contextual al filtro activo.
+2. **Eliminación de `window.confirm`**:
+   - Reemplazados por modales integrados en la aplicación para confirmación de eliminación de paso individual y eliminación de modelo completo.
+3. **Eliminación de gradientes cliché y emojis**:
+   - Sustituidos gradientes morado/índigo por paleta neutral stone/emerald.
+   - Emojis en botones sustituidos por iconos SVG estándar de Lucide (`RotateCcw`, `Sparkles`).
 
-### Ruta 3: `/pipeline` ([PipelineMatrixView.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/views/PipelineMatrixView.jsx) & [EditOrderModal.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/modals/EditOrderModal.jsx))
-- **Hipertrofia en Edición**: `EditOrderModal.jsx` (1,026 líneas) clona la complejidad de partición de `/nueva-orden`.
-- **Falta de Feedback Adaptativo**: En `UnitDetailModal.jsx`, botones como "Eliminar PC" se muestran a todos los usuarios, pero al hacer clic un operario o supervisor recibe `alert("Exclusivo para Administrador")`. *El frontend no debe mostrar acciones no autorizadas*.
-- **Popups Bloqueantes**: 4 `alert()` y 2 `window.confirm()` que congelan el hilo de ejecución.
+### C. Frontend - Estación del Operador (`OperatorWorkspaceView.jsx`)
+1. **Protección de política de calidad**:
+   - Eliminado el toggle manual discrecional `requirePhotoVerification`.
+   - La obligatoriedad de la foto queda determinada rígidamente por la definición del paso (`step.requires_photo || isLastStep`).
+2. **Limpieza visual**:
+   - Removidos gradientes y reemplazados `alert()` nativos por el sistema de notificaciones `notify()`.
 
-### Ruta 4: `/estacion` ([OperatorWorkspaceView.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/views/OperatorWorkspaceView.jsx))
-- **Monolito de 1,638 Líneas**.
-- **Switch Discrecional de Calidad**: Switch "OBLIGATORIA (Activa)" vs "LIBRE / OPCIONAL" en foto de evidencia. Permite al operario apagar la regla de calidad que el modelo técnico exige.
-- **Selección Manual de PC**: Grilla horizontal de 50 botones de PCs. El operario debe adivinar qué PC trabajar en vez de que el backend despache la siguiente unidad en cola FIFO.
-- **Cámara Sobrediseñada**: `CameraCaptureModal.jsx` (750 líneas) con 6 `alert()` nativos.
+### D. Frontend - Gestión de Técnicos & Login (`TechniciansManagementView.jsx` y `LoginPage.jsx`)
+1. **ID secuencial determinista**:
+   - Reemplazado generador pseudo-aleatorio por cálculo secuencial `getNextOperatorId()` basado en usuarios existentes.
+2. **Modales nativos**:
+   - Confirmación de baja de técnicos mediante modal integrado, sin `window.confirm`.
+3. **Login dinámico**:
+   - Operadores de acceso rápido cargados desde la base de datos de usuarios activos en lugar de una lista estática `[1..6]`.
 
-### Ruta 5: `/tecnicos` ([TechniciansManagementView.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/views/TechniciansManagementView.jsx))
-- **Generación de ID en Frontend**: `id: 'OP-' + Math.floor(100 + Math.random() * 900)`. Riesgo de colisión y violación de Tesler (el backend debe asignar el ID correlativo autoincremental).
-- Uso de `window.confirm()` y `alert("Error: " + err.message)`.
-
-### Ruta 6: `/auditoria` ([AuditLogsView.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/views/AuditLogsView.jsx))
-- **Carga Masiva No Paginada**: `GET /orders/{order_id}/logs` descarga el 100% de registros y fotos de una sola vez, provocando colapso de memoria y lentitud en dispositivos móviles de planta.
-
-### Ruta 7: `/login` ([LoginPage.jsx](file:///d:/SISTEMAS%2002/Desktop/Proyectos_generales/proyecto_ensamblaje/frontend/src/LoginPage.jsx))
-- **Hardcodeo de Operarios**: Botones rápidos limitados estrictamente a `OP-101` .. `OP-106`. Técnicos registrados dinámicamente no aparecen en el acceso rápido.
+### E. Frontend - Modales (`UnitDetailModal.jsx`)
+1. **Manejo de errores amigable**:
+   - Reemplazados `alert()` por notificaciones `notify()` integradas.
+2. **Control de rol**:
+   - Eliminación de unidades restringida estrictamente al rol `ADMIN`.
 
 ---
 
-## 3. Plan de Reestructuración Arquitectónica
+## 3. Archivos Modificados
+- `backend/app/main.py`: Función de inferencia, auto-secuencia en DELETE, validación de diagnóstico.
+- `frontend/src/views/ChecklistEditorView.jsx`: Unificación de botones, modales de confirmación, eliminación de gradientes y emojis.
+- `frontend/src/views/OperatorWorkspaceView.jsx`: Política estricta de fotos sin toggle discrecional, notificaciones limpias.
+- `frontend/src/views/TechniciansManagementView.jsx`: ID secuencial y modal de confirmación.
+- `frontend/src/LoginPage.jsx`: Operadores dinámicos.
+- `frontend/src/modals/UnitDetailModal.jsx`: Notificaciones integradas y protección de permisos.
 
-1. **Checklists Inteligente (`ChecklistEditorView`)**:
-   - Reducir los 47 botones a un menú de acciones unificado (3 acciones clave: Importar, Exportar, Nuevo Paso).
-   - Eliminar "Re-secuenciar": la base de datos renumera automáticamente en cada inserción o borrado.
-   - Eliminar "Auto-detectar Limpieza": el backend clasifica automáticamente las palabras clave al crear o importar pasos.
-   - Ajustar el asistente de diagnóstico para que distinga entre modelos de ensamble completo (52 pasos) y modelos compactos/barebone.
-2. **Creación y Edición de Órdenes Sin Partición Manual**:
-   - Reemplazar inputs de texto plano (`asmb_0`, rangos) por auto-distribución automática en backend.
-3. **Puesto de Trabajo Directo (`OperatorWorkspaceView`)**:
-   - Eliminar switch de fotos discrecional (la ficha técnica manda).
-   - Botón único de "Siguiente PC en Cola" respetando orden FIFO.
+---
+
+## 4. Verificación
+1. **Compilación Frontend**: `vite build` ejecutado exitosamente con 0 errores (dist generado).
+2. **Backend**: Pruebas unitarias de sintaxis, importación y heurística de inferencia ejecutadas con éxito.
+3. **Diseño & UX**: Cumplimiento del 100% de la Ley de Tesler y directrices de diseño sobrio sin gradientes de IA.

@@ -166,6 +166,45 @@ def auto_heal_cleaning_flags(db: Optional[Session] = None):
         if own_session and db:
             db.close()
 
+def reorder_ezent_checklist(db: Optional[Session] = None):
+    """Reordena el paso 55 de EZENT a la posición 47 (bloque estético previo al cierre y empaque)"""
+    own_session = False
+    if db is None:
+        db = SessionLocal()
+        own_session = True
+    try:
+        step55 = db.query(QCChecklistItem).filter(
+            QCChecklistItem.model_name == "EZENT",
+            QCChecklistItem.step_number == 55
+        ).first()
+        if step55 and "tapa" in (step55.operation or "").lower():
+            # Asignar temporalmente 999
+            step55.step_number = 999
+            db.commit()
+
+            # Desplazar 47..54 hacia 48..55 en orden descendente
+            steps_to_shift = db.query(QCChecklistItem).filter(
+                QCChecklistItem.model_name == "EZENT",
+                QCChecklistItem.step_number >= 47,
+                QCChecklistItem.step_number <= 54
+            ).order_by(QCChecklistItem.step_number.desc()).all()
+
+            for s in steps_to_shift:
+                s.step_number += 1
+            db.commit()
+
+            # Asignar paso 999 a 47
+            step55.step_number = 47
+            step55.is_cleaning = True
+            db.commit()
+            print("[DB Migration] Checklist de EZENT reordenado: Paso de tapa interna reubicado a #47 exitosamente.")
+    except Exception as e:
+        db.rollback()
+        print(f"[DB Migration Warning] Error reordenando checklist de EZENT: {e}")
+    finally:
+        if own_session and db:
+            db.close()
+
 # Inicialización de base de datos en startup
 @app.on_event("startup")
 def startup_db_init():
@@ -178,6 +217,7 @@ def startup_db_init():
             db_session = SessionLocal()
             seed_database(db_session)
             auto_heal_cleaning_flags(db_session)
+            reorder_ezent_checklist(db_session)
             print(f"[DB] Base de datos y orden inicial sembrada correctamente.")
             break
         except Exception as e:
@@ -1917,7 +1957,9 @@ def get_operator_workspace(
             assignment = user_assignments[0]
 
     # 4. Fallback ÚNICAMENTE para administrador o supervisor auditor de esta orden
-    if not assignment and (is_admin or (is_supervisor and (order.supervisor_id == user_id or not order.supervisor_id))):
+    order_sup_ids = [s.strip().upper() for s in (order.supervisor_id or "").split(",") if s.strip()]
+    is_order_sup = is_admin or (is_supervisor and ((user_id or "").upper() in order_sup_ids or not order_sup_ids))
+    if not assignment and is_order_sup:
         target_st = station_number or 1
         assignment = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == order.order_id,
@@ -2481,6 +2523,10 @@ def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
     # 1. Determinar si quien solicita desmarcar es supervisor o técnico
     req_user = db.query(QCUser).filter(QCUser.id == req.user_id).first()
     is_sup = req_user and req_user.role in ["SUPERVISOR", "ADMIN"]
+    if not is_sup and order and order.supervisor_id:
+        sup_ids = [s.strip().upper() for s in order.supervisor_id.split(",") if s.strip()]
+        if (req.user_id or "").upper() in sup_ids:
+            is_sup = True
     if not is_sup:
         st_asgn = db.query(QCStationAssignment).filter(
             QCStationAssignment.order_id == real_order_id,

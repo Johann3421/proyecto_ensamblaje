@@ -58,7 +58,20 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   const [supervisorAuditModalOpen, setSupervisorAuditModalOpen] = useState(false);
   const [activeSupervisorAudit, setActiveSupervisorAudit] = useState(supervisor_audit);
 
-  const isSupervisorMode = Boolean(workspace.is_supervisor_mode || assignment.is_supervisor_station || assignment.station_number === 0);
+  const isSupervisorUser = useMemo(() => {
+    if (currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'ADMIN') return true;
+    if (!order?.supervisor_id) return false;
+    const supIds = order.supervisor_id.split(',').map(s => s.trim().toUpperCase());
+    return supIds.includes((currentUser.id || "").toUpperCase()) || supIds.includes((currentUser.name || "").toUpperCase());
+  }, [currentUser, order?.supervisor_id]);
+
+  const isAssignedTechToCurrentStation = assignment?.user_id === currentUser.id || assignment?.secondary_user_id === currentUser.id;
+  const isSupervisorMode = Boolean(
+    workspace.is_supervisor_mode || 
+    assignment.is_supervisor_station || 
+    assignment.station_number === 0 || 
+    (isSupervisorUser && !isAssignedTechToCurrentStation)
+  );
 
   useEffect(() => {
     setActiveSupervisorAudit(supervisor_audit || null);
@@ -134,7 +147,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
     return uniqueStationSteps.filter(s => technicianDoneSteps.includes(s.step_number)).length;
   }, [uniqueStationSteps, technicianDoneSteps]);
 
-  const isSupervisorUser = currentUser.role === 'SUPERVISOR' || currentUser.role === 'ADMIN' || (order?.supervisor_id && currentUser.id === order.supervisor_id);
+  // isSupervisorUser moved to top memo
 
   // Pasos específicos asignados para supervisión en esta orden
   const supervisedStepsSet = useMemo(() => {
@@ -154,7 +167,41 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
   const handleToggleStep = async (step) => {
     if (isSupervisorMode) {
-      setSupervisorPhotoStepModal(step);
+      const isAlreadyVerified = supervisorDoneSteps.includes(step.step_number) || Boolean(supervisorStepLogsMap[step.step_number]);
+      if (isAlreadyVerified) {
+        // Desmarcar Visto Bueno de supervisión
+        try {
+          setSubmittingStep(step.step_number);
+          const res = await fetch(`${API_BASE}/operator/uncheck-step`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              order_id: order.order_id,
+              unit_number: active_unit.unit_number,
+              step_number: step.step_number,
+              station_number: step.origin_station_number || assignment.station_number,
+              user_id: currentUser.id,
+              user_name: currentUser.name,
+              reason: "Visto Bueno de supervisión retirado para corrección"
+            })
+          });
+          if (!res.ok) throw new Error("Error al retirar visto bueno del supervisor");
+          setSupervisorDoneSteps(prev => prev.filter(num => num !== step.step_number));
+          setCompletedSteps(prev => prev.filter(num => num !== step.step_number));
+          setSupervisorStepLogsMap(prev => {
+            const updated = { ...prev };
+            delete updated[step.step_number];
+            return updated;
+          });
+          notify(`↩ V°B° del Paso #${step.step_number} retirado`);
+        } catch (err) {
+          if (notify) notify(err.message || "Error al retirar supervisión", "danger");
+        } finally {
+          setSubmittingStep(null);
+        }
+      } else {
+        setSupervisorPhotoStepModal(step);
+      }
       return;
     }
     const isDone = technicianDoneSteps.includes(step.step_number);

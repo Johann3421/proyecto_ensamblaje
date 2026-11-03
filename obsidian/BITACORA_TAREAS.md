@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-03** | Auditoría integral de producción: rutas, checklists PROWORK y violaciones Ley de Tesler | `auditoria` / `arquitectura` | ✅ Completado | [[2026-11-03-auditoria-rutas-produccion-prowork-y-ley-de-tesler]] |
 | **2026-10-23** | Corrección de regla de estaciones de limpieza en edición de órdenes (mínimo 1 personal) | `fix` / `ux` | ✅ Completado | [[2026-10-23-fix-regla-limpieza-edicion-ordenes]] |
 | **2026-10-23** | Auditoría integral del frontend: Ley de Tesler, estructura y ergonomía | `auditoria` / `arquitectura` | ✅ Completado | [[2026-10-23-auditoria-frontend-ley-tesler-y-estructura]] |
 | **2026-10-23** | Aislamiento estricto de estaciones y órdenes: eliminación del bypass de apoyo | `fix` / `refactor` | ✅ Completado | [[2026-10-23-aislamiento-estricto-estaciones-eliminacion-bypass-apoyo]] |

@@ -143,10 +143,12 @@ def auto_migrate_schema():
     print("[DB Migration] Esquema de base de datos verificado y actualizado.")
 
 # Inicialización de base de datos en startup
-@app.on_event("startup")
-
-def auto_heal_cleaning_flags(db: Session):
+def auto_heal_cleaning_flags(db: Optional[Session] = None):
     """Sincroniza y corrige automáticamente los flags is_cleaning de todos los modelos (Ley de Tesler)"""
+    own_session = False
+    if db is None:
+        db = SessionLocal()
+        own_session = True
     try:
         items = db.query(QCChecklistItem).all()
         updated = 0
@@ -160,7 +162,12 @@ def auto_heal_cleaning_flags(db: Session):
             print(f"[DB Auto-Healing] Se sincronizaron {updated} pasos de limpieza en checklist de modelos.")
     except Exception as e:
         print(f"[DB Auto-Healing Warning] No se pudo auto-corregir flags de limpieza: {e}")
+    finally:
+        if own_session and db:
+            db.close()
 
+# Inicialización de base de datos en startup
+@app.on_event("startup")
 def startup_db_init():
     print("[DB] Verificando tablas y sembrando datos iniciales...")
     for attempt in range(1, 11):

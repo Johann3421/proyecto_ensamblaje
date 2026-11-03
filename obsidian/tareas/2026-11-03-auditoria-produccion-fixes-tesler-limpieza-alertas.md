@@ -73,3 +73,4 @@ A partir de la auditoría exhaustiva en vivo sobre la API y base de datos de pro
 - `rtk npm --prefix frontend run build`: Exitoso en 4.06s con 0 errores de compilación.
 - Verificación de sintaxis de Python backend: Exitosa.
 - Escaneo integral de código en `frontend/src`: 0 llamadas a `alert()` y 0 a `confirm()`.
+

@@ -74,15 +74,15 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
             <Shield className="w-4 h-4 text-emerald-800" />
             <span>Auditoría y Evidencias Forenses</span>
           </h3>
-          <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+          <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-300">
             {logs.length} registros · {totalPhotosCount} fotos
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           {orders.length > 0 && (
             <div>
-              <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider block mb-1">Orden de Trabajo</label>
+              <label className="text-xs font-bold text-stone-700 uppercase tracking-wide block mb-1">Orden de Trabajo</label>
               <select
                 value={activeOrderId || ""}
                 onChange={(e) => {
@@ -90,7 +90,7 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                   setFilterUnit("");
                   onSelectOrder?.(e.target.value);
                 }}
-                className="text-xs border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 font-semibold touch-target w-full"
+                className="text-xs border border-stone-300 rounded-lg px-3 py-2 bg-stone-50 font-semibold touch-target w-full"
               >
                 {orders.map(o => <option key={o.order_id} value={o.order_id}>{o.order_id} ({o.model_name})</option>)}
               </select>
@@ -98,11 +98,11 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
           )}
 
           <div>
-            <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider block mb-1">Organizar por PC</label>
+            <label className="text-xs font-bold text-stone-700 uppercase tracking-wide block mb-1">Organizar por PC</label>
             <select
               value={filterUnit}
               onChange={(e) => setFilterUnit(e.target.value)}
-              className="text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white font-semibold touch-target w-full"
+              className="text-xs border border-stone-300 rounded-lg px-3 py-2 bg-white font-semibold touch-target w-full"
             >
               <option value="">Todas las PCs ({availableUnits.length} disponibles)</option>
               {availableUnits.map(u => (
@@ -114,13 +114,13 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-gray-600 uppercase tracking-wider block mb-1">Filtrar por Técnico</label>
+            <label className="text-xs font-bold text-stone-700 uppercase tracking-wide block mb-1">Filtrar por Técnico</label>
             <input
               type="text"
               placeholder="Buscar técnico..."
               value={filterUser}
               onChange={(e) => setFilterUser(e.target.value)}
-              className="text-xs border border-gray-300 rounded-lg px-3 py-2 touch-target w-full"
+              className="text-xs border border-stone-300 rounded-lg px-3 py-2 touch-target w-full"
             />
           </div>
         </div>

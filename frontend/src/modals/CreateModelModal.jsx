@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, AlertCircle, Plus, Loader2, X, PlusCircle, ClipboardList, Sparkles } from 'lucide-react';
+import { Check, AlertCircle, Plus, Loader2, X, PlusCircle, ClipboardList } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
 export default function CreateModelModal({ isOpen, onClose, onSuccess, existingModels = [], notify }) {
@@ -134,7 +134,7 @@ export default function CreateModelModal({ isOpen, onClose, onSuccess, existingM
                 />
                 <div className="text-xs">
                   <div className="font-bold text-gray-900 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
                     <span>⚡ Plantilla Maestra SekaiTech (52 Pasos)</span>
                     <span className="text-[9px] bg-stone-200 text-stone-800 px-1.5 py-0.5 rounded font-bold">Recomendado</span>
                   </div>

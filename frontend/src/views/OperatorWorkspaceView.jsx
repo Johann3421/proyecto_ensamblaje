@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Video, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Sparkles, Clock } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Video, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Clock } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Card from '../components/Card';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
@@ -57,6 +57,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   const [requirePhotoVerification, setRequirePhotoVerification] = useState(true);
   const [supervisorAuditModalOpen, setSupervisorAuditModalOpen] = useState(false);
   const [activeSupervisorAudit, setActiveSupervisorAudit] = useState(supervisor_audit);
+  const [showSupervisorGuide, setShowSupervisorGuide] = useState(false);
 
   const isSupervisorUser = useMemo(() => {
     if (currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'ADMIN') return true;
@@ -850,29 +851,36 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
           {/* PROTOCOLO OFICIAL DE VERIFICACIÓN DEL SUPERVISOR QC (VISIBLE SOLO PARA SUPERVISOR/ADMIN) */}
           {isSupervisorUser && (
-            <div className="p-3.5 bg-gradient-to-br from-amber-50/90 via-orange-50/50 to-white border-b-2 border-amber-300 space-y-3">
+            <div className="p-3 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white border-b-2 border-amber-300 space-y-2.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
-                    🛡️
+                    <ShieldCheck className="w-4 h-4" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-xs font-bold text-amber-950">
-                        Protocolo de Verificación del Supervisor QC
+                        Protocolo del Supervisor QC
                       </h4>
                       {activeSupervisorAudit?.status === "APPROVED" ? (
-                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
-                          <CheckCircle className="w-3 h-3 text-emerald-600" /> V°B° APROBADO
+                        <span className="text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> V°B° APROBADO
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                        <span className="text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
                           ⏳ Pendiente de Auditoría
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setShowSupervisorGuide(!showSupervisorGuide)}
+                        className="text-[11px] text-amber-900 font-bold underline hover:text-amber-700 ml-1"
+                      >
+                        {showSupervisorGuide ? "Ocultar Guía ▲" : "Ver Guía de 4 Puntos ▼"}
+                      </button>
                     </div>
-                    <p className="text-[10px] text-amber-800 mt-0.5">
-                      Sigue los 5 pasos normativos antes de otorgar el Visto Bueno a la PC #{active_unit.unit_number.toString().padStart(2, '0')}:
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      Auditoría normativa para PC #{active_unit.unit_number.toString().padStart(2, '0')}
                     </p>
                   </div>
                 </div>
@@ -888,7 +896,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     }`}
                   >
                     <ShieldCheck className="w-4 h-4" />
-                    <span>{activeSupervisorAudit?.status === "APPROVED" ? "Ver / Modificar V°B°" : "🛡️ Auditar y Emitir V°B°"}</span>
+                    <span>{activeSupervisorAudit?.status === "APPROVED" ? "Ver / Modificar V°B°" : "🛡️ Emitir V°B°"}</span>
                   </button>
                   <button
                     type="button"
@@ -902,48 +910,50 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                 </div>
               </div>
 
-              {/* Guía detallada de los 5 pasos del supervisor */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-                <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-                  <div>
-                    <strong className="text-[11px] text-gray-900 block">1. Auditoría de Fotos</strong>
-                    <span className="text-[10px] text-gray-500 leading-tight block">
-                      Revisar fotos de placa madre, cooler, pasta térmica y precintos tomadas en las estaciones.
-                    </span>
+              {/* Guía detallada colapsable */}
+              {showSupervisorGuide && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1.5 border-t border-amber-200 fade-in">
+                  <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                    <div>
+                      <strong className="text-xs text-gray-900 block">1. Auditoría de Fotos</strong>
+                      <span className="text-[11px] text-gray-600 leading-tight block">
+                        Revisar fotos de placa madre, cooler, pasta térmica y precintos tomadas en las estaciones.
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-                  <div>
-                    <strong className="text-[11px] text-gray-900 block">🧼 2. Doble Limpieza (Obligatoria)</strong>
-                    <span className="text-[10px] text-gray-500 leading-tight block">
-                      Inspeccionar que el chasis esté 100% libre de huellas, restos de cintillos cortados y polvo.
-                    </span>
+                  <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                    <div>
+                      <strong className="text-xs text-gray-900 block">2. Doble Limpieza (Obligatoria)</strong>
+                      <span className="text-[11px] text-gray-600 leading-tight block">
+                        Inspeccionar que el chasis esté 100% libre de huellas, restos de cintillos cortados y polvo.
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
-                  <div>
-                    <strong className="text-[11px] text-gray-900 block">3. Hardware, BIOS & POST</strong>
-                    <span className="text-[10px] text-gray-500 leading-tight block">
-                      Comprobar encendido a la primera, RAM Dual Channel, XMP/EXPO y sin cables tocando ventiladores.
-                    </span>
+                  <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                    <div>
+                      <strong className="text-xs text-gray-900 block">3. Hardware, BIOS & POST</strong>
+                      <span className="text-[11px] text-gray-600 leading-tight block">
+                        Comprobar encendido a la primera, RAM Dual Channel, XMP/EXPO y sin cables tocando ventiladores.
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[10px] flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
-                  <div>
-                    <strong className="text-[11px] text-gray-900 block">4. Trazabilidad & KENYA</strong>
-                    <span className="text-[10px] text-gray-500 leading-tight block">
-                      Serie ({active_unit.serial_number}) idéntica a etiqueta física y sticker frontal de marca KENYA OK.
-                    </span>
+                  <div className="p-2 rounded-xl bg-white border border-amber-200 shadow-xs flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 font-bold text-[11px] flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
+                    <div>
+                      <strong className="text-xs text-gray-900 block">4. Trazabilidad & KENYA</strong>
+                      <span className="text-[11px] text-gray-600 leading-tight block">
+                        Serie ({active_unit.serial_number}) idéntica a etiqueta física y sticker frontal de marca KENYA OK.
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -1685,6 +1695,23 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             onRefresh && onRefresh();
           }}
         />
+      )}
+
+      {/* BARRA FLOTANTE DE DESPACHO RÁPIDO PARA EL OPERARIO (LEY DE TESLER / ERGONOMÍA DE PLANTA) */}
+      {!isSupervisorMode && active_unit && isStationComplete && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-lg shadow-2xl rounded-2xl overflow-hidden border-2 border-emerald-500 bg-white p-2">
+          <button
+            onClick={handleFinishStation}
+            disabled={finishingUnit}
+            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2.5 transition shadow-md touch-target"
+          >
+            {finishingUnit ? (
+              <><Loader2 className="w-5 h-5 animate-spin" /><span>Despachando...</span></>
+            ) : (
+              <><ArrowRightCircle className="w-5 h-5" /><span>¡Estación Lista! Despachar PC #{active_unit.unit_number}</span></>
+            )}
+          </button>
+        </div>
       )}
     </div>
   );

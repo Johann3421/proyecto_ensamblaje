@@ -121,45 +121,45 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="p-3 border-l-4 border-l-emerald-600">
-          <p className="text-[10px] font-bold text-emerald-700 uppercase">Completadas</p>
+        <Card className="p-3.5 border-l-4 border-l-emerald-600">
+          <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">Completadas</p>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold text-emerald-600">{passed}</span>
+            <span className="text-2xl font-black text-emerald-700">{passed}</span>
             <span className="text-xs text-emerald-700 font-bold">{completionPercentage}%</span>
           </div>
         </Card>
-        <Card className="p-3 border-l-4 border-l-amber-500">
-          <p className="text-[10px] font-bold text-amber-700 uppercase">En Proceso</p>
+        <Card className="p-3.5 border-l-4 border-l-amber-500">
+          <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">En Proceso</p>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold text-amber-600">{inProgress}</span>
-            <span className="text-xs text-amber-600">activas</span>
+            <span className="text-2xl font-black text-amber-600">{inProgress}</span>
+            <span className="text-xs text-amber-700 font-semibold">activas</span>
           </div>
         </Card>
-        <Card className="p-3 border-l-4 border-l-rose-600">
-          <p className="text-[10px] font-bold text-rose-700 uppercase">Con Falla</p>
+        <Card className="p-3.5 border-l-4 border-l-rose-600">
+          <p className="text-xs font-bold text-rose-800 uppercase tracking-wide">Con Falla</p>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold text-rose-600">{failed}</span>
-            <span className="text-xs text-rose-600">{issues.length} tickets</span>
+            <span className="text-2xl font-black text-rose-600">{failed}</span>
+            <span className="text-xs text-rose-700 font-semibold">{issues.length} tickets</span>
           </div>
         </Card>
-        <Card className="p-3 border-l-4 border-l-gray-400">
-          <p className="text-[10px] font-bold text-gray-500 uppercase">En Cola</p>
+        <Card className="p-3.5 border-l-4 border-l-stone-400">
+          <p className="text-xs font-bold text-stone-600 uppercase tracking-wide">En Cola</p>
           <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold text-gray-700">{pending}</span>
-            <span className="text-xs text-gray-500">pendiente</span>
+            <span className="text-2xl font-black text-stone-700">{pending}</span>
+            <span className="text-xs text-stone-500 font-semibold">pendiente</span>
           </div>
         </Card>
       </div>
 
       {/* Barra progreso general */}
-      <Card className="p-3">
-        <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1.5">
+      <Card className="p-3.5">
+        <div className="flex justify-between text-xs font-bold text-stone-800 mb-1.5">
           <span>Progreso del Lote</span>
           <span>{passed} / {total} PCs</span>
         </div>
-        <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+        <div className="w-full bg-stone-200 h-2.5 rounded-full overflow-hidden">
           <div
-            className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+            className="bg-emerald-600 h-full rounded-full transition-all duration-500"
             style={{ width: `${completionPercentage}%` }}
           ></div>
         </div>
@@ -172,27 +172,27 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
             <Columns className="w-4 h-4 text-primary" />
             <span>Matriz de Trazabilidad</span>
           </h3>
-          <div className="flex items-center gap-3 text-[10px] text-gray-500">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>OK</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block animate-pulse"></span>Activo</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>Falla</span>
+          <div className="flex items-center gap-3 text-xs text-gray-600">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>OK</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block animate-pulse"></span>Activo</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>Falla</span>
           </div>
         </div>
 
-        <div className="table-mobile-scroll">
-          <table className="w-full text-left border-collapse text-xs min-w-[480px]">
+        <div className="table-mobile-scroll overflow-x-auto w-full relative">
+          <table className="w-full text-left border-collapse text-xs min-w-[520px]">
             <thead>
-              <tr className="bg-gray-50 text-gray-700 border-b border-gray-200">
-                <th className="py-2 px-3 font-bold sticky left-0 bg-gray-50 z-10 w-20">PC</th>
+              <tr className="bg-stone-50 text-stone-700 border-b border-stone-200">
+                <th className="py-2.5 px-3 font-bold sticky left-0 bg-stone-50 z-10 w-20 border-r border-stone-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">PC</th>
                 {stations.map(st => (
-                  <th key={st.station_number} className="py-2 px-3 font-bold border-l border-gray-200 whitespace-nowrap">
-                    <div className="text-gray-800 font-semibold">E{st.station_number}</div>
-                    <div className="text-[10px] text-gray-500 font-normal hidden sm:block truncate max-w-[100px]">
+                  <th key={st.station_number} className="py-2.5 px-3 font-bold border-l border-stone-200 whitespace-nowrap">
+                    <div className="text-stone-900 font-bold">E{st.station_number}</div>
+                    <div className="text-[11px] text-stone-500 font-normal hidden sm:block truncate max-w-[110px]">
                       {st.user_name}
                     </div>
                   </th>
                 ))}
-                <th className="py-2 px-3 font-bold border-l border-gray-200 text-center w-24">Estado</th>
+                <th className="py-2.5 px-3 font-bold border-l border-stone-200 text-center w-28">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -203,9 +203,9 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
                   <tr
                     key={unit.unit_number}
                     onClick={() => onSelectUnit(unit)}
-                    className="hover:bg-stone-100/50 active:bg-stone-200 cursor-pointer transition"
+                    className="hover:bg-stone-100/60 active:bg-stone-200 cursor-pointer transition"
                   >
-                    <td className="py-2 px-3 font-bold text-gray-900 sticky left-0 bg-white z-10">
+                    <td className="py-2.5 px-3 font-bold text-stone-900 sticky left-0 bg-white z-10 border-r border-stone-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                       #{unit.unit_number.toString().padStart(2, '0')}
                     </td>
                     {stations.map(st => {

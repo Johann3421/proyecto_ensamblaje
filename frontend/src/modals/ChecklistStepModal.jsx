@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, X, Wrench, Trash2, Trash, Sparkles, Camera } from 'lucide-react';
+import { Upload, X, Wrench, Trash2, Trash, Camera } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
 import { isStepCleaning } from '../utils/steps';
@@ -100,7 +100,7 @@ export default function ChecklistStepModal({
             }`}>
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                  {formData.is_cleaning ? <Sparkles className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-primary" />}
+                  {formData.is_cleaning ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-primary" />}
                   <span>Clasificación del Paso (Asignación)</span>
                 </label>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${

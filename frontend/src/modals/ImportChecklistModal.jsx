@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Download, Upload, Loader2, X, Sparkles, Wrench } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Download, Upload, Loader2, X, Wrench } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
 export default function ImportChecklistModal({ modelName, category = "ASSEMBLY", onClose, onSuccess, notify }) {
@@ -68,7 +68,7 @@ export default function ImportChecklistModal({ modelName, category = "ASSEMBLY",
         }`}>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
-              {isCleaning ? <Sparkles className="w-4 h-4 text-emerald-200" /> : <Wrench className="w-4 h-4 text-stone-200" />}
+              {isCleaning ? <ShieldCheck className="w-4 h-4 text-emerald-200" /> : <Wrench className="w-4 h-4 text-stone-200" />}
             </div>
             <div>
               <h3 className="text-sm font-bold">
@@ -122,7 +122,7 @@ export default function ImportChecklistModal({ modelName, category = "ASSEMBLY",
                 }`}
               >
                 <div className={`p-1.5 rounded-lg ${isCleaning ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"}`}>
-                  <Sparkles className="w-4 h-4" />
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
                   <p className="text-xs font-bold leading-tight">Apartado Limpieza QC</p>

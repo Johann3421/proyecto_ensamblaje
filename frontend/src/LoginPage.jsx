@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, ShieldCheck, Mail, Lock, User, Eye, EyeOff, ArrowRight, Cpu, CheckCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { Shield, ShieldCheck, Mail, Lock, User, Eye, EyeOff, ArrowRight, Cpu, CheckCircle, AlertCircle, Loader2, UserPlus, Users } from 'lucide-react';
 
 import { API_BASE } from './utils/api';
 
@@ -19,6 +19,7 @@ export default function LoginPage({ onLogin }) {
   const [success, setSuccess] = useState('');
   const [availableUsers, setAvailableUsers] = useState([]);
   const [animateIn, setAnimateIn] = useState(false);
+  const [quickRole, setQuickRole] = useState('ALL'); // 'ALL' | 'ADMIN' | 'SUPERVISOR' | 'OPERATOR'
 
   useEffect(() => {
     setTimeout(() => setAnimateIn(true), 100);
@@ -128,7 +129,7 @@ export default function LoginPage({ onLogin }) {
               className={`login-tab ${mode === 'register' ? 'active' : ''}`}
               onClick={() => switchMode('register')}
             >
-              <Sparkles size={14} />
+              <UserPlus size={14} />
               Registrarse
             </button>
           </div>
@@ -244,13 +245,30 @@ export default function LoginPage({ onLogin }) {
             </button>
             {/* Quick Access Account Selector */}
             {mode === 'login' && (
-              <div className="mt-2 pt-3 border-t border-stone-200">
-                <div className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>Acceso Rápido por Rol:</span>
+              <div className="mt-3 pt-3 border-t border-stone-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-stone-600 uppercase tracking-wider">Acceso Rápido:</span>
+                  <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-lg">
+                    {['ALL', 'ADMIN', 'SUPERVISOR', 'OPERATOR'].map(r => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setQuickRole(r)}
+                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
+                          quickRole === r 
+                            ? 'bg-white text-stone-900 shadow-xs' 
+                            : 'text-stone-500 hover:text-stone-800'
+                        }`}
+                      >
+                        {r === 'ALL' ? 'Todos' : r === 'ADMIN' ? 'Admin' : r === 'SUPERVISOR' ? 'Sup.' : 'Oper.'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-0.5">
                   {/* Admin */}
-                  {(() => {
+                  {(quickRole === 'ALL' || quickRole === 'ADMIN') && (() => {
                     const u = availableUsers.find(x => x.role === 'ADMIN' || x.id === 'ADM-01');
                     const uEmail = u?.email || 'admin@sekaitech.com.pe';
                     const uName = u?.name || 'Ing. Carlos Mendoza';
@@ -261,19 +279,19 @@ export default function LoginPage({ onLogin }) {
                           setEmail(uEmail);
                           setPassword('admin123');
                         }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-left text-xs transition"
+                        className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-stone-100 hover:bg-stone-200/80 border border-stone-300 text-left transition"
                       >
-                        <Shield className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                        <div className="truncate">
-                          <div className="font-bold text-stone-900 text-[11px] truncate">{uName}</div>
-                          <div className="text-[9px] text-stone-500 truncate">Admin · {uEmail}</div>
+                        <Shield className="w-4 h-4 text-[#1B4332] flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-stone-900 text-xs truncate">{uName}</div>
+                          <div className="text-[11px] text-stone-500 truncate">Admin · {uEmail}</div>
                         </div>
                       </button>
                     );
                   })()}
 
                   {/* Supervisores Dinámicos */}
-                  {(() => {
+                  {(quickRole === 'ALL' || quickRole === 'SUPERVISOR') && (() => {
                     const dbSupervisors = availableUsers.filter(u => u.role === 'SUPERVISOR');
                     const supsToRender = dbSupervisors.length > 0 ? dbSupervisors : [{
                       id: 'SUP-01',
@@ -288,22 +306,22 @@ export default function LoginPage({ onLogin }) {
                           setEmail(sup.email || `${sup.id.toLowerCase()}@sekaitech.com.pe`);
                           setPassword('supervisor123');
                         }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-left text-xs transition"
+                        className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-300 text-left transition"
                       >
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
-                        <div className="truncate">
-                          <div className="font-bold text-stone-900 text-[11px] truncate">{sup.name}</div>
-                          <div className="text-[9px] text-stone-500 truncate">Supervisor · {sup.email || sup.id}</div>
+                        <ShieldCheck className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-stone-900 text-xs truncate">{sup.name}</div>
+                          <div className="text-[11px] text-emerald-800 truncate">Supervisor · {sup.id}</div>
                         </div>
                       </button>
                     ));
                   })()}
 
-                  {/* Operarios Dinámicos desde API (Ley de Tesler) */}
-                  {(() => {
+                  {/* Operarios Dinámicos desde API */}
+                  {(quickRole === 'ALL' || quickRole === 'OPERATOR') && (() => {
                     const dbOperators = availableUsers.filter(u => u.role === 'OPERATOR');
                     const opsToRender = dbOperators.length > 0
-                      ? dbOperators.slice(0, 8)
+                      ? dbOperators
                       : [1, 2, 3, 4, 5, 6].map(stNum => ({
                           id: `OP-10${stNum}`,
                           name: `Operario ${stNum}`,
@@ -320,12 +338,12 @@ export default function LoginPage({ onLogin }) {
                             setEmail(uEmail);
                             setPassword('kenya123');
                           }}
-                          className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-left text-xs transition"
+                          className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-left transition"
                         >
-                          <User className="w-3.5 h-3.5 text-stone-600 flex-shrink-0" />
-                          <div className="truncate">
-                            <div className="font-bold text-stone-900 text-[11px] truncate">{op.name}</div>
-                            <div className="text-[9px] text-stone-500 truncate">{op.id} · {uEmail}</div>
+                          <User className="w-4 h-4 text-stone-600 flex-shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-stone-900 text-xs truncate">{op.name}</div>
+                            <div className="text-[11px] text-stone-500 truncate">{op.id} · {uEmail}</div>
                           </div>
                         </button>
                       );

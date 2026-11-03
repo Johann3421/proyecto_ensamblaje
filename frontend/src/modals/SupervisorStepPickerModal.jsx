@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Check, X, Search, ShieldCheck, Sparkles, Wrench, Layers } from 'lucide-react';
+import { Check, X, Search, ShieldCheck, Wrench, Layers } from 'lucide-react';
 import { formatStepNumbersRange, isStepCleaning } from '../utils/steps';
 
 export default function SupervisorStepPickerModal({
@@ -118,7 +118,7 @@ export default function SupervisorStepPickerModal({
                   activeTab === "CLEANING" ? "bg-white text-emerald-900 shadow-2xs font-bold" : "text-stone-600 hover:text-stone-900"
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Limpieza QC ({cleaningSteps.length})</span>
               </button>
             </div>
@@ -140,7 +140,7 @@ export default function SupervisorStepPickerModal({
                     onClick={onSelectCleaningOnly}
                     className="text-[11px] text-emerald-700 hover:underline font-bold inline-flex items-center gap-1"
                   >
-                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
                     <span>Solo Limpieza</span>
                   </button>
                 </>

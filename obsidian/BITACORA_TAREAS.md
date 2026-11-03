@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-03** | Auditoría integral frontend: DOM, capturas y mala distribución de UI en todos los apartados | `auditoria` / `ux` / `tesler` | ✅ Completado | [[2026-11-03-auditoria-frontend-dom-capturas-distribucion-ui]] |
 | **2026-11-03** | Reordenamiento de secuencia EZENT (paso 55 a #47) y desacople de roles de supervision | ix / ux | ✅ Completado | [[2026-11-03-reordenamiento-ezent-paso55-y-desacople-supervisores]] |
 | **2026-11-03** | Fixes produccion: auto-healing limpieza, auto-sanitizacion estaciones y cero alertas nativas | ix / ux / 	esler | ✅ Completado | [[2026-11-03-auditoria-produccion-fixes-tesler-limpieza-alertas]] |
 | **2026-11-03** | Corrección de asignación de supervisores y orden correlativo de pasos QC | [[2026-11-03-correccion-asignacion-supervisor-y-orden-pasos]] |

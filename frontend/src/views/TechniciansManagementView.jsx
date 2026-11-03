@@ -168,7 +168,7 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
                   </div>
                   <div>
                     <h4 className="font-bold text-stone-900 text-xs">{user.name}</h4>
-                    <p className="font-mono text-[10px] text-stone-500 font-medium">{user.id}</p>
+                    <p className="font-mono text-xs text-stone-500 font-semibold">{user.id}</p>
                   </div>
                 </div>
                 <Badge variant={isAdmin ? "warning" : isSupervisor ? "success" : "neutral"}>

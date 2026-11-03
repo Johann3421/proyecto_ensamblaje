@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Check, CheckCircle, AlertTriangle, Plus, Loader2, Play, 
   ShieldCheck, PlusCircle, Wrench, Trash2, RotateCcw, 
-  Sparkles, Layers, UserPlus, X 
+  Layers, UserPlus, X 
 } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Card from '../components/Card';
@@ -186,6 +186,42 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
     if (hasCleaningSteps && cleaningStations.length > 0) {
       handleDistributeCleaningOnly();
     }
+  };
+
+  // Manejador: Aplicar Preset Inteligente de Línea (Ley de Tesler)
+  const handleApplyPreset = (asmbCount, cleanCount) => {
+    setAssemblyCount(asmbCount);
+    setCleaningCount(cleanCount);
+    const asmbNums = assemblySteps.map(s => s.step_number);
+    const distributedAsmb = distributeStepsEqually(asmbNums, asmbCount);
+    setAssemblyStations(Array.from({ length: asmbCount }, (_, i) => ({
+      station_number: i + 1,
+      station_name: DEFAULT_ASSEMBLY_NAMES[i] || `Estación Ensamblaje ${i + 1}`,
+      user_id: users[i % (users.length || 1)]?.id || `OP-${101 + i}`,
+      user_name: users[i % (users.length || 1)]?.name || `Operario ${i + 1}`,
+      secondary_user_id: "",
+      secondary_user_name: "",
+      is_cleaning_station: false,
+      station_type: "ASSEMBLY",
+      step_numbers: distributedAsmb[i] || []
+    })));
+
+    const cleanNums = cleaningSteps.map(s => s.step_number);
+    const actualClean = hasCleaningSteps ? cleanCount : 0;
+    const distributedClean = distributeStepsEqually(cleanNums, actualClean);
+    setCleaningStations(Array.from({ length: actualClean }, (_, i) => ({
+      station_number: asmbCount + i + 1,
+      station_name: DEFAULT_CLEANING_NAMES[i] || `Estación Limpieza ${i + 1}`,
+      user_id: users[(asmbCount + i) % (users.length || 1)]?.id || `OP-${201 + i}`,
+      user_name: users[(asmbCount + i) % (users.length || 1)]?.name || `Operario Limpieza ${i + 1}`,
+      secondary_user_id: "",
+      secondary_user_name: "",
+      is_cleaning_station: true,
+      station_type: "CLEANING",
+      step_numbers: distributedClean[i] || []
+    })));
+
+    notify?.(`Preset aplicado: ${asmbCount} Ensamblaje + ${actualClean} Limpieza. Pasos distribuidos al 100%.`, "success");
   };
 
   // Manejadores para agregar / quitar Inspectores
@@ -823,7 +859,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                         disabled={populatingSteps}
                         className="px-3 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg font-bold text-xs shadow-xs flex items-center gap-1.5 transition touch-target"
                       >
-                        {populatingSteps ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                        {populatingSteps ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                         <span>Cargar Pasos Estándar</span>
                       </button>
                     </div>
@@ -962,7 +998,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                             onClick={handleSelectCleaningOnlySupervisorSteps}
                             className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
                           >
-                            <Sparkles className="w-3 h-3 text-emerald-600" />
+                            <ShieldCheck className="w-3 h-3 text-emerald-600" />
                             <span>Solo Limpieza</span>
                           </button>
                         )}
@@ -1016,22 +1052,89 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
             </div>
           </div>
 
-          {/* BOTÓN GENERAL DE AUTO-REPARTO */}
-          <div className="flex items-center justify-between p-3 bg-stone-100 border border-stone-300 rounded-xl">
-            <div>
-              <h3 className="text-xs font-bold text-stone-900">División de la Línea de Producción</h3>
-              <p className="text-[11px] text-stone-600">
-                Las estaciones de ensamblaje y limpieza se gestionan y dividen de forma completamente independiente.
-              </p>
+          {/* BARRA DE PRESETS Y ESTADO GLOBAL (LEY DE TESLER) */}
+          <div className="bg-stone-50 p-3.5 rounded-2xl border-2 border-stone-300 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-800">
+                  Presets de Configuración Rápida (1-Clic):
+                </h3>
+                <p className="text-[11px] text-stone-500">
+                  Selecciona la cadencia deseada y el sistema balanceará automáticamente todos los pasos:
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center gap-1 ${
+                  isGlobalComplete 
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300" 
+                    : "bg-amber-100 text-amber-800 border-amber-300"
+                }`}>
+                  {isGlobalComplete ? "✓ 100% Pasos Cubiertos" : "⚠️ Pasos Faltantes"}
+                </span>
+                <button
+                  type="submit"
+                  disabled={submitting || !isGlobalComplete}
+                  className="px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:bg-stone-300 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 flex-shrink-0"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
+                  <span>Crear Orden</span>
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={handleDistributeBothBlocks}
-              className="px-3.5 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs rounded-lg transition shadow-xs flex items-center gap-1.5 flex-shrink-0"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Repartir Ambos Bloques</span>
-            </button>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => handleApplyPreset(3, 2)}
+                className={`p-2.5 rounded-xl border text-left transition ${
+                  assemblyCount === 3 && cleaningCount === 2
+                    ? "bg-emerald-50 border-emerald-600 shadow-2xs"
+                    : "bg-white border-stone-200 hover:border-stone-400"
+                }`}
+              >
+                <div className="font-bold text-stone-900 text-xs">Estándar (3+2)</div>
+                <div className="text-[11px] text-stone-500">3 Ensamble · 2 Limpieza</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleApplyPreset(2, 1)}
+                className={`p-2.5 rounded-xl border text-left transition ${
+                  assemblyCount === 2 && cleaningCount === 1
+                    ? "bg-emerald-50 border-emerald-600 shadow-2xs"
+                    : "bg-white border-stone-200 hover:border-stone-400"
+                }`}
+              >
+                <div className="font-bold text-stone-900 text-xs">Rápida (2+1)</div>
+                <div className="text-[11px] text-stone-500">2 Ensamble · 1 Limpieza</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleApplyPreset(4, 2)}
+                className={`p-2.5 rounded-xl border text-left transition ${
+                  assemblyCount === 4 && cleaningCount === 2
+                    ? "bg-emerald-50 border-emerald-600 shadow-2xs"
+                    : "bg-white border-stone-200 hover:border-stone-400"
+                }`}
+              >
+                <div className="font-bold text-stone-900 text-xs">Completa (4+2)</div>
+                <div className="text-[11px] text-stone-500">4 Ensamble · 2 Limpieza</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleApplyPreset(1, hasCleaningSteps ? 1 : 0)}
+                className={`p-2.5 rounded-xl border text-left transition ${
+                  assemblyCount === 1 && cleaningCount === (hasCleaningSteps ? 1 : 0)
+                    ? "bg-emerald-50 border-emerald-600 shadow-2xs"
+                    : "bg-white border-stone-200 hover:border-stone-400"
+                }`}
+              >
+                <div className="font-bold text-stone-900 text-xs">Línea Mínima (1+1)</div>
+                <div className="text-[11px] text-stone-500">1 Ensamble · 1 Limpieza</div>
+              </button>
+            </div>
           </div>
 
           {/* ========================================================= */}
@@ -1126,7 +1229,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-emerald-200">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center shadow-xs">
-                  <Sparkles className="w-4 h-4" />
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">

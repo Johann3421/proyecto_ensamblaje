@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, X, Search, Wrench, Sparkles } from 'lucide-react';
+import { Check, X, Search, Wrench } from 'lucide-react';
 import { formatStepNumbersRange, isStepCleaning } from '../utils/steps';
 
 export default function StepPickerModal({
@@ -74,7 +74,7 @@ export default function StepPickerModal({
                   Estación {station.station_number}: {station.station_name}
                 </h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white flex items-center gap-1">
-                  {isCleaningStation ? <Sparkles className="w-3 h-3 text-emerald-300" /> : <Wrench className="w-3 h-3 text-stone-200" />}
+                  {isCleaningStation ? <ShieldCheck className="w-3 h-3 text-emerald-300" /> : <Wrench className="w-3 h-3 text-stone-200" />}
                   <span>{isCleaningStation ? "Bloque Limpieza" : "Bloque Ensamblaje"}</span>
                 </span>
               </div>

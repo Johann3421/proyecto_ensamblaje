@@ -5,6 +5,7 @@ import { API_BASE } from '../utils/api';
 export default function AddUnitsModal({ order, onClose, onSuccess }) {
   const [count, setCount] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -20,7 +21,7 @@ export default function AddUnitsModal({ order, onClose, onSuccess }) {
       if (!res.ok) throw new Error(data.detail || "Error al agregar PCs");
       onSuccess(data.message);
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message || "Error al procesar");
     } finally {
       setLoading(false);
     }
@@ -39,6 +40,11 @@ export default function AddUnitsModal({ order, onClose, onSuccess }) {
           </button>
         </div>
         <form onSubmit={handleAdd} className="p-4 space-y-4 text-xs">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <span>{errorMsg}</span>
+          </div>
+        )}
           <div className="bg-stone-100 p-3 rounded-xl border border-stone-200">
             <p className="font-semibold text-stone-900">Orden activa: {order.order_id}</p>
             <p className="text-primary text-[11px] mt-0.5">Modelo: {order.model_name} · Total actual: {order.total_units} PCs</p>

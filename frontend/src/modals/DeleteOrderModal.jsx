@@ -4,6 +4,7 @@ import { API_BASE } from '../utils/api';
 
 export default function DeleteOrderModal({ order, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleDelete = async () => {
     try {
@@ -13,7 +14,7 @@ export default function DeleteOrderModal({ order, onClose, onSuccess }) {
       if (!res.ok) throw new Error(data.detail || "Error al eliminar");
       onSuccess(data.message || "Orden eliminada exitosamente");
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message || "Error al procesar");
     } finally {
       setLoading(false);
     }
@@ -32,6 +33,11 @@ export default function DeleteOrderModal({ order, onClose, onSuccess }) {
           </button>
         </div>
         <div className="p-4 space-y-3 text-xs">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <span>{errorMsg}</span>
+          </div>
+        )}
           <div className="bg-rose-50 border border-rose-200 text-rose-900 p-3 rounded-xl">
             <p className="font-bold flex items-center gap-1 mb-1">
               <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />

@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Loader2, X, ArrowRightCircle } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
-export default function TransferUnitModal({ unit, order, currentStation, allStations, currentUser, onClose, onSuccess }) {
+export default function TransferUnitModal({
+ unit, order, currentStation, allStations, currentUser, onClose, onSuccess }) {
+  const [errorMsg, setErrorMsg] = useState('');
   const availableStations = (allStations || []).filter(s => s.station_number !== currentStation);
   const [targetStation, setTargetStation] = useState(availableStations[0]?.station_number || 1);
   const [reason, setReason] = useState("Carga de trabajo / Finalizar procesos pendientes");
@@ -28,7 +30,7 @@ export default function TransferUnitModal({ unit, order, currentStation, allStat
       if (!res.ok) throw new Error(data.detail || "Error al derivar unidad");
       onSuccess(data.message || `PC #${unit.unit_number} derivada a Estación ${targetStation}`);
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message || "Error al procesar");
     } finally {
       setSubmitting(false);
     }
@@ -47,6 +49,11 @@ export default function TransferUnitModal({ unit, order, currentStation, allStat
           </button>
         </div>
         <form onSubmit={handleTransfer} className="p-4 space-y-3.5 text-xs">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <span>{errorMsg}</span>
+          </div>
+        )}
           <div className="bg-stone-100 p-3 rounded-xl border border-stone-200 text-stone-900 space-y-1">
             <p className="font-semibold text-[11px]">
               📍 Estación actual: <strong>Estación {currentStation}</strong>

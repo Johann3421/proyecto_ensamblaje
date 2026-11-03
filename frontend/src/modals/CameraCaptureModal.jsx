@@ -173,7 +173,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
       }
     } catch (e) {
       console.warn("Fallo al alternar flash/linterna:", e);
-      alert("El sensor actual no admite control directo de linterna por navegador. Puede usar el botón 'Cámara Celular' para capturar con el flash nativo de su teléfono.");
+      setCameraError("El sensor actual no admite control directo de linterna. Puede usar 'Cámara Celular' para capturar con el flash nativo.");
     }
   };
 
@@ -211,7 +211,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
       setCapturedImage(optimizedDataUrl);
     } catch (err) {
       console.error("Error al capturar y comprimir:", err);
-      alert("Error procesando foto: " + err.message);
+      setCameraError("Error procesando foto: " + err.message);
     } finally {
       setCompressing(false);
     }
@@ -275,7 +275,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
       }, 100);
     } catch (err) {
       console.error("Error al iniciar grabación:", err);
-      alert("No se pudo iniciar grabación de video: " + err.message);
+      setCameraError("No se pudo iniciar grabación de video: " + err.message);
       setIsRecording(false);
     }
   };
@@ -311,7 +311,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
       }
       setCameraError(null);
     } catch (err) {
-      alert("Error procesando archivo: " + err.message);
+      setCameraError("Error procesando archivo: " + err.message);
     } finally {
       setCompressing(false);
     }
@@ -339,7 +339,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
         if (stream) stream.getTracks().forEach(track => track.stop());
         onCapture(data.url, data.type || "video");
       } catch (err) {
-        alert("Error al subir video: " + err.message);
+        setCameraError("Error al subir video: " + err.message);
         setLoading(false);
       }
       return;
@@ -362,7 +362,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
       }
       onCapture(data.url, data.type || "image");
     } catch (err) {
-      alert("Error al subir foto: " + err.message);
+      setCameraError("Error al subir foto: " + err.message);
       setLoading(false);
     }
   };

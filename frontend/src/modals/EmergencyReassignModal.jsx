@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
-export default function EmergencyReassignModal({ order, stations, operators, onClose, onSuccess }) {
+export default function EmergencyReassignModal({
+ order, stations, operators, onClose, onSuccess }) {
+  const [errorMsg, setErrorMsg] = useState('');
   const [stationNumber, setStationNumber] = useState(stations[0]?.station_number || 1);
   const [newUserId, setNewUserId] = useState(operators[0]?.id || "");
   const [reason, setReason] = useState("Ausencia / Retraso de Operario");
@@ -29,7 +31,7 @@ export default function EmergencyReassignModal({ order, stations, operators, onC
       const data = await res.json();
       onSuccess(data.message);
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message || "Error al procesar");
     } finally {
       setSubmitting(false);
     }
@@ -48,6 +50,11 @@ export default function EmergencyReassignModal({ order, stations, operators, onC
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <span>{errorMsg}</span>
+          </div>
+        )}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">Estación a Transferir</label>
             <select

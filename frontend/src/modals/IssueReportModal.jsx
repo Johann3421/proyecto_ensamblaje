@@ -13,6 +13,7 @@ export default function IssueReportModal({ data, currentUser, orderId, stationNu
   const [cameraOpen, setCameraOpen] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -29,7 +30,7 @@ export default function IssueReportModal({ data, currentUser, orderId, stationNu
       const data = await res.json();
       setPhotoUrl(data.url);
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMessage("Error al subir foto: " + err.message);
     } finally {
       setUploadingPhoto(false);
     }
@@ -37,8 +38,9 @@ export default function IssueReportModal({ data, currentUser, orderId, stationNu
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErrorMessage("");
     if (!photoUrl) {
-      alert("⚠️ Es OBLIGATORIO tomar o adjuntar una fotografía de la falla para generar el reporte.");
+      setErrorMessage("Es OBLIGATORIO tomar o adjuntar una fotografía de la falla para generar el reporte.");
       return;
     }
     try {
@@ -64,7 +66,7 @@ export default function IssueReportModal({ data, currentUser, orderId, stationNu
       }
       onSuccess();
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMessage(err.message || "Error al registrar la incidencia");
     } finally {
       setSubmitting(false);
     }
@@ -84,6 +86,12 @@ export default function IssueReportModal({ data, currentUser, orderId, stationNu
             </button>
           </div>
           <form onSubmit={handleSubmit} className="p-4 space-y-3">
+            {errorMessage && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">Título de la Falla</label>
               <input

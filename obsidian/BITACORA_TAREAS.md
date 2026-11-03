@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-03** | Fixes produccion: auto-healing limpieza, auto-sanitizacion estaciones y cero alertas nativas | ix / ux / 	esler | ✅ Completado | [[2026-11-03-auditoria-produccion-fixes-tesler-limpieza-alertas]] |
 | **2026-11-03** | Corrección de asignación de supervisores y orden correlativo de pasos QC | [[2026-11-03-correccion-asignacion-supervisor-y-orden-pasos]] |
 | **2026-11-03** | Auditoría integral de producción: rutas, checklists PROWORK y violaciones Ley de Tesler | `auditoria` / `arquitectura` | ✅ Completado | [[2026-11-03-auditoria-rutas-produccion-prowork-y-ley-de-tesler]] |
 | **2026-10-23** | Corrección de regla de estaciones de limpieza en edición de órdenes (mínimo 1 personal) | `fix` / `ux` | ✅ Completado | [[2026-10-23-fix-regla-limpieza-edicion-ordenes]] |

@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Loader2, X, ArrowRightCircle } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
-export default function ReassignStepModal({ step, unit, order, currentStation, allStations, currentUser, onClose, onSuccess }) {
+export default function ReassignStepModal({
+ step, unit, order, currentStation, allStations, currentUser, onClose, onSuccess }) {
+  const [errorMsg, setErrorMsg] = useState('');
   const availableStations = (allStations || []).filter(s => s.station_number !== currentStation);
   const [targetStation, setTargetStation] = useState(availableStations[0]?.station_number || 1);
   const [scope, setScope] = useState("UNIT"); // "UNIT" o "ALL"
@@ -30,7 +32,7 @@ export default function ReassignStepModal({ step, unit, order, currentStation, a
       if (!res.ok) throw new Error(data.detail || "Error al reasignar paso");
       onSuccess(data.message || `Paso #${step.step_number} reasignado a Estación ${targetStation}`);
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message || "Error al procesar");
     } finally {
       setSubmitting(false);
     }
@@ -49,6 +51,11 @@ export default function ReassignStepModal({ step, unit, order, currentStation, a
           </button>
         </div>
         <form onSubmit={handleReassign} className="p-4 space-y-3 text-xs">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <span>{errorMsg}</span>
+          </div>
+        )}
           <div className="bg-sky-50 p-3 rounded-xl border border-sky-200 text-sky-950 space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700 block">Proceso Seleccionado</span>
             <p className="font-bold text-sm text-sky-900">

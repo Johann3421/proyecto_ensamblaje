@@ -8,6 +8,7 @@ import SupervisorAuditModal from '../modals/SupervisorAuditModal';
 export default function UnitDetailModal({ unit, order, stations, issues = [], currentUser, onPreviewPhoto, onClose, onSuccess, notify }) {
   const [loading, setLoading] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState(null);
   const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
   const [supervisorAuditData, setSupervisorAuditData] = useState(null);
   const [unitLogs, setUnitLogs] = useState([]);
@@ -34,20 +35,27 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
 
   const unitPhotos = unitLogs.filter(l => l.photo_url);
 
-  const handleResetUnit = async () => {
-    if (!window.confirm(`¿Seguro que deseas reiniciar la PC #${unit.unit_number}? Su progreso volverá a Estación 1 y se limpiarán sus registros.`)) return;
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}/reset`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Error al reiniciar");
-      onSuccess(data.message || `PC #${unit.unit_number} reiniciada`);
-    } catch (err) {
-      if (notify) notify(err.message || "Error al reiniciar unidad", "danger");
-      else alert("Error: " + err.message);
-    } finally {
-      setLoading(false);
-    }
+  const handleResetUnit = () => {
+    setPendingConfirm({
+      title: "Reiniciar Unidad",
+      message: `¿Seguro que deseas reiniciar la PC #${unit.unit_number}? Su progreso volverá a Estación 1 y se limpiarán sus registros de esta estación.`,
+      confirmText: "Sí, reiniciar",
+      onConfirm: async () => {
+        setPendingConfirm(null);
+        try {
+          setLoading(true);
+          const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}/reset`, { method: "POST" });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Error al reiniciar");
+          onSuccess(data.message || `PC #${unit.unit_number} reiniciada`);
+        } catch (err) {
+          if (notify) notify(err.message || "Error al reiniciar unidad", "danger");
+          else console.error("Error al reiniciar unidad:", err);
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const handleResumeUnit = async () => {
@@ -59,27 +67,34 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
       onSuccess(data.message || `PC #${unit.unit_number} reincorporada`);
     } catch (err) {
       if (notify) notify(err.message || "Error al reanudar unidad", "danger");
-      else alert("Error: " + err.message);
+      else console.error("Error al reanudar unidad:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteUnit = async () => {
+  const handleDeleteUnit = () => {
     if (currentUser?.role !== "ADMIN") return;
-    if (!window.confirm(`¿ELIMINAR definitivamente la PC #${unit.unit_number} de la orden? Esta acción reducirá el total de unidades del lote.`)) return;
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Error al eliminar");
-      onSuccess(data.message || `PC #${unit.unit_number} eliminada`);
-    } catch (err) {
-      if (notify) notify(err.message || "Error al eliminar unidad", "danger");
-      else alert("Error: " + err.message);
-    } finally {
-      setLoading(false);
-    }
+    setPendingConfirm({
+      title: "Eliminar Unidad del Lote",
+      message: `¿ELIMINAR definitivamente la PC #${unit.unit_number} de la orden? Esta acción reducirá el total de unidades del lote.`,
+      confirmText: "Sí, eliminar",
+      onConfirm: async () => {
+        setPendingConfirm(null);
+        try {
+          setLoading(true);
+          const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}`, { method: "DELETE" });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Error al eliminar");
+          onSuccess(data.message || `PC #${unit.unit_number} eliminada`);
+        } catch (err) {
+          if (notify) notify(err.message || "Error al eliminar unidad", "danger");
+          else console.error("Error al eliminar unidad:", err);
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const handleSupervisorApproval = () => {
@@ -248,7 +263,37 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
               </div>
             )}
 
-            {/* Acciones de gestión de la PC */}
+            {pendingConfirm && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 mb-2 animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-xs text-amber-900">{pendingConfirm.title}</h4>
+                  <p className="text-[11px] text-amber-800 mt-0.5">{pendingConfirm.message}</p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setPendingConfirm(null)}
+                  className="px-2.5 py-1 text-xs text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={pendingConfirm.onConfirm}
+                  className="px-2.5 py-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg"
+                >
+                  {pendingConfirm.confirmText}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Acciones de gestión de la PC */}
             <div className="pt-2 border-t border-gray-200 space-y-2">
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Acciones de Control</p>
               

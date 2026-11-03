@@ -101,7 +101,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
       loadModelSteps(targetModel);
       onRefreshModels?.();
     } catch (err) {
-      alert("Error: " + err.message);
+      if (notify) notify("Error: " + err.message, "danger"); else console.error("Error:", err);
     } finally {
       setPopulatingSteps(false);
     }
@@ -469,17 +469,17 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
     e.preventDefault();
 
     if (hasCleaningSteps && cleaningStations.length < 1) {
-      alert("⚠️ Regla de Calidad Obligatoria: El modelo contiene pasos de limpieza. Debes asignar al menos 1 estación en el Bloque de Limpieza.");
+      if (notify) notify("Regla de Calidad Obligatoria: El modelo contiene pasos de limpieza. Debes asignar al menos 1 estación en el Bloque de Limpieza.", "warning");
       return;
     }
 
     if (!assemblyCoverage.isComplete) {
-      alert(`⚠️ Faltan ${assemblyCoverage.missing.length} pasos de ensamblaje por asignar (${assemblyCoverage.missing.slice(0, 10).join(', ')}...). Asígnalos antes de iniciar.`);
+      if (notify) notify(`Faltan ${assemblyCoverage.missing.length} pasos de ensamblaje por asignar (${assemblyCoverage.missing.slice(0, 10).join(', ')}...). Asígnalos antes de iniciar.`, "warning");
       return;
     }
 
     if (hasCleaningSteps && !cleaningCoverage.isComplete) {
-      alert(`⚠️ Faltan ${cleaningCoverage.missing.length} pasos de limpieza por asignar (${cleaningCoverage.missing.slice(0, 10).join(', ')}...). Asígnalos antes de iniciar.`);
+      if (notify) notify(`Faltan ${cleaningCoverage.missing.length} pasos de limpieza por asignar (${cleaningCoverage.missing.slice(0, 10).join(', ')}...). Asígnalos antes de iniciar.`, "warning");
       return;
     }
 
@@ -549,7 +549,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
       }
       onSuccess(orderId);
     } catch (err) {
-      alert(err.message);
+      if (notify) notify(err.message || "Error al crear la orden", "danger"); else console.error("Error al crear la orden:", err);
     } finally {
       setSubmitting(false);
     }

@@ -4,7 +4,9 @@ import { API_BASE } from '../utils/api';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
 import { isStepCleaning } from '../utils/steps';
 
-export default function ChecklistStepModal({ item, onClose, onSave, onDelete }) {
+export default function ChecklistStepModal({
+  item, onClose, onSave, onDelete }) {
+  const [errorMsg, setErrorMsg] = useState('');
   const [formData, setFormData] = useState({
     ...item,
     is_cleaning: Boolean(item?.is_cleaning !== undefined ? item.is_cleaning : isStepCleaning(item))
@@ -24,7 +26,7 @@ export default function ChecklistStepModal({ item, onClose, onSave, onDelete }) 
       const data = await res.json();
       setFormData(prev => ({ ...prev, media_url: data.url, media_type: data.type }));
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message || "Error al procesar");
     } finally {
       setUploading(false);
     }
@@ -43,6 +45,11 @@ export default function ChecklistStepModal({ item, onClose, onSave, onDelete }) 
             </button>
           </div>
           <form onSubmit={(e) => { e.preventDefault(); onSave(formData); }} className="p-4 space-y-3">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <span>{errorMsg}</span>
+          </div>
+        )}
             <div className="grid grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">N°</label>

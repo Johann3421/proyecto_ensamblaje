@@ -113,6 +113,44 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
     return (modelSteps || []).some(s => isStepCleaning(s));
   }, [modelSteps]);
 
+  // Sincronizar y validar pasos de las estaciones cuando se cargan los pasos del modelo (Ley de Tesler)
+  useEffect(() => {
+    if (!modelSteps || modelSteps.length === 0) return;
+    const validStepNums = new Set(modelSteps.map(s => Number(s.step_number)));
+    
+    setStationsList(prev => {
+      let needsCorrection = false;
+      const sanitized = prev.map(st => {
+        const filtered = (st.step_numbers || []).filter(n => validStepNums.has(Number(n)));
+        if (filtered.length !== (st.step_numbers || []).length) {
+          needsCorrection = true;
+          return {
+            ...st,
+            step_numbers: filtered,
+            rawStepsInput: filtered.join(", ")
+          };
+        }
+        return st;
+      });
+
+      const totalAssigned = sanitized.reduce((acc, st) => acc + (st.step_numbers?.length || 0), 0);
+      if (totalAssigned === 0 && modelSteps.length > 0) {
+        const distributed = distributeStepsSeparatingCleaning(sanitized, modelSteps);
+        return distributed.map(st => ({
+          ...st,
+          rawStepsInput: (st.step_numbers || []).join(", ")
+        }));
+      }
+
+      return needsCorrection ? sanitized : prev;
+    });
+
+    setSupervisorSteps(prev => {
+      const filtered = prev.filter(n => validStepNums.has(Number(n)));
+      return filtered.length !== prev.length ? filtered : prev;
+    });
+  }, [modelSteps]);
+
   // Handlers para técnicos
   const handlePrimaryTechChange = (idx, newUserId) => {
     const u = users.find(x => x.id === newUserId);
@@ -202,7 +240,7 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
 
   const handleRemoveStation = (idxToRemove) => {
     if (stationsList.length <= 2) {
-      alert("Una orden de producción debe tener al menos 2 estaciones.");
+      if (notify) notify("Una orden de producción debe tener al menos 2 estaciones.", "warning");
       return;
     }
     const filtered = stationsList.filter((_, idx) => idx !== idxToRemove);
@@ -331,14 +369,12 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
     e.preventDefault();
     if (hasCleaningSteps && cleaningCount < 1) {
       if (notify) notify("Regla de Calidad: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.", "warning");
-      else alert("Regla de Calidad: El modelo incluye pasos de limpieza y requiere al menos 1 estación designada para Limpieza.");
       return;
     }
 
     for (const st of stationsList) {
       if (!st.user_id) {
         if (notify) notify(`La Estación ${st.station_number} (${st.station_name}) requiere un 1er Técnico (titular) asignado.`, "warning");
-        else alert(`La Estación ${st.station_number} (${st.station_name}) requiere un 1er Técnico (titular) asignado.`);
         return;
       }
     }
@@ -384,7 +420,7 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
       onSuccess(data.message || "Orden actualizada exitosamente");
     } catch (err) {
       if (notify) notify(err.message || "No se pudo actualizar la orden", "danger");
-      else alert("Error: " + err.message);
+      else console.error("Error al actualizar la orden:", err);
     } finally {
       setLoading(false);
     }

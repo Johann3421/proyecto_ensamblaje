@@ -17,6 +17,7 @@ export default function SupervisorAuditModal({ isOpen, onClose, orderId, unitNum
   const [photoUrl, setPhotoUrl] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
 
@@ -55,7 +56,7 @@ export default function SupervisorAuditModal({ isOpen, onClose, orderId, unitNum
       }
       onClose();
     } catch (err) {
-      alert("Error: " + err.message);
+      setErrorMsg(err.message || "Error al procesar");
     } finally {
       setLoading(false);
     }
@@ -78,6 +79,11 @@ export default function SupervisorAuditModal({ isOpen, onClose, orderId, unitNum
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-3.5 text-xs">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <span>{errorMsg}</span>
+          </div>
+        )}
           <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 space-y-1">
             <span className="text-[11px] font-bold text-amber-950 block">
               🛡️ Protocolo Oficial de Verificación y Dictamen de Calidad

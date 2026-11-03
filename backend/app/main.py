@@ -80,17 +80,17 @@ def auto_migrate_schema():
            SET is_cleaning = FALSE
            WHERE is_cleaning = TRUE
              AND (
-                 step_number IN (12, 13, 14, 35, 39, 43)
-                 OR LOWER(operation) LIKE '%bomba%'
+                 LOWER(operation) LIKE '%bomba%'
                  OR LOWER(operation) LIKE '%cooler%'
-                 OR LOWER(operation) LIKE '%video%'
-                 OR LOWER(operation) LIKE '%tarjeta%'
-                 OR LOWER(operation) LIKE '%película protectora%'
-                 OR LOWER(operation) LIKE '%pelicula protectora%'
-                 OR LOWER(operation) LIKE '%temporales%'
-                 OR LOWER(operation) LIKE '%fotogr%'
-                 OR LOWER(operation) LIKE '%limpieza del sistema%'
-             );""",
+                 OR LOWER(operation) LIKE '%disipador%'
+                 OR LOWER(operation) LIKE '%socket%'
+                 OR LOWER(operation) LIKE '%procesador%'
+                 OR LOWER(operation) LIKE '%memoria ram%'
+                 OR LOWER(operation) LIKE '%tarjeta de video%'
+                 OR LOWER(operation) LIKE '%placa madre%'
+                 OR LOWER(operation) LIKE '%fuente de poder%'
+             )
+             AND LOWER(operation) NOT LIKE '%rejilla%';""",
         """CREATE TABLE IF NOT EXISTS qc_step_station_overrides (
             id SERIAL PRIMARY KEY,
             order_id VARCHAR(50) NOT NULL,
@@ -144,6 +144,23 @@ def auto_migrate_schema():
 
 # Inicialización de base de datos en startup
 @app.on_event("startup")
+
+def auto_heal_cleaning_flags(db: Session):
+    """Sincroniza y corrige automáticamente los flags is_cleaning de todos los modelos (Ley de Tesler)"""
+    try:
+        items = db.query(QCChecklistItem).all()
+        updated = 0
+        for it in items:
+            should_clean = infer_step_is_cleaning(it.operation, it.description, it.qc_criteria)
+            if bool(it.is_cleaning) != should_clean:
+                it.is_cleaning = should_clean
+                updated += 1
+        if updated > 0:
+            db.commit()
+            print(f"[DB Auto-Healing] Se sincronizaron {updated} pasos de limpieza en checklist de modelos.")
+    except Exception as e:
+        print(f"[DB Auto-Healing Warning] No se pudo auto-corregir flags de limpieza: {e}")
+
 def startup_db_init():
     print("[DB] Verificando tablas y sembrando datos iniciales...")
     for attempt in range(1, 11):
@@ -153,6 +170,7 @@ def startup_db_init():
             auto_migrate_schema()
             db_session = SessionLocal()
             seed_database(db_session)
+            auto_heal_cleaning_flags(db_session)
             print(f"[DB] Base de datos y orden inicial sembrada correctamente.")
             break
         except Exception as e:
@@ -602,16 +620,20 @@ def infer_step_is_cleaning(operation: str, description: str, qc_criteria: str) -
         "bomba", "cooler", "disipador", "socket", "cpu", "procesador", "ram", "memoria",
         "placa madre", "motherboard", "tarjeta de video", "tarjeta gráfica", "tarjeta grafica",
         "tarjeta wi-fi", "tarjeta wifi", "gpu", "nvme", "disco", "ssd", "hdd",
-        "fuente de poder", "conectar cable", "bios", "uefi", "windows", "driver", "sistema operativo"
+        "fuente de poder", "conectar cable", "bios", "uefi", "windows", "driver", "sistema operativo",
+        "ventilación interna", "ventilacion interna", "ventiladores"
     ])
-    if is_hardware:
+    if is_hardware and not any(k in combined for k in ["limpieza de rejillas", "rejillas de ventilación", "rejillas de ventilacion"]):
         return False
     return any(k in combined for k in [
         "limpieza", "limpiar", "microfibra", "alcohol isoprop", "soplado", "polvo",
         "aire comprimido", "película", "pelicula", "adhesivo de transporte", "sello de seguridad",
         "sellos qc", "embalaje", "empaque", "caja del case", "tapa frontal", "tapa interna",
         "tapa de la parte interna", "placa e/s", "bolsa", "tecnopor", "caja principal",
-        "armar caja", "incluir en la caja", "almohadilla", "espuma", "antenas", "manual"
+        "armar caja", "incluir en la caja", "almohadilla", "espuma", "antenas", "manual",
+        "quitar stiker", "quitar adeciv", "quitar adhesiv", "rejillas de ventilación",
+        "rejillas de ventilacion", "manchas y huellas", "manchas", "huellas", "carcasa trasera",
+        "base y brazo", "cable de poder", "teclado y mouse", "cámara web y parlantes"
     ])
 
 @api_router.get("/models/{model_name}/checklist", response_model=List[ChecklistItemSchema])
@@ -1288,16 +1310,26 @@ def update_order(order_id: str, req: OrderUpdateRequest, db: Session = Depends(g
                     asgn.end_step = st_in.end_step
                 if st_in.step_numbers is not None:
                     if isinstance(st_in.step_numbers, list):
-                        asgn.step_numbers = ",".join(str(x) for x in sorted(st_in.step_numbers))
+                        nums = [int(x) for x in st_in.step_numbers if str(x).isdigit()]
+                        asgn.step_numbers = ",".join(str(x) for x in sorted(nums))
+                        if nums:
+                            asgn.start_step = min(nums)
+                            asgn.end_step = max(nums)
                     else:
                         asgn.step_numbers = str(st_in.step_numbers)
                 asgn.is_cleaning_station = bool(st_in.is_cleaning_station or st_in.station_type == "CLEANING" or "limpieza" in (st_in.station_name or "").lower())
                 asgn.station_type = st_in.station_type or ("CLEANING" if asgn.is_cleaning_station else "ASSEMBLY")
             else:
                 step_nums_str = None
+                calc_start = st_in.start_step or 1
+                calc_end = st_in.end_step or 1
                 if st_in.step_numbers:
                     if isinstance(st_in.step_numbers, list):
-                        step_nums_str = ",".join(str(x) for x in sorted(st_in.step_numbers))
+                        nums = [int(x) for x in st_in.step_numbers if str(x).isdigit()]
+                        step_nums_str = ",".join(str(x) for x in sorted(nums))
+                        if nums:
+                            calc_start = min(nums)
+                            calc_end = max(nums)
                     else:
                         step_nums_str = str(st_in.step_numbers)
                 is_clean = bool(st_in.is_cleaning_station or st_in.station_type == "CLEANING" or "limpieza" in (st_in.station_name or "").lower())
@@ -1309,8 +1341,8 @@ def update_order(order_id: str, req: OrderUpdateRequest, db: Session = Depends(g
                     user_name=st_in.user_name,
                     secondary_user_id=st_in.secondary_user_id,
                     secondary_user_name=st_in.secondary_user_name,
-                    start_step=st_in.start_step or 1,
-                    end_step=st_in.end_step or 1,
+                    start_step=calc_start,
+                    end_step=calc_end,
                     step_numbers=step_nums_str,
                     is_cleaning_station=is_clean,
                     station_type=st_in.station_type or ("CLEANING" if is_clean else "ASSEMBLY")

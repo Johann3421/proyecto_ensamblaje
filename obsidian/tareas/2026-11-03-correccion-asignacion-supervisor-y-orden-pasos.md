@@ -78,3 +78,4 @@ tags: [supervisor, asignacion, roles, auto-healing, checklist, orden-pasos, step
 1. `normalize_supervisor_steps` verificado con asserts en Python.
 2. `parseStepNumbersInput` y `formatStepNumbersRange` verificados en Node.js para rangos con guion y dos puntos.
 3. Compilación de producción con `rtk npm run build` exitosa (0 errores).
+

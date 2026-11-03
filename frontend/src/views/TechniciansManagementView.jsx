@@ -67,7 +67,7 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
       onRefreshUsers();
     } catch (err) {
       if (notify) notify(err.message || "Error al procesar técnico", "danger");
-      else alert("Error: " + err.message);
+      else console.error("Error:", err);
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export default function TechniciansManagementView({ users, onRefreshUsers, notif
       onRefreshUsers();
     } catch (err) {
       if (notify) notify(err.message || "Error al eliminar técnico", "danger");
-      else alert("Error: " + err.message);
+      else console.error("Error:", err);
     } finally {
       setLoading(false);
     }

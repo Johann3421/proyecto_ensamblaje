@@ -193,7 +193,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         notify(`↩ Paso #${step.step_number} desmarcado`);
       } catch (err) {
         if (notify) notify(err.message || "Error al desmarcar paso", "danger");
-        else alert("Error: " + err.message);
+        else console.error("Error:", err);
       } finally {
         setSubmittingStep(null);
       }
@@ -244,7 +244,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           }
         } catch (err) {
           if (notify) notify(err.message || "Error registrando paso", "danger");
-          else alert("Error: " + err.message);
+          else console.error("Error:", err);
         } finally {
           setSubmittingStep(null);
         }
@@ -296,7 +296,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       }
     } catch (err) {
       if (notify) notify(err.message || "Error subiendo evidencia", "danger");
-      else alert("Error: " + err.message);
+      else console.error("Error:", err);
     } finally {
       setSubmittingStep(null);
     }
@@ -349,7 +349,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       }
     } catch (err) {
       if (notify) notify(err.message || "Error registrando supervisión", "danger");
-      else alert("Error: " + err.message);
+      else console.error("Error:", err);
     } finally {
       setSubmittingStep(null);
     }
@@ -375,7 +375,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       onRefresh();
     } catch (err) {
       if (notify) notify(err.message || "Error al despachar estación", "danger");
-      else alert("Error: " + err.message);
+      else console.error("Error:", err);
     } finally {
       setFinishingUnit(false);
     }
@@ -1033,12 +1033,20 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
           {/* Lista de pasos principales de la estación (Deduplicados) */}
           <div className="p-3 space-y-3">
-            {displayedStationSteps.length === 0 && (
+            {totalStationSteps === 0 ? (
+              <div className="p-6 text-center text-stone-500 bg-stone-50 border border-dashed border-stone-300 rounded-2xl text-xs">
+                <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                <p className="font-bold text-stone-900">Esta estación no tiene pasos asignados</p>
+                <p className="text-[11px] text-stone-500 mt-0.5">
+                  La orden no cuenta con pasos configurados para esta estación. Contacta al supervisor o administrador de línea.
+                </p>
+              </div>
+            ) : displayedStationSteps.length === 0 && (
               <div className="p-6 text-center text-stone-500 bg-stone-50 border border-dashed border-stone-300 rounded-2xl text-xs">
                 <ShieldCheck className="w-8 h-8 text-primary mx-auto mb-2" />
-                <p className="font-bold text-stone-900">No hay pasos asignados a tu supervisión en esta estación</p>
+                <p className="font-bold text-stone-900">No hay pasos con tu filtro de supervisión en esta estación</p>
                 <p className="text-[11px] text-stone-500 mt-0.5">
-                  Tus {supervisedStepsSet?.size} pasos asignados se encuentran en otras estaciones de la línea.
+                  Los pasos asignados a tu supervisión se encuentran en otras estaciones de la línea.
                 </p>
                 <button
                   type="button"

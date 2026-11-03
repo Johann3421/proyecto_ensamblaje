@@ -12,6 +12,7 @@ export default function AdminPhotoCorrectionModal({ photo, currentUser, currentS
   const [newPhotoUrl, setNewPhotoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -31,7 +32,7 @@ export default function AdminPhotoCorrectionModal({ photo, currentUser, currentS
       const data = await res.json();
       setNewPhotoUrl(data.url);
     } catch (err) {
-      alert("Error subiendo foto: " + err.message);
+      setFormError("Error subiendo foto: " + err.message);
     } finally {
       setUploading(false);
     }
@@ -39,50 +40,43 @@ export default function AdminPhotoCorrectionModal({ photo, currentUser, currentS
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError("");
     if (!reason.trim()) {
-      alert("Por favor indica en qué se equivocó el técnico o el motivo de la corrección.");
+      setFormError("Por favor indica en qué se equivocó el técnico o el motivo de la corrección.");
       return;
     }
     if (action === "REPLACE" && !newPhotoUrl) {
-      alert("Por favor selecciona o sube la nueva fotografía de reemplazo.");
+      setFormError("Por favor selecciona o sube la nueva fotografía de reemplazo.");
       return;
     }
 
     try {
       setSubmitting(true);
-      const res = await fetch(`${API_BASE}/admin/correct-step-photo`, {
+      const res = await fetch(`${API_BASE}/admin/photos/correct`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order_id: photo.order_id,
           unit_number: photo.unit_number,
           step_number: photo.step_number,
-          action,
-          reason: reason.trim(),
-          admin_name: currentUser?.name || "Administrador",
-          return_to_station: returnToStation > 0 ? returnToStation : null,
-          new_photo_url: action === "REPLACE" ? newPhotoUrl : null
+          log_id: photo.id,
+          action: action,
+          correction_reason: reason.trim(),
+          admin_user_id: currentUser.id,
+          admin_name: currentUser.name,
+          new_photo_url: action === "REPLACE" ? newPhotoUrl : null,
+          return_to_station: returnToStation > 0 ? returnToStation : null
         })
       });
-
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Error al procesar corrección");
-
-      onSuccess(data.message);
-      onClose();
+      onSuccess(data.message || "Corrección aplicada correctamente");
     } catch (err) {
-      alert("Error: " + err.message);
+      setFormError(err.message || "Error al procesar corrección");
     } finally {
       setSubmitting(false);
     }
   };
-
-  // Generar lista de posibles estaciones de retorno previas
-  const returnOptions = [];
-  returnOptions.push({ value: 0, label: "Mantener en la estación actual" });
-  for (let s = 1; s <= Math.max(1, currentStation); s++) {
-    returnOptions.push({ value: s, label: `Devolver y reabrir Estación ${s}` });
-  }
 
   return (
     <div className="fixed inset-0 z-[110] bg-black/85 flex items-center justify-center p-3 sm:p-4 fade-in backdrop-blur-xs" onClick={onClose}>
@@ -104,6 +98,12 @@ export default function AdminPhotoCorrectionModal({ photo, currentUser, currentS
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-3.5 text-xs">
+        {formError && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2 animate-in fade-in">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{formError}</span>
+          </div>
+        )}
           {/* Acción a realizar */}
           <div>
             <label className="text-[11px] font-bold text-slate-300 block mb-1">Acción a realizar:</label>

@@ -39,7 +39,7 @@ export default function SupervisorAuditModal({ isOpen, onClose, orderId, unitNum
           order_id: orderId,
           unit_number: unitNumber,
           supervisor_id: currentUser?.id || "SUP-01",
-          supervisor_name: currentUser?.name || "Supervisor de Calidad",
+          supervisor_name: currentUser?.name || (orderId ? "Supervisor Asignado" : "Supervisor de Calidad"),
           status: status,
           checks: selectedChecks,
           photo_url: photoUrl,

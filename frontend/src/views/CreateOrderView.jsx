@@ -451,11 +451,13 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
   };
 
   const handleSelectAllSupervisorSteps = () => {
-    setSupervisorSteps((modelSteps || []).map(s => s.step_number));
+    const nums = (modelSteps || []).map(s => Number(s.step_number)).filter(n => !isNaN(n));
+    setSupervisorSteps(Array.from(new Set(nums)).sort((a, b) => a - b));
   };
 
   const handleSelectCleaningOnlySupervisorSteps = () => {
-    setSupervisorSteps((cleaningSteps || []).map(s => s.step_number));
+    const nums = (cleaningSteps || []).map(s => Number(s.step_number)).filter(n => !isNaN(n));
+    setSupervisorSteps(Array.from(new Set(nums)).sort((a, b) => a - b));
   };
 
   const handleClearSupervisorSteps = () => {
@@ -530,7 +532,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
         supervisor_name: supNames.length > 0 ? supNames.join(", ") : null,
         supervisor_ids: supIds,
         supervisor_names: supNames,
-        supervisor_steps: supervisorSteps.length > 0 ? supervisorSteps.join(",") : null,
+        supervisor_steps: supervisorSteps.length > 0 ? Array.from(new Set(supervisorSteps.map(Number))).filter(n => !isNaN(n)).sort((a, b) => a - b).join(",") : null,
         assignment_mode: "MANUAL",
         stations: payloadStations,
         created_by: "Admin / Supervisor QC"

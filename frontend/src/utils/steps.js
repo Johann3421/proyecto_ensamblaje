@@ -29,7 +29,7 @@ export function parseStepNumbersInput(inputStr, maxLimit = 500) {
   parts.forEach(part => {
     const trimmed = part.trim();
     if (!trimmed) return;
-    const rangeMatch = trimmed.match(/^(\d+)(?:-|\.\.(\d+))$/);
+    const rangeMatch = trimmed.match(/^(\d+)(?:-|\.\.)(\d+)$/);
     if (rangeMatch) {
       const from = parseInt(rangeMatch[1], 10);
       const to = parseInt(rangeMatch[2], 10);

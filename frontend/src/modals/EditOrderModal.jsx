@@ -292,8 +292,10 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
   };
 
   const handleAddSupervisorStepRange = (from, to) => {
+    const min = Math.min(from, to);
+    const max = Math.max(from, to);
     const range = [];
-    for (let i = from; i <= to; i++) range.push(i);
+    for (let i = min; i <= max; i++) range.push(i);
     setSupervisorSteps(prev => {
       const combined = Array.from(new Set([...prev, ...range]));
       return combined.sort((a, b) => a - b);
@@ -312,11 +314,13 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
   };
 
   const handleSelectAllSupervisorSteps = () => {
-    setSupervisorSteps((modelSteps || []).map(s => s.step_number));
+    const nums = (modelSteps || []).map(s => Number(s.step_number)).filter(n => !isNaN(n));
+    setSupervisorSteps(Array.from(new Set(nums)).sort((a, b) => a - b));
   };
 
   const handleSelectCleaningOnlySupervisorSteps = () => {
-    setSupervisorSteps((modelSteps || []).filter(s => isStepCleaning(s)).map(s => s.step_number));
+    const nums = (modelSteps || []).filter(s => isStepCleaning(s)).map(s => Number(s.step_number)).filter(n => !isNaN(n));
+    setSupervisorSteps(Array.from(new Set(nums)).sort((a, b) => a - b));
   };
 
   const handleClearSupervisorSteps = () => {
@@ -353,7 +357,7 @@ export default function EditOrderModal({ order, stations: initialStations = [], 
         supervisor_name: supNames.length > 0 ? supNames.join(", ") : null,
         supervisor_ids: supIds,
         supervisor_names: supNames,
-        supervisor_steps: supervisorSteps.length > 0 ? supervisorSteps.join(",") : null,
+        supervisor_steps: supervisorSteps.length > 0 ? Array.from(new Set(supervisorSteps.map(Number))).filter(n => !isNaN(n)).sort((a, b) => a - b).join(",") : null,
         stations: stationsList.map(st => ({
           station_number: st.station_number,
           station_name: st.station_name,

@@ -255,8 +255,9 @@ export default function App() {
     { id: 'operator', label: 'Mi Estación', shortLabel: 'Trabajo', icon: CheckSquare },
   ];
 
+  const isSupervisorUser = currentUser.role === 'SUPERVISOR' || (orders || []).some(o => (o.supervisor_id || '').includes(currentUser.id));
   const tabs = currentUser.role === 'ADMIN' ? ADMIN_TABS
-    : currentUser.role === 'SUPERVISOR' ? SUPERVISOR_TABS
+    : isSupervisorUser ? SUPERVISOR_TABS
     : OPERATOR_TABS;
 
   // Loading
@@ -276,7 +277,7 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  const roleLabel = currentUser.role === 'ADMIN' ? 'Admin' : currentUser.role === 'SUPERVISOR' ? 'Supervisor' : 'Operario';
+  const roleLabel = currentUser.role === 'ADMIN' ? 'Admin' : isSupervisorUser ? 'Supervisor' : 'Operario';
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-stone-50">

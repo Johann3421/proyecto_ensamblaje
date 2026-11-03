@@ -272,27 +272,31 @@ export default function LoginPage({ onLogin }) {
                     );
                   })()}
 
-                  {/* Supervisor */}
+                  {/* Supervisores Dinámicos */}
                   {(() => {
-                    const u = availableUsers.find(x => x.role === 'SUPERVISOR' || x.id === 'SUP-01');
-                    const uEmail = u?.email || 'supervisor@sekaitech.com.pe';
-                    const uName = u?.name || 'Jhoan Supervisor';
-                    return (
+                    const dbSupervisors = availableUsers.filter(u => u.role === 'SUPERVISOR');
+                    const supsToRender = dbSupervisors.length > 0 ? dbSupervisors : [{
+                      id: 'SUP-01',
+                      name: 'Jhoan Supervisor',
+                      email: 'supervisor@sekaitech.com.pe'
+                    }];
+                    return supsToRender.map(sup => (
                       <button
+                        key={sup.id}
                         type="button"
                         onClick={() => {
-                          setEmail(uEmail);
+                          setEmail(sup.email || `${sup.id.toLowerCase()}@sekaitech.com.pe`);
                           setPassword('supervisor123');
                         }}
                         className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200/80 border border-stone-200 text-left text-xs transition"
                       >
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
                         <div className="truncate">
-                          <div className="font-bold text-stone-900 text-[11px] truncate">{uName}</div>
-                          <div className="text-[9px] text-stone-500 truncate">Supervisor · {uEmail}</div>
+                          <div className="font-bold text-stone-900 text-[11px] truncate">{sup.name}</div>
+                          <div className="text-[9px] text-stone-500 truncate">Supervisor · {sup.email || sup.id}</div>
                         </div>
                       </button>
-                    );
+                    ));
                   })()}
 
                   {/* Operarios Dinámicos desde API (Ley de Tesler) */}

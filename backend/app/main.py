@@ -256,16 +256,8 @@ def login_user(req: AuthLogin, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario desactivado. Contacte al administrador.")
     
-    # Auto-healing de roles estándar por seguridad de la línea de producción
-    if user.id in ["OP-101", "OP-102", "OP-103", "OP-104", "OP-105", "OP-106"] and user.role != "OPERATOR":
-        user.role = "OPERATOR"
-        db.commit()
-        db.refresh(user)
-    elif user.id == "SUP-01" and user.role != "SUPERVISOR":
-        user.role = "SUPERVISOR"
-        db.commit()
-        db.refresh(user)
-    elif user.id == "ADM-01" and user.role != "ADMIN":
+    # Asegurar únicamente que el superusuario inicial ADM-01 conserve rol ADMIN
+    if user.id == "ADM-01" and user.role != "ADMIN":
         user.role = "ADMIN"
         db.commit()
         db.refresh(user)
@@ -279,15 +271,7 @@ def login_user(req: AuthLogin, db: Session = Depends(get_db)):
 @api_router.get("/auth/me", response_model=QCUserSchema)
 def get_current_user_info(current_user: QCUser = Depends(require_auth), db: Session = Depends(get_db)):
     """Obtener información del usuario autenticado con auto-healing de roles."""
-    if current_user.id in ["OP-101", "OP-102", "OP-103", "OP-104", "OP-105", "OP-106"] and current_user.role != "OPERATOR":
-        current_user.role = "OPERATOR"
-        db.commit()
-        db.refresh(current_user)
-    elif current_user.id == "SUP-01" and current_user.role != "SUPERVISOR":
-        current_user.role = "SUPERVISOR"
-        db.commit()
-        db.refresh(current_user)
-    elif current_user.id == "ADM-01" and current_user.role != "ADMIN":
+    if current_user.id == "ADM-01" and current_user.role != "ADMIN":
         current_user.role = "ADMIN"
         db.commit()
         db.refresh(current_user)
@@ -612,11 +596,12 @@ def get_model_diagnostics(model_name: str, db: Session = Depends(get_db)):
     }
 
 def infer_step_is_cleaning(operation: str, description: str, qc_criteria: str) -> bool:
-    """Infiere automáticamente si un paso pertenece al bloque de limpieza QC (Ley de Tesler)"""
+    """Infiere automáticamente si un paso pertenece al bloque de limpieza QC o empaque (Ley de Tesler)"""
     combined = f"{(operation or '').lower()} {(description or '').lower()} {(qc_criteria or '').lower()}"
     is_hardware = any(k in combined for k in [
         "bomba", "cooler", "disipador", "socket", "cpu", "procesador", "ram", "memoria",
-        "placa madre", "motherboard", "tarjeta", "gpu", "nvme", "disco", "ssd", "hdd",
+        "placa madre", "motherboard", "tarjeta de video", "tarjeta gráfica", "tarjeta grafica",
+        "tarjeta wi-fi", "tarjeta wifi", "gpu", "nvme", "disco", "ssd", "hdd",
         "fuente de poder", "conectar cable", "bios", "uefi", "windows", "driver", "sistema operativo"
     ])
     if is_hardware:
@@ -624,7 +609,9 @@ def infer_step_is_cleaning(operation: str, description: str, qc_criteria: str) -
     return any(k in combined for k in [
         "limpieza", "limpiar", "microfibra", "alcohol isoprop", "soplado", "polvo",
         "aire comprimido", "película", "pelicula", "adhesivo de transporte", "sello de seguridad",
-        "sellos qc", "embalaje", "empaque", "caja del case", "tapa frontal"
+        "sellos qc", "embalaje", "empaque", "caja del case", "tapa frontal", "tapa interna",
+        "tapa de la parte interna", "placa e/s", "bolsa", "tecnopor", "caja principal",
+        "armar caja", "incluir en la caja", "almohadilla", "espuma", "antenas", "manual"
     ])
 
 @api_router.get("/models/{model_name}/checklist", response_model=List[ChecklistItemSchema])
@@ -699,7 +686,7 @@ def toggle_step_cleaning(model_name: str, step_id: int, db: Session = Depends(ge
 
 @api_router.post("/models/{model_name}/classify-cleaning")
 def classify_cleaning_steps(model_name: str, db: Session = Depends(get_db)):
-    """Auto-clasifica exclusivamente pasos de estética final y empaque, protegiendo ensamblaje de hardware"""
+    """Auto-clasifica exclusivamente pasos de estética final, limpieza y empaque"""
     model_name = model_name.strip().upper()
     items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).all()
     if not items:
@@ -707,23 +694,7 @@ def classify_cleaning_steps(model_name: str, db: Session = Depends(get_db)):
     
     updated_count = 0
     for it in items:
-        combined = f"{(it.operation or '').lower()} {(it.description or '').lower()} {(it.qc_criteria or '').lower()}"
-        
-        # Si describe hardware, componentes o software, es 100% ENSAMBLAJE
-        is_hardware = any(k in combined for k in [
-            "bomba", "cooler", "disipador", "socket", "cpu", "procesador", "ram", "memoria",
-            "placa", "motherboard", "tarjeta", "gpu", "disco", "ssd", "nvme", "hdd",
-            "fuente", "cable", "bios", "uefi", "windows", "driver", "benchmark", "fotograf",
-            "temporales", "cookies", "cache", "sistema operativo"
-        ])
-        
-        should_clean = False
-        if not is_hardware:
-            should_clean = any(k in combined for k in [
-                "limpieza exterior", "limpieza final", "limpieza y embalaje", "paño de microfibra",
-                "armar caja del case", "armar caja del teclado", "empaquetado correcto", "embalaje final"
-            ])
-            
+        should_clean = infer_step_is_cleaning(it.operation, it.description, it.qc_criteria)
         if bool(it.is_cleaning) != should_clean:
             it.is_cleaning = should_clean
             updated_count += 1
@@ -954,24 +925,23 @@ def list_orders(user_id: Optional[str] = None, db: Session = Depends(get_db)):
     if user_id:
         req_u = db.query(QCUser).filter(QCUser.id == user_id).first()
         if req_u and req_u.role != "ADMIN":
+            assigned_st_orders = [
+                sa[0] for sa in db.query(QCStationAssignment.order_id).filter(
+                    (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
+                ).distinct().all()
+            ]
+            # Coincidencia como supervisor asignado (soporta ID único o lista separada por comas)
+            sup_filter = (
+                (QCOrder.supervisor_id == user_id) |
+                (QCOrder.supervisor_id.like(f"{user_id},%")) |
+                (QCOrder.supervisor_id.like(f"%, {user_id}%")) |
+                (QCOrder.supervisor_id.like(f"%,{user_id}%"))
+            )
             if req_u.role == "SUPERVISOR":
-                # Supervisor: órdenes donde sea el supervisor asignado, o la orden no tenga supervisor específico asignado, o esté en estaciones
-                assigned_st_orders = [
-                    sa[0] for sa in db.query(QCStationAssignment.order_id).filter(
-                        (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
-                    ).distinct().all()
-                ]
-                q = q.filter(
-                    (QCOrder.supervisor_id == user_id) | (QCOrder.supervisor_id.is_(None)) | (QCOrder.supervisor_id == "") | (QCOrder.order_id.in_(assigned_st_orders))
-                )
-            else:
-                # Operario: ÚNICAMENTE órdenes donde tenga una estación asignada (titular o secundario)
-                assigned_st_orders = [
-                    sa[0] for sa in db.query(QCStationAssignment.order_id).filter(
-                        (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
-                    ).distinct().all()
-                ]
-                q = q.filter(QCOrder.order_id.in_(assigned_st_orders))
+                # Si el usuario tiene rol SUPERVISOR, también tiene acceso a órdenes sin supervisor asignado
+                sup_filter = sup_filter | (QCOrder.supervisor_id.is_(None)) | (QCOrder.supervisor_id == "")
+
+            q = q.filter(sup_filter | (QCOrder.order_id.in_(assigned_st_orders)))
 
     orders = q.order_by(QCOrder.created_at.desc()).all()
     results = []
@@ -1002,6 +972,18 @@ def list_orders(user_id: Optional[str] = None, db: Session = Depends(get_db)):
             }
         })
     return results
+
+def normalize_supervisor_steps(steps_val) -> Optional[str]:
+    """Ordena estrictamente de 1 a N los pasos de supervisión eliminando duplicados"""
+    if not steps_val:
+        return None
+    if isinstance(steps_val, list):
+        nums = sorted(set(int(x) for x in steps_val if str(x).strip().isdigit()))
+        return ",".join(str(x) for x in nums) if nums else None
+    if isinstance(steps_val, str):
+        nums = sorted(set(int(x.strip()) for x in steps_val.split(",") if x.strip().isdigit()))
+        return ",".join(str(x) for x in nums) if nums else None
+    return None
 
 @api_router.post("/orders")
 def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
@@ -1050,12 +1032,7 @@ def create_order(req: OrderCreateRequest, db: Session = Depends(get_db)):
         if sup_user:
             sup_name = sup_user.name
 
-    sup_steps_str = None
-    if req.supervisor_steps is not None:
-        if isinstance(req.supervisor_steps, list):
-            sup_steps_str = ",".join(str(x) for x in sorted(set(req.supervisor_steps)))
-        elif isinstance(req.supervisor_steps, str):
-            sup_steps_str = req.supervisor_steps.strip() or None
+    sup_steps_str = normalize_supervisor_steps(req.supervisor_steps)
 
     order = QCOrder(
         order_id=req.order_id,
@@ -1244,10 +1221,7 @@ def update_order(order_id: str, req: OrderUpdateRequest, db: Session = Depends(g
             order.supervisor_name = None
 
     if req.supervisor_steps is not None:
-        if isinstance(req.supervisor_steps, list):
-            order.supervisor_steps = ",".join(str(x) for x in sorted(set(req.supervisor_steps)))
-        elif isinstance(req.supervisor_steps, str):
-            order.supervisor_steps = req.supervisor_steps.strip() or None
+        order.supervisor_steps = normalize_supervisor_steps(req.supervisor_steps)
 
     # Ajuste de unidades si se modificó total_units
     if req.total_units is not None and req.total_units > 0 and req.total_units != order.total_units:
@@ -1577,15 +1551,12 @@ def get_operator_workspace(
     available_orders_info = []
     for ord_item in all_orders:
         user_asgn = next((a for a in ord_item.stations if a.user_id == user_id or a.secondary_user_id == user_id), None)
-        is_order_sup = (ord_item.supervisor_id == user_id) or (is_supervisor and not ord_item.supervisor_id)
+        order_sup_ids = [s.strip() for s in (ord_item.supervisor_id or "").split(",") if s.strip()]
+        is_order_sup = (user_id in order_sup_ids) or (is_supervisor and not order_sup_ids)
 
-        # Regla estricta de aislamiento de órdenes:
-        # - ADMIN tiene visión total de planta
-        # - SUPERVISOR solo ve órdenes donde es supervisor o técnico asignado
-        # - OPERARIO ÚNICAMENTE ve órdenes donde tiene estación asignada (titular o secundario)
         can_access = (
             is_admin
-            or (is_supervisor and (is_order_sup or user_asgn is not None))
+            or is_order_sup
             or (user_asgn is not None)
         )
         if not can_access:
@@ -1640,7 +1611,8 @@ def get_operator_workspace(
         }
 
     # Identificar si la solicitud es para el Puesto de Supervisión (Estación 0)
-    is_supervisor_role = (requesting_user and requesting_user.role in ["SUPERVISOR", "ADMIN"]) or (target_order and target_order.supervisor_id == user_id)
+    target_sup_ids = [s.strip() for s in (target_order.supervisor_id or "").split(",") if s.strip()] if target_order else []
+    is_supervisor_role = (requesting_user and requesting_user.role in ["SUPERVISOR", "ADMIN"]) or (user_id in target_sup_ids)
     wants_supervisor_station = (station_number == 0) or (is_supervisor_role and (station_number is None or station_number == 0))
 
     # MODO SUPERVISIÓN EXCLUSIVO: Estación propia del Supervisor (Estación 0)

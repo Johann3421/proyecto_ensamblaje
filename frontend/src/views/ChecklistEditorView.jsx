@@ -35,6 +35,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
   const [diagnostics, setDiagnostics] = useState(null);
   const [processingAction, setProcessingAction] = useState(null);
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const [showDiagnosticDetails, setShowDiagnosticDetails] = useState(false);
   const toolsMenuRef = useRef(null);
 
   const handleSelectModel = (modelName) => {
@@ -622,78 +623,82 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
         </div>
       </Card>
 
-      {/* ASISTENTE DE PASOS FALTANTES Y CALIDAD */}
+      {/* ASISTENTE COMPACTO DE CALIDAD (LEY DE TESLER / ERGONOMÍA) */}
       {diagnostics && (
-        <Card className={`p-4 border transition ${
+        <Card className={`p-2.5 sm:px-3.5 border transition ${
           diagnostics.is_healthy
-            ? "bg-emerald-50/40 border-emerald-300"
+            ? "bg-emerald-50/50 border-emerald-300"
             : diagnostics.total_steps === 0
               ? "bg-stone-50 border-stone-300"
-              : "bg-amber-50/50 border-amber-300"
+              : "bg-amber-50/60 border-amber-300"
         }`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start sm:items-center gap-2.5">
-              <div className={`p-2 rounded-xl flex-shrink-0 ${
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`p-1.5 rounded-lg flex-shrink-0 ${
                 diagnostics.is_healthy ? "bg-emerald-100 text-emerald-700" : diagnostics.total_steps === 0 ? "bg-stone-200 text-primary" : "bg-amber-100 text-amber-700"
               }`}>
                 {diagnostics.is_healthy ? (
-                  <ShieldCheck className="w-5 h-5" />
+                  <ShieldCheck className="w-4 h-4" />
                 ) : diagnostics.total_steps === 0 ? (
-                  <ClipboardList className="w-5 h-5" />
+                  <ClipboardList className="w-4 h-4" />
                 ) : (
-                  <AlertTriangle className="w-5 h-5" />
+                  <AlertTriangle className="w-4 h-4" />
                 )}
               </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-xs font-bold text-gray-900">
-                    Control de Calidad y Pasos: {selectedModel}
-                  </h3>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-stone-900 truncate">
+                    Control de Calidad: {selectedModel}
+                  </span>
                   {diagnostics.is_healthy ? (
-                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.2 rounded-full flex items-center gap-1">
                       <Check className="w-3 h-3 text-emerald-600" />
                       <span>Secuencia Completa y Continua</span>
                     </span>
                   ) : diagnostics.missing_in_sequence.length > 0 ? (
-                    <span className="text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.2 rounded-full">
                       ⚠️ {diagnostics.missing_in_sequence.length} pasos faltantes en secuencia
                     </span>
                   ) : diagnostics.total_steps === 0 ? (
-                    <span className="text-[10px] font-bold text-stone-800 bg-stone-200 border border-stone-300 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-bold text-stone-800 bg-stone-200 border border-stone-300 px-2 py-0.2 rounded-full">
                       Modelo sin pasos
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.2 rounded-full">
                       {diagnostics.recommendations.length} sugerencia(s)
                     </span>
                   )}
+                  {diagnostics.recommendations.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDiagnosticDetails(!showDiagnosticDetails)}
+                      className="text-[11px] font-bold text-amber-900 underline hover:text-amber-700 ml-1"
+                    >
+                      {showDiagnosticDetails ? "Ocultar sugerencias ▲" : "Ver sugerencias ▼"}
+                    </button>
+                  )}
                 </div>
-                <p className="text-[11px] text-gray-600 mt-0.5">
-                  {diagnostics.total_steps} pasos registrados ({assemblySteps.length} ensamblaje, {cleaningSteps.length} limpieza QC) · {diagnostics.has_cleaning ? "Limpieza cubierta" : "Falta limpieza QC"} · {diagnostics.has_bios ? "BIOS verificado" : "Falta BIOS"}
-                </p>
               </div>
             </div>
 
             {/* Acciones de reparación directa */}
-            <div className="flex items-center gap-2 flex-wrap self-end sm:self-center">
+            <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
               {diagnostics.missing_in_sequence.length > 0 && (
                 <>
                   <button
                     type="button"
                     onClick={handleResequence}
                     disabled={processingAction === "resequence"}
-                    className="px-3 py-1.5 bg-stone-800 hover:bg-stone-900 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
-                    title="Renumerar los pasos de 1 a N eliminando saltos numéricos"
+                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-900 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
                   >
                     {processingAction === "resequence" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                    <span>Re-secuenciar (1 a N)</span>
+                    <span>Re-secuenciar</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleFillMissing("APPEND_MISSING")}
                     disabled={processingAction === "fill"}
-                    className="px-3 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
-                    title="Insertar los pasos estándar en los huecos faltantes"
+                    className="px-2.5 py-1 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
                   >
                     {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                     <span>Rellenar Faltantes</span>
@@ -706,10 +711,10 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   type="button"
                   onClick={() => handleFillMissing("REPLACE")}
                   disabled={processingAction === "fill"}
-                  className="px-3.5 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
+                  className="px-3 py-1 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
                 >
                   {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                  <span>Cargar Catálogo Estándar (52 Pasos)</span>
+                  <span>Cargar Catálogo (52)</span>
                 </button>
               )}
 
@@ -718,21 +723,21 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   type="button"
                   onClick={() => handleFillMissing("APPEND_MISSING")}
                   disabled={processingAction === "fill"}
-                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 transition touch-target"
+                  className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
                   title="Incorporar pasos restantes del catálogo maestro de 52 pasos"
                 >
                   {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
-                  <span>Añadir Pasos Estándar ({52 - diagnostics.total_steps})</span>
+                  <span>+ Añadir Pasos Estándar ({52 - diagnostics.total_steps})</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Recomendaciones detalladas si existen */}
-          {diagnostics.recommendations.length > 0 && (
-            <div className="mt-3 pt-2.5 border-t border-gray-200/60 text-xs text-gray-700 space-y-1">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Diagnóstico de Calidad:</span>
-              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-gray-600">
+          {/* Recomendaciones detalladas expandibles */}
+          {showDiagnosticDetails && diagnostics.recommendations.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-amber-200 text-xs text-stone-700 space-y-1 fade-in">
+              <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide block">Sugerencias del Catálogo:</span>
+              <ul className="list-disc list-inside space-y-0.5 text-xs text-stone-600">
                 {diagnostics.recommendations.map((rec, i) => (
                   <li key={i}>{rec}</li>
                 ))}
@@ -825,24 +830,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-center">
-                <button
-                  type="button"
-                  onClick={() => setEditingItem({
-                    model_name: selectedModel,
-                    step_number: steps.length + 1,
-                    operation: "",
-                    description: "",
-                    qc_criteria: "",
-                    media_url: "",
-                    is_cleaning: false
-                  })}
-                  className="text-xs bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Nuevo Paso</span>
-                </button>
-              </div>
+
             </div>
 
             {filteredAssembly.length === 0 ? (

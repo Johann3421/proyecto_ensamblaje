@@ -1,9 +1,21 @@
-import React from 'react';
-import { Check, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, RefreshCw, X, Columns, ShieldCheck, Trash2, RotateCcw, Trash, Camera } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Check, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, RefreshCw, X, Columns, ShieldCheck, Trash2, RotateCcw, Trash, Camera, MoreHorizontal } from 'lucide-react';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
 
 export default function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder, onOpenEditOrder, onPreviewPhoto }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
   if (!matrixData || !matrixData.order) {
     return (
       <div className="bg-white rounded-3xl border border-stone-200/80 shadow-bento p-8 text-center mx-auto max-w-sm space-y-4">
@@ -61,7 +73,7 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
               <select
                 value={selectedOrder || ""}
                 onChange={(e) => setSelectedOrder(e.target.value)}
-                className="text-xs border border-stone-200 rounded-xl px-3 py-2 bg-stone-50 font-semibold text-stone-700 outline-none hover:bg-stone-100 transition cursor-pointer"
+                className="text-xs border border-stone-200/90 rounded-xl px-3 py-2 bg-stone-50 font-semibold text-stone-700 outline-none hover:bg-stone-100 transition cursor-pointer"
               >
                 {orders.map(o => (
                   <option key={o.order_id} value={o.order_id}>
@@ -70,52 +82,80 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
                 ))}
               </select>
             )}
+
+            {/* 1. Botón Secundario Frecuente */}
             <button
               onClick={onOpenEditOrder}
-              className="text-xs bg-stone-100 hover:bg-stone-200/80 text-stone-800 border border-stone-200/80 px-3 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition"
+              className="text-xs bg-white hover:bg-stone-50 text-stone-800 border border-stone-300 font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-2xs transition"
               title="Editar parámetros de la orden, modelo, supervisor y estaciones"
             >
               <Edit className="w-3.5 h-3.5 text-stone-600" />
-              <span>Editar</span>
+              <span>Editar Orden</span>
             </button>
+
+            {/* 2. ÚNICO Botón Primario Destacado */}
             <button
               onClick={onOpenAddUnits}
-              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition shadow-xs"
+              className="text-xs bg-[#0071E3] hover:bg-[#0077ED] text-white px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition shadow-sm"
               title="Agregar PCs a esta orden"
             >
-              <Plus className="w-4 h-4" />
-              <span>+ PC</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Agregar PC</span>
             </button>
-            <button
-              onClick={onOpenResetOrder}
-              className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 px-3 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition"
-              title="Reiniciar y limpiar todo el lote a Estación 1"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
-              <span>Reiniciar</span>
-            </button>
-            <button
-              onClick={onOpenEmergency}
-              className="text-xs bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/80 px-3 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition"
-              title="Reasignación de emergencia de técnico"
-            >
-              <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-              <span>Reasignar</span>
-            </button>
-            <button
-              onClick={onOpenDeleteOrder}
-              className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 px-2.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition"
-              title="Eliminar orden por completo"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            </button>
-            <button
-              onClick={onRefresh}
-              className="p-2 bg-stone-100 hover:bg-stone-200/80 rounded-xl transition text-stone-600"
-              title="Actualizar datos"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+
+            {/* 3. Menú Overflow (···) para Acciones Críticas o Secundarias */}
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="p-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl transition flex items-center justify-center border border-stone-200/80"
+                title="Más opciones de la orden"
+              >
+                <MoreHorizontal className="w-4 h-4 text-stone-600" />
+              </button>
+
+              {menuOpen && (
+                <div className="absolute right-0 mt-1.5 w-56 bg-white rounded-2xl shadow-xl border border-stone-200 py-1.5 z-40 fade-in">
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); onRefresh?.(); }}
+                    className="w-full text-left px-3.5 py-2 text-xs text-stone-700 hover:bg-stone-50 flex items-center gap-2.5 transition font-medium"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-stone-500" />
+                    <span>Actualizar Datos</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); onOpenEmergency?.(); }}
+                    className="w-full text-left px-3.5 py-2 text-xs text-stone-700 hover:bg-stone-50 flex items-center gap-2.5 transition font-medium"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-stone-500" />
+                    <span>Reasignar Técnico</span>
+                  </button>
+
+                  <div className="border-t border-stone-100 my-1"></div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); onOpenResetOrder?.(); }}
+                    className="w-full text-left px-3.5 py-2 text-xs text-amber-700 hover:bg-amber-50 flex items-center gap-2.5 transition font-medium"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Reiniciar Todo el Lote</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); onOpenDeleteOrder?.(); }}
+                    className="w-full text-left px-3.5 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition font-medium"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Eliminar Orden</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

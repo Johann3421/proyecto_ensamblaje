@@ -396,29 +396,32 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
               <span className="text-emerald-700 font-semibold">{cleaningSteps.length} limpieza QC</span>
             </div>
 
+          </div>
+
+          {/* Acciones del Modelo: Primario + Mantenimiento */}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
               type="button"
               onClick={() => setCreateModelModalOpen(true)}
-              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition touch-target"
+              className="text-xs bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition touch-target"
               title="Crear un nuevo modelo de PC"
             >
-              <Plus className="w-4 h-4" />
-              <span>+ Nuevo Modelo</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Nuevo Modelo</span>
             </button>
-          </div>
 
-          {/* Menú de Opciones y Mantenimiento del Modelo */}
-          <div className="relative self-start sm:self-auto" ref={toolsMenuRef}>
-            <button
-              type="button"
-              onClick={() => setToolsMenuOpen(!toolsMenuOpen)}
-              className="text-xs bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-300 font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target"
-              title="Mantenimiento de secuencia, auto-clasificación y opciones del modelo"
-            >
-              <Settings className="w-3.5 h-3.5 text-stone-600" />
-              <span>Opciones del Modelo</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-stone-400 transition-transform ${toolsMenuOpen ? "rotate-180" : ""}`} />
-            </button>
+            {/* Menú de Opciones y Mantenimiento del Modelo */}
+            <div className="relative" ref={toolsMenuRef}>
+              <button
+                type="button"
+                onClick={() => setToolsMenuOpen(!toolsMenuOpen)}
+                className="text-xs bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 shadow-2xs transition touch-target"
+                title="Mantenimiento de secuencia, auto-clasificación y opciones del modelo"
+              >
+                <Settings className="w-3.5 h-3.5 text-stone-600" />
+                <span>Mantenimiento</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-stone-400 transition-transform ${toolsMenuOpen ? "rotate-180" : ""}`} />
+              </button>
 
             {toolsMenuOpen && (
               <div className="absolute right-0 mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-30 fade-in">
@@ -475,6 +478,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 )}
               </div>
             )}
+            </div>
           </div>
         </div>
       </Card>
@@ -482,8 +486,8 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
       {/* 2. Barra de Control Operativo (Vistas, Búsqueda y Acciones del Checklist) */}
       <Card className="p-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Selector de Vistas / Pestañas */}
-          <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl flex-shrink-0 overflow-x-auto">
+          {/* Selector de Vistas / Pestañas Segmentadas */}
+          <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl flex-shrink-0 overflow-x-auto border border-stone-200/60">
             <button
               type="button"
               onClick={() => handleSelectFilterType("GROUPED")}
@@ -494,7 +498,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
               }`}
             >
               <Layers className="w-3.5 h-3.5 text-blue-600" />
-              <span>Vista por Secciones</span>
+              <span>Secciones</span>
             </button>
             <button
               type="button"
@@ -535,8 +539,8 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
           </div>
 
           {/* Buscador Rápido de Pasos */}
-          <div className="flex-1 max-w-md">
-            <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-400/20 focus-within:border-blue-500 transition">
+          <div className="flex-1 max-w-sm">
+            <div className="flex items-center gap-2 bg-stone-50/80 border border-stone-200 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-400/20 focus-within:border-blue-500 transition">
               <Search className="w-4 h-4 text-stone-400 flex-shrink-0" />
               <input
                 type="text"
@@ -557,8 +561,60 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
             </div>
           </div>
 
-          {/* Acciones Generales del Checklist (Contextuales a la vista activa) */}
-          <div className="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+          {/* Acciones Derecha: Cápsula Fusionada de Utilidades + 1 Primario Destacado */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Cápsula Segmentada de Archivos (Importar | Exportar | Plantilla) */}
+            <div className="inline-flex items-center bg-stone-100 p-0.5 rounded-xl border border-stone-200/80">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetCat = filterType === "CLEANING" ? "CLEANING" : "ASSEMBLY";
+                  openImportModal(targetCat);
+                }}
+                className="text-xs font-semibold text-stone-700 hover:text-stone-900 hover:bg-white px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5"
+                title="Importar lista desde archivo Excel, CSV o texto"
+              >
+                <Upload className="w-3.5 h-3.5 text-stone-500" />
+                <span>Importar</span>
+              </button>
+
+              <div className="w-[1px] h-3.5 bg-stone-300 mx-0.5"></div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
+                  window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=${targetCat}`, "_blank");
+                }}
+                disabled={steps.length === 0}
+                className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                  steps.length === 0
+                    ? "text-stone-400 cursor-not-allowed"
+                    : "text-stone-700 hover:text-stone-900 hover:bg-white"
+                }`}
+                title="Exportar pasos actuales a Excel"
+              >
+                <Download className="w-3.5 h-3.5 text-stone-500" />
+                <span>Exportar</span>
+              </button>
+
+              <div className="w-[1px] h-3.5 bg-stone-300 mx-0.5"></div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
+                  window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=${targetCat}`, "_blank");
+                }}
+                className="text-xs font-semibold text-stone-700 hover:text-stone-900 hover:bg-white px-2.5 py-1.5 rounded-lg transition flex items-center gap-1.5"
+                title="Descargar plantilla oficial Excel vacía para llenar"
+              >
+                <FileText className="w-3.5 h-3.5 text-stone-500" />
+                <span className="hidden sm:inline">Plantilla</span>
+              </button>
+            </div>
+
+            {/* Único Botón Primario de Acción */}
             <button
               type="button"
               onClick={() => setEditingItem({
@@ -570,54 +626,10 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 media_url: "",
                 is_cleaning: filterType === "CLEANING"
               })}
-              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition touch-target"
+              className="text-xs bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition touch-target"
             >
-              <Plus className="w-4 h-4" />
-              <span>+ Nuevo Paso</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const targetCat = filterType === "CLEANING" ? "CLEANING" : "ASSEMBLY";
-                openImportModal(targetCat);
-              }}
-              className="text-xs bg-white hover:bg-stone-50 text-stone-800 border border-stone-300 font-semibold px-2.5 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target"
-              title="Importar lista desde archivo Excel, CSV o texto"
-            >
-              <Upload className="w-3.5 h-3.5 text-stone-600" />
-              <span>Importar</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
-                window.open(`${API_BASE}/models/${selectedModel}/export-excel?category=${targetCat}`, "_blank");
-              }}
-              disabled={steps.length === 0}
-              className={`text-xs font-semibold px-2.5 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target ${
-                steps.length === 0
-                  ? "bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
-                  : "bg-white hover:bg-stone-50 text-stone-800 border border-stone-300"
-              }`}
-              title="Exportar pasos actuales a Excel"
-            >
-              <Download className="w-3.5 h-3.5 text-stone-600" />
-              <span>Exportar</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const targetCat = filterType === "CLEANING" ? "CLEANING" : filterType === "ASSEMBLY" ? "ASSEMBLY" : "ALL";
-                window.open(`${API_BASE}/checklist/template?model_name=${selectedModel}&category=${targetCat}`, "_blank");
-              }}
-              className="text-xs bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 font-semibold px-2.5 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition touch-target"
-              title="Descargar plantilla oficial Excel vacía para llenar"
-            >
-              <FileText className="w-3.5 h-3.5 text-stone-600" />
-              <span className="hidden sm:inline">Plantilla</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Nuevo Paso</span>
             </button>
           </div>
         </div>

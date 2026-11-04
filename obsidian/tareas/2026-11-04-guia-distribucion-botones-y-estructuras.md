@@ -36,6 +36,10 @@ En las interfaces previas existía acumulación de botones sin jerarquía:
   - Botón neutro/cancelar a la izquierda (`Cancelar`).
   - Botón de acción definitiva a la derecha (`Confirmar`, `Guardar`, `Eliminar`).
 
-## 3. Entregables
-- Archivo interactivo local: `preview_distribucion_botones.html`.
-- Captura de alta resolución comparativa: `brain/.../screenshots/distribucion_botones_showcase.png`.
+## 3. Entregables y Verificación
+- Archivo interactivo local final: `resultado_final_distribuciones.html` (3 ejemplos interactivos: Pipeline Header, Checklist Toolbar, Puesto Operario).
+- Capturas de verificación:
+  - Ejemplo 01: `ejemplo1_pipeline_header.png` y `ejemplo1_overflow_abierto.png` (Regla 1-1-···).
+  - Ejemplo 02: `ejemplo2_checklist_toolbar.png` (Cápsulas fusionadas de utilidades).
+  - Ejemplo 03: `ejemplo3_operator_fitts.png` (Ley de Fitts en puesto de trabajo).
+

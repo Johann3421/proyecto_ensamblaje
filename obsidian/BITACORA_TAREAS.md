@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-04** | Flujo continuo de ensamblaje y corrección de violaciones a la Ley de Tesler al despachar PCs | ux / arquitectura / tesler | ✅ Completado | [[2026-11-04-flujo-continuo-despacho-pc-ley-tesler]] |
 | **2026-11-04** | Fix aislamiento estricto de PCs por estación física y desacople de pasos de supervisión | fix / arquitectura | ✅ Completado | [[2026-11-04-fix-aislamiento-pcs-estaciones-y-pasos-supervisor]] |
 | **2026-11-04** | Fix runtime: ReferenceError ShieldCheck is not defined en modales de checklist | ix | ✅ Completado | [[2026-11-04-fix-reference-error-shieldcheck-modales]] |
 | **2026-11-04** | Implementación de distribución Opción 2: Cápsulas fusionadas y menú 1-1-··· | ux / rquitectura | ✅ Completado | [[2026-11-04-implementacion-opcion2-capsulas-fusionadas]] |

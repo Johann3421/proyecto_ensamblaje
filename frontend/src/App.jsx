@@ -189,7 +189,7 @@ export default function App() {
     else if (selectedOrder) params.append('order_id', selectedOrder);
     const targetStation = (stationNumber !== null && stationNumber !== undefined) 
       ? stationNumber 
-      : ((unitNumber !== null && unitNumber !== undefined) ? null : operatorStationFilter);
+      : operatorStationFilter;
     if (targetStation !== null && targetStation !== undefined) {
       params.append('station_number', targetStation);
     }
@@ -202,7 +202,7 @@ export default function App() {
           if (data.assignment?.station_number !== undefined && currentUser.role === 'OPERATOR') {
             setOperatorStationFilter(data.assignment.station_number);
           }
-          if (data.active_unit?.unit_number) {
+          if (data.active_unit?.unit_number && data.active_unit.current_station === data.assignment?.station_number) {
             localStorage.setItem('qc_active_unit', data.active_unit.unit_number);
           } else {
             localStorage.removeItem('qc_active_unit');
@@ -405,7 +405,7 @@ export default function App() {
               onOpenMedia={(item) => setActiveMediaModal(item)}
               onOpenIssue={(unit, step) => setActiveIssueModal({ unit, step })}
               onPreviewPhoto={(p) => setActivePhotoPreview(p)}
-              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, null)}
+              onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, operatorStationFilter)}
               onSelectOrder={(ordId) => { setOperatorStationFilter(null); handleSelectOrder(ordId); loadOperatorWorkspace(null, ordId, null); }}
               onSelectStation={(stNum) => { localStorage.removeItem('qc_active_unit'); setOperatorStationFilter(stNum); loadOperatorWorkspace(null, selectedOrder, stNum); }}
               onRefresh={() => loadOperatorWorkspace(null, selectedOrder, operatorStationFilter)}

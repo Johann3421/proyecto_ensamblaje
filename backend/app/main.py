@@ -2704,10 +2704,20 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
         unit.overall_status = "PENDING"
 
     db.commit()
+
+    # Ley de Tesler: Buscar la siguiente unidad en cola para esta estación
+    next_unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == order_id,
+        QCPCUnit.current_station == station_number,
+        QCPCUnit.overall_status.in_(["PENDING", "IN_PROGRESS"]),
+        QCPCUnit.unit_number != unit_number
+    ).order_by(QCPCUnit.unit_number.asc()).first()
+
     return {
-        "message": f"PC #{unit_number} enviada a Estación {next_station if next_station <= order.total_stations else 'FINALIZADO'}",
+        "message": f"PC #{unit_number} completada y enviada a Estación {next_station if next_station <= order.total_stations else 'FINALIZADO'}",
         "next_station": next_station,
-        "is_finished": next_station > order.total_stations
+        "is_finished": next_station > order.total_stations,
+        "next_unit_number": next_unit.unit_number if next_unit else None
     }
 
 @api_router.post("/admin/correct-step-photo")

@@ -80,3 +80,4 @@ tags: [estaciones, supervisor, aislamiento, pipeline, tesler, ponytail]
   - `POST /api/operator/submit-step`: Devolvió HTTP 400 (*"La PC #28 se encuentra en la Estación 1, no en la Estación 2"*).
   - `POST /api/operator/finish-station`: Devolvió HTTP 400 (*"No se puede despachar: La PC #28 se encuentra en la Estación 1, no en la Estación 2"*).
 - Compilación de producción con Vite: `rtk npm --prefix frontend run build` exitoso (0 errores, 4.10s).
+

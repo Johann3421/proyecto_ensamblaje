@@ -73,6 +73,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
     assignment.station_number === 0
   );
 
+  const isHistorical = Boolean(
+    !isSupervisorMode && 
+    active_unit && 
+    assignment?.station_number && 
+    active_unit.current_station > assignment.station_number
+  );
+
   useEffect(() => {
     setActiveSupervisorAudit(supervisor_audit || null);
   }, [supervisor_audit, active_unit?.unit_number]);
@@ -166,6 +173,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   }, [uniqueStationSteps, filterSupervisorOnly, supervisedStepsSet, isSupervisorMode]);
 
   const handleToggleStep = async (step) => {
+    if (isHistorical) {
+      notify?.("Esta PC ya completó tu estación y está en modo histórico (solo lectura).", "info");
+      return;
+    }
     if (isSupervisorMode) {
       const isAlreadyVerified = supervisorDoneSteps.includes(step.step_number) || Boolean(supervisorStepLogsMap[step.step_number]);
       if (isAlreadyVerified) {
@@ -403,7 +414,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   };
 
   const handleFinishStation = async () => {
-    if (!active_unit) return;
+    if (!active_unit || isHistorical) return;
     try {
       setFinishingUnit(true);
       const res = await fetch(`${API_BASE}/operator/finish-station`, {
@@ -415,11 +426,26 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           station_number: assignment.station_number
         })
       });
-      if (!res.ok) throw new Error("Error al despachar");
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || "Error al despachar");
+      }
       const data = await res.json();
-      notify(data.message);
+      
+      const nextUnitNum = data.next_unit_number;
       setCompletedSteps([]);
-      onRefresh();
+      setOperatorStepLogsMap({});
+      setStepLogsMap({});
+
+      if (nextUnitNum) {
+        notify?.(`✓ PC #${active_unit.unit_number} enviada a siguiente estación. Iniciando PC #${nextUnitNum}...`, "success");
+        localStorage.setItem('qc_active_unit', nextUnitNum);
+        onSelectUnit && onSelectUnit(nextUnitNum);
+      } else {
+        notify?.(data.message || `✓ PC #${active_unit.unit_number} despachada exitosamente.`, "success");
+        localStorage.removeItem('qc_active_unit');
+        onRefresh && onRefresh();
+      }
     } catch (err) {
       if (notify) notify(err.message || "Error al despachar estación", "danger");
       else console.error("Error:", err);
@@ -684,13 +710,32 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
       {active_unit ? (
         <Card className="overflow-hidden border-2 border-stone-300 shadow-md">
-          {/* Banner histórico si la PC ya pasó esta estación */}
-          {!isSupervisorMode && active_unit.current_station > assignment.station_number && (
-            <div className="bg-amber-100/90 border-b border-amber-300 px-3 py-2 text-xs text-amber-950 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-700 flex-shrink-0" />
-              <span>
-                <strong>Registro Histórico:</strong> Esta PC ya completó tu estación y se encuentra en <strong>Estación {active_unit.current_station}</strong>. Puedes revisar todos tus pasos y fotos registrados.
-              </span>
+          {/* Banner histórico con botón de regreso si la PC ya pasó esta estación */}
+          {isHistorical && (
+            <div className="bg-amber-50/90 border-b border-amber-300 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                <div>
+                  <span className="text-xs font-bold text-amber-950 block leading-tight">
+                    Consulta Histórica (Solo Lectura) · PC #{active_unit.unit_number.toString().padStart(2, '0')}
+                  </span>
+                  <span className="text-[10px] text-amber-800 block mt-0.5">
+                    Esta PC ya completó tu puesto y se encuentra en <strong>Estación {active_unit.current_station}</strong>.
+                  </span>
+                </div>
+              </div>
+              {units_in_station && units_in_station.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem('qc_active_unit', units_in_station[0].unit_number);
+                    onSelectUnit && onSelectUnit(units_in_station[0].unit_number);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition touch-target self-start sm:self-auto"
+                >
+                  <span>← Volver a PC #{units_in_station[0].unit_number.toString().padStart(2, '0')} en Curso</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -762,40 +807,40 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               </div>
             </div>
 
-            {/* Barra de Progreso */}
+            {/* Barra de Progreso Bento Apple */}
             <div className="space-y-2">
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-blue-100 flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5 text-emerald-300" />
-                    <span>{isSupervisorMode ? `Avance de Ensamblaje (Técnicos de Planta)` : `Progreso PC #${active_unit.unit_number}`}</span>
+                  <span className="text-stone-700 font-semibold flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{isSupervisorMode ? `Avance de Ensamblaje (Técnicos de Planta)` : `Progreso PC #${active_unit.unit_number.toString().padStart(2, '0')}`}</span>
                   </span>
-                  <span className="font-extrabold text-white font-mono">
+                  <span className="font-bold text-stone-900 font-mono">
                     {technicianVerifiedCount}/{totalStationSteps}
                   </span>
                 </div>
-                <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden border border-stone-200/60">
                   <div
-                    className="bg-emerald-400 h-full rounded-full transition-all duration-300 shadow-sm"
+                    className="bg-emerald-500 h-full rounded-full transition-all duration-300 shadow-xs"
                     style={{ width: `${((technicianVerifiedCount / Math.max(totalStationSteps, 1)) * 100)}%` }}
                   ></div>
                 </div>
               </div>
 
               {isSupervisorMode && (
-                <div className="pt-1 border-t border-white/10">
+                <div className="pt-1.5 border-t border-stone-100">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-amber-200 flex items-center gap-1 text-[11px] font-semibold">
+                    <span className="text-amber-900 flex items-center gap-1 text-[11px] font-semibold">
                       <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
                       <span>Certificación Oficial (V°B° Supervisor)</span>
                     </span>
-                    <span className="font-extrabold text-amber-600 font-mono text-[11px]">
+                    <span className="font-bold text-amber-800 font-mono text-[11px]">
                       {supervisorVerifiedCount}/{totalStationSteps}
                     </span>
                   </div>
-                  <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-stone-100 h-2 rounded-full overflow-hidden border border-stone-200/60">
                     <div
-                      className="bg-amber-400 h-full rounded-full transition-all duration-300 shadow-sm"
+                      className="bg-amber-500 h-full rounded-full transition-all duration-300 shadow-xs"
                       style={{ width: `${((supervisorVerifiedCount / Math.max(totalStationSteps, 1)) * 100)}%` }}
                     ></div>
                   </div>
@@ -804,12 +849,12 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
 
             {/* Indicador Normativo de Evidencias de Calidad (Ley de Tesler) */}
-            <div className="flex items-center justify-between pt-2 border-t border-white/20">
-              <span className="text-[11px] font-bold text-white/90 flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-emerald-300" />
+            <div className="flex items-center justify-between pt-2 border-t border-stone-100">
+              <span className="text-[11px] font-bold text-stone-600 flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Control de Calidad Fotográfica:</span>
               </span>
-              <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-white/20 text-white flex items-center gap-1 shadow-2xs">
+              <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-stone-100 text-stone-700 border border-stone-200 flex items-center gap-1">
                 <span>Norma QC Oficial</span>
               </span>
             </div>
@@ -1519,63 +1564,120 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             })}
           </div>
 
-          {/* Botón de V°B° para Supervisor vs Despacho de Estación para Operario */}
+          {/* Botón de V°B° para Supervisor vs Despacho de Estación para Operario (Ley de Tesler) */}
           <div className="p-3 pt-0">
             {isSupervisorMode ? (
               <button
                 type="button"
                 onClick={() => setSupervisorAuditModalOpen(true)}
-                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target"
+                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-sm rounded-2xl shadow-md flex items-center justify-center gap-2 transition touch-target"
               >
                 <ShieldCheck className="w-5 h-5" />
                 <span>
                   {activeSupervisorAudit?.status === "APPROVED"
-                    ? `V°B° Oficial Otorgado a PC #${active_unit.unit_number} (Ver / Modificar)`
-                    : `🛡️ Emitir V°B° Oficial Normativo a PC #${active_unit.unit_number}`}
+                    ? `V°B° Oficial Otorgado a PC #${active_unit.unit_number.toString().padStart(2, '0')} (Ver / Modificar)`
+                    : `🛡️ Emitir V°B° Oficial Normativo a PC #${active_unit.unit_number.toString().padStart(2, '0')}`}
                 </span>
               </button>
+            ) : isHistorical ? (
+              <div className="bg-stone-50 p-4 rounded-2xl text-center border border-stone-200 space-y-2.5">
+                <div className="flex items-center justify-center gap-2 text-stone-800">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-bold">
+                    PC #{active_unit.unit_number.toString().padStart(2, '0')} ya completada y despachada
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-500">
+                  Esta unidad se encuentra actualmente en la <strong>Estación {active_unit.current_station}</strong>. Puedes revisar sus evidencias arriba.
+                </p>
+                {units_in_station && units_in_station.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem('qc_active_unit', units_in_station[0].unit_number);
+                      onSelectUnit && onSelectUnit(units_in_station[0].unit_number);
+                    }}
+                    className="mt-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5 transition touch-target"
+                  >
+                    <span>Continuar con PC #{units_in_station[0].unit_number.toString().padStart(2, '0')} en tu estación →</span>
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-stone-400 italic block mt-1">
+                    No tienes más PCs en cola en este momento.
+                  </span>
+                )}
+              </div>
             ) : isStationComplete ? (
               <button
                 onClick={handleFinishStation}
                 disabled={finishingUnit}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-base rounded-xl shadow-lg flex items-center justify-center gap-3 transition pulse-glow touch-target"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-base rounded-2xl shadow-lg flex items-center justify-center gap-3 transition touch-target pulse-glow"
               >
                 {finishingUnit ? (
-                  <><Loader2 className="w-6 h-6 animate-spin" /><span>Enviando...</span></>
+                  <><Loader2 className="w-6 h-6 animate-spin" /><span>Despachando...</span></>
+                ) : assignment.station_number >= order.total_stations ? (
+                  <><CheckCircle className="w-6 h-6" /><span>🎉 Finalizar y Aprobar PC #{active_unit.unit_number.toString().padStart(2, '0')} (Fin de Línea)</span></>
                 ) : (
-                  <><ArrowRightCircle className="w-6 h-6" /><span>Enviar PC #{active_unit.unit_number} a siguiente estación</span></>
+                  <><ArrowRightCircle className="w-6 h-6" /><span>Despachar PC #{active_unit.unit_number.toString().padStart(2, '0')} a Estación {assignment.station_number + 1} →</span></>
                 )}
               </button>
             ) : allStepsDone && !hasLastStepPhoto ? (
-              <div className="bg-amber-50 p-3 rounded-xl text-center border border-amber-300 space-y-2">
+              <div className="bg-amber-50 p-3.5 rounded-2xl text-center border border-amber-300 space-y-2">
                 <p className="text-xs font-bold text-amber-900 flex items-center justify-center gap-1.5">
                   <Camera className="w-4 h-4 text-amber-700" />
                   <span>Foto obligatoria requerida en Paso #{lastStationStep?.step_number}</span>
                 </p>
                 <p className="text-[11px] text-amber-800 leading-snug">
-                  Para enviar la PC a la siguiente estación debes tomar la foto de evidencia del último paso: <strong>{lastStationStep?.operation}</strong>.
+                  Para despachar la PC a la siguiente estación debes tomar la foto de evidencia del último paso: <strong>{lastStationStep?.operation}</strong>.
                 </p>
                 <button
                   type="button"
                   onClick={() => setPhotoStepModal(lastStationStep)}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition inline-flex items-center gap-1.5 shadow-sm"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition inline-flex items-center gap-1.5 shadow-xs touch-target"
                 >
                   <Camera className="w-3.5 h-3.5" />
                   <span>Tomar Foto del Paso #{lastStationStep?.step_number} Ahora</span>
                 </button>
               </div>
             ) : (
-              <div className="bg-gray-50 p-3 rounded-xl text-center text-xs text-gray-500 border border-gray-200">
-                Completa los {totalStationSteps} pasos de la <strong>PC #{active_unit.unit_number}</strong> para habilitar su despacho.
+              <div className="bg-stone-50 p-3.5 rounded-2xl text-center text-xs text-stone-500 border border-stone-200">
+                Completa los {totalStationSteps} pasos de la <strong>PC #{active_unit.unit_number.toString().padStart(2, '0')}</strong> para habilitar su despacho.
               </div>
             )}
           </div>
         </Card>
       ) : (
-        <Card className="p-8 text-center">
-          <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-          <h3 className="text-sm font-bold text-gray-700">Sin PCs en tu estación</h3>
-          <p className="text-xs text-gray-400 mt-1">Esperando que la estación anterior despache unidades...</p>
+        <Card className="p-8 text-center bg-white border border-stone-200/80 rounded-3xl shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-stone-100 text-stone-400 flex items-center justify-center mx-auto mb-3 shadow-2xs">
+            <Inbox className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-bold text-stone-800">Sin PCs en tu estación</h3>
+          <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+            {completed_units && completed_units.length > 0 && (!units_in_station || units_in_station.length === 0)
+              ? `Has completado y despachado ${completed_units.length} PC(s). Esperando que la estación anterior procese nuevas unidades...`
+              : "Esperando que la estación anterior complete y despache unidades a tu puesto..."}
+          </p>
+          {completed_units && completed_units.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-stone-100">
+              <span className="text-[11px] font-bold text-stone-600 block mb-2">
+                Consultar historial de PCs que ya pasaron por tu estación:
+              </span>
+              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                {completed_units.slice(0, 8).map(u => (
+                  <button
+                    key={u.unit_number}
+                    type="button"
+                    onClick={() => {
+                      onSelectUnit && onSelectUnit(u.unit_number);
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200 rounded-lg transition"
+                  >
+                    PC #{u.unit_number.toString().padStart(2, '0')}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
 
@@ -1696,22 +1798,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         />
       )}
 
-      {/* BARRA FLOTANTE DE DESPACHO RÁPIDO PARA EL OPERARIO (LEY DE TESLER / ERGONOMÍA DE PLANTA) */}
-      {!isSupervisorMode && active_unit && isStationComplete && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-lg shadow-2xl rounded-2xl overflow-hidden border-2 border-emerald-500 bg-white p-2">
-          <button
-            onClick={handleFinishStation}
-            disabled={finishingUnit}
-            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2.5 transition shadow-md touch-target"
-          >
-            {finishingUnit ? (
-              <><Loader2 className="w-5 h-5 animate-spin" /><span>Despachando...</span></>
-            ) : (
-              <><ArrowRightCircle className="w-5 h-5" /><span>¡Estación Lista! Despachar PC #{active_unit.unit_number}</span></>
-            )}
-          </button>
-        </div>
-      )}
+
     </div>
   );
 }

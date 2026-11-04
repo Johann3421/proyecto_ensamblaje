@@ -263,10 +263,10 @@ export default function App() {
   // Loading
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-stone-50">
-        <div className="text-center">
-          <div className="inline-block w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" style={{ borderWidth: '3px' }} />
-          <p className="text-stone-500 text-sm mt-3">Verificando sesión...</p>
+      <div className="flex items-center justify-center h-screen bg-[#F5F5F7]">
+        <div className="text-center bg-white p-8 rounded-3xl border border-stone-200/80 shadow-bento">
+          <div className="inline-block w-8 h-8 border-3 border-blue-500/20 border-t-blue-600 rounded-full animate-spin" style={{ borderWidth: '3px' }} />
+          <p className="text-stone-500 text-sm mt-3 font-medium">Verificando sesión...</p>
         </div>
       </div>
     );
@@ -280,28 +280,28 @@ export default function App() {
   const roleLabel = currentUser.role === 'ADMIN' ? 'Admin' : isSupervisorUser ? 'Supervisor' : 'Operario';
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-stone-50">
-      {/* HEADER */}
-      <header className="bg-primary text-white shadow-md flex-shrink-0 z-40">
-        <div className="px-3 sm:px-4 h-14 flex items-center justify-between max-w-7xl mx-auto">
+    <div className="flex flex-col h-screen overflow-hidden bg-surface">
+      {/* HEADER BENTO APPLE */}
+      <header className="bg-white/85 backdrop-blur-md border-b border-stone-200/80 text-stone-900 shadow-subtle flex-shrink-0 z-40 sticky top-0">
+        <div className="px-3 sm:px-5 h-14 flex items-center justify-between max-w-7xl mx-auto">
           {/* Logo */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="font-black text-base tracking-wider">KENYA</span>
-            <div className="hidden sm:block h-5 w-px bg-white/30"></div>
-            <span className="hidden sm:flex text-sm font-medium text-white/80 items-center gap-2">
+            <span className="font-extrabold text-base tracking-wider text-stone-900 bg-stone-100 px-2.5 py-1 rounded-xl border border-stone-200/60">KENYA</span>
+            <div className="hidden sm:block h-4 w-px bg-stone-200"></div>
+            <span className="hidden sm:flex text-xs font-semibold text-stone-500 items-center gap-2">
               Control de Calidad
-              <span className="text-[10px] bg-white/15 px-1.5 py-0.5 rounded font-mono">v2.0</span>
+              <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-mono font-medium">v2.0</span>
             </span>
           </div>
 
           {/* Nav Desktop */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1 bg-stone-100/80 p-1 rounded-2xl border border-stone-200/50">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => navigate(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
-                  activeTab === tab.id ? 'bg-white/20 text-white font-semibold' : 'hover:bg-white/10 text-white/70'
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  activeTab === tab.id ? 'bg-white text-stone-900 font-semibold shadow-xs' : 'hover:text-stone-900 text-stone-500'
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -312,17 +312,17 @@ export default function App() {
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg text-xs">
-              <span className="text-white/60 text-[10px] font-medium">{roleLabel}</span>
-              <span className="text-white font-medium max-w-[100px] sm:max-w-none truncate">{currentUser.name}</span>
+            <div className="flex items-center gap-1.5 bg-stone-100 px-2.5 py-1 rounded-xl text-xs border border-stone-200/60">
+              <span className="text-stone-400 text-[10px] font-semibold uppercase tracking-wider">{roleLabel}</span>
+              <span className="text-stone-800 font-medium max-w-[100px] sm:max-w-none truncate">{currentUser.name}</span>
             </div>
-            <div className="w-8 h-8 rounded-full bg-white/20 text-white font-bold text-xs flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-xs">
               {currentUser.avatar || (currentUser.name ? currentUser.name.slice(0, 2).toUpperCase() : 'U')}
             </div>
-            <button onClick={handleLogout} className="p-1.5 rounded-lg hover:bg-white/20 transition text-white/60 hover:text-white" title="Cerrar sesión">
+            <button onClick={handleLogout} className="p-1.5 rounded-xl hover:bg-stone-100 transition text-stone-400 hover:text-stone-700" title="Cerrar sesión">
               <LogOut className="w-4 h-4" />
             </button>
-            <button className="md:hidden p-1.5 rounded-lg hover:bg-white/20 transition" onClick={() => setMobileMenuOpen(prev => !prev)}>
+            <button className="md:hidden p-1.5 rounded-xl hover:bg-stone-100 transition text-stone-700" onClick={() => setMobileMenuOpen(prev => !prev)}>
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
@@ -330,13 +330,13 @@ export default function App() {
 
         {/* Mobile dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-primary-light border-t border-white/10 px-3 py-2 space-y-1 fade-in z-50">
+          <div className="md:hidden bg-white/95 backdrop-blur-md border-t border-stone-200/80 px-3 py-2 space-y-1 fade-in z-50">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => navigate(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition touch-target ${
-                  activeTab === tab.id ? 'bg-white/15 text-white font-semibold' : 'text-white/70 hover:bg-white/10'
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-sm font-medium transition touch-target ${
+                  activeTab === tab.id ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-stone-600 hover:bg-stone-50'
                 }`}
               >
                 <tab.icon className="w-5 h-5 flex-shrink-0" />
@@ -412,17 +412,17 @@ export default function App() {
         </div>
       </main>
 
-      {/* BOTTOM NAV MOBILE */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 safe-bottom z-40 flex shadow-lg">
+      {/* BOTTOM NAV MOBILE BENTO APPLE */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-stone-200/80 safe-bottom z-40 flex shadow-sm">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => navigate(tab.id)}
             className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 touch-target transition-colors relative ${
-              activeTab === tab.id ? 'text-primary' : 'text-stone-400'
+              activeTab === tab.id ? 'text-blue-600 font-semibold' : 'text-stone-400'
             }`}
           >
-            {activeTab === tab.id && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />}
+            {activeTab === tab.id && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-blue-600 rounded-full" />}
             <tab.icon className="w-5 h-5" />
             <span className="text-[10px] font-medium leading-none">{tab.shortLabel}</span>
           </button>

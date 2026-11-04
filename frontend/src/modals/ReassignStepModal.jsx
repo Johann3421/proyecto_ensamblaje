@@ -97,7 +97,7 @@ export default function ReassignStepModal({
                   value="UNIT"
                   checked={scope === "UNIT"}
                   onChange={() => setScope("UNIT")}
-                  className="text-primary"
+                  className="text-blue-600"
                 />
                 <span className="text-xs">Solo para PC #{unit.unit_number}</span>
               </label>
@@ -111,7 +111,7 @@ export default function ReassignStepModal({
                   value="ALL"
                   checked={scope === "ALL"}
                   onChange={() => setScope("ALL")}
-                  className="text-primary"
+                  className="text-blue-600"
                 />
                 <span className="text-xs">Para todo el lote</span>
               </label>

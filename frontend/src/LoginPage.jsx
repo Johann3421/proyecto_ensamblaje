@@ -245,16 +245,16 @@ export default function LoginPage({ onLogin }) {
             </button>
             {/* Quick Access Account Selector */}
             {mode === 'login' && (
-              <div className="mt-3 pt-3 border-t border-stone-200">
+              <div className="mt-3 pt-3 border-t border-stone-200/80">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-stone-600 uppercase tracking-wider">Acceso Rápido:</span>
-                  <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-lg">
+                  <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Acceso Rápido:</span>
+                  <div className="flex items-center gap-1 bg-stone-100 p-0.5 rounded-xl border border-stone-200/60">
                     {['ALL', 'ADMIN', 'SUPERVISOR', 'OPERATOR'].map(r => (
                       <button
                         key={r}
                         type="button"
                         onClick={() => setQuickRole(r)}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
+                        className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition ${
                           quickRole === r 
                             ? 'bg-white text-stone-900 shadow-xs' 
                             : 'text-stone-500 hover:text-stone-800'
@@ -279,11 +279,11 @@ export default function LoginPage({ onLogin }) {
                           setEmail(uEmail);
                           setPassword('admin123');
                         }}
-                        className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-stone-100 hover:bg-stone-200/80 border border-stone-300 text-left transition"
+                        className="flex items-center gap-2.5 p-2.5 min-h-[44px] rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200/80 text-left transition"
                       >
-                        <Shield className="w-4 h-4 text-[#1B4332] flex-shrink-0" />
+                        <Shield className="w-4 h-4 text-blue-600 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-stone-900 text-xs truncate">{uName}</div>
+                          <div className="font-semibold text-stone-900 text-xs truncate">{uName}</div>
                           <div className="text-[11px] text-stone-500 truncate">Admin · {uEmail}</div>
                         </div>
                       </button>
@@ -306,12 +306,12 @@ export default function LoginPage({ onLogin }) {
                           setEmail(sup.email || `${sup.id.toLowerCase()}@sekaitech.com.pe`);
                           setPassword('supervisor123');
                         }}
-                        className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-300 text-left transition"
+                        className="flex items-center gap-2.5 p-2.5 min-h-[44px] rounded-xl bg-blue-50/50 hover:bg-blue-50 border border-blue-200/70 text-left transition"
                       >
-                        <ShieldCheck className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                        <ShieldCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <div className="font-bold text-stone-900 text-xs truncate">{sup.name}</div>
-                          <div className="text-[11px] text-emerald-800 truncate">Supervisor · {sup.id}</div>
+                          <div className="font-semibold text-stone-900 text-xs truncate">{sup.name}</div>
+                          <div className="text-[11px] text-blue-700 truncate">Supervisor · {sup.id}</div>
                         </div>
                       </button>
                     ));
@@ -338,11 +338,11 @@ export default function LoginPage({ onLogin }) {
                             setEmail(uEmail);
                             setPassword('kenya123');
                           }}
-                          className="flex items-center gap-2 p-2 min-h-[44px] rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-left transition"
+                          className="flex items-center gap-2.5 p-2.5 min-h-[44px] rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200/80 text-left transition"
                         >
-                          <User className="w-4 h-4 text-stone-600 flex-shrink-0" />
+                          <User className="w-4 h-4 text-stone-500 flex-shrink-0" />
                           <div className="min-w-0 flex-1">
-                            <div className="font-bold text-stone-900 text-xs truncate">{op.name}</div>
+                            <div className="font-semibold text-stone-900 text-xs truncate">{op.name}</div>
                             <div className="text-[11px] text-stone-500 truncate">{op.id} · {uEmail}</div>
                           </div>
                         </button>

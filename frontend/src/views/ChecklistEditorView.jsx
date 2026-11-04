@@ -285,7 +285,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
           className="w-full flex items-center gap-3 p-3 text-left touch-target cursor-pointer hover:bg-gray-50/80 transition"
         >
           <span className={`w-7 h-7 rounded-full text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-xs ${
-            isClean ? "bg-emerald-600 ring-2 ring-emerald-400/30" : "bg-primary ring-2 ring-primary/20"
+            isClean ? "bg-emerald-600 ring-2 ring-emerald-400/30" : "bg-blue-600 ring-2 ring-blue-400/20"
           }`}>
             {st.step_number}
           </span>
@@ -305,7 +305,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 }`}
                 title="Clic para alternar entre Ensamblaje y Limpieza QC"
               >
-                {isClean ? <ShieldCheck className="w-3 h-3 text-emerald-600" /> : <Wrench className="w-3 h-3 text-primary" />}
+                {isClean ? <ShieldCheck className="w-3 h-3 text-emerald-600" /> : <Wrench className="w-3 h-3 text-blue-600" />}
                 <span>{isClean ? "Limpieza QC" : "Ensamblaje"}</span>
               </button>
             </div>
@@ -323,7 +323,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
               isClean ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-stone-50 border-stone-200 text-stone-900"
             }`}>
               <div className="flex items-center gap-1.5">
-                {isClean ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-primary" />}
+                {isClean ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-blue-600" />}
                 <span className="font-bold">
                   {isClean ? "Paso Exclusivo de Limpieza QC" : "Paso de Ensamblaje General"}
                 </span>
@@ -383,7 +383,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
             <select
               value={selectedModel}
               onChange={(e) => handleSelectModel(e.target.value)}
-              className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-white text-stone-800 touch-target focus:ring-2 focus:ring-primary/20 focus:outline-none shadow-2xs"
+              className="text-xs font-bold border border-gray-300 rounded-lg px-3 py-2 bg-white text-stone-800 touch-target focus:ring-2 focus:ring-blue-400/20 focus:outline-none shadow-2xs"
             >
               {models.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
             </select>
@@ -399,7 +399,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
             <button
               type="button"
               onClick={() => setCreateModelModalOpen(true)}
-              className="text-xs bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition touch-target"
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition touch-target"
               title="Crear un nuevo modelo de PC"
             >
               <Plus className="w-4 h-4" />
@@ -446,7 +446,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   onClick={() => { setToolsMenuOpen(false); handleFillMissing("APPEND_MISSING"); }}
                   className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-stone-50 flex items-center gap-2 transition"
                 >
-                  <FileText className="w-3.5 h-3.5 text-primary" />
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
                   <span>Completar catálogo estándar (52)</span>
                 </button>
 
@@ -493,7 +493,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   : "text-stone-600 hover:text-stone-900"
               }`}
             >
-              <Layers className="w-3.5 h-3.5 text-primary" />
+              <Layers className="w-3.5 h-3.5 text-blue-600" />
               <span>Vista por Secciones</span>
             </button>
             <button
@@ -517,7 +517,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   : "text-stone-600 hover:text-stone-900"
               }`}
             >
-              <Wrench className="w-3.5 h-3.5 text-primary" />
+              <Wrench className="w-3.5 h-3.5 text-blue-600" />
               <span>Ensamblaje ({assemblySteps.length})</span>
             </button>
             <button
@@ -536,7 +536,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
 
           {/* Buscador Rápido de Pasos */}
           <div className="flex-1 max-w-md">
-            <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition">
+            <div className="flex items-center gap-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-400/20 focus-within:border-blue-500 transition">
               <Search className="w-4 h-4 text-stone-400 flex-shrink-0" />
               <input
                 type="text"
@@ -570,7 +570,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 media_url: "",
                 is_cleaning: filterType === "CLEANING"
               })}
-              className="text-xs bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition touch-target"
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition touch-target"
             >
               <Plus className="w-4 h-4" />
               <span>+ Nuevo Paso</span>
@@ -635,7 +635,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <div className={`p-1.5 rounded-lg flex-shrink-0 ${
-                diagnostics.is_healthy ? "bg-emerald-100 text-emerald-700" : diagnostics.total_steps === 0 ? "bg-stone-200 text-primary" : "bg-amber-100 text-amber-700"
+                diagnostics.is_healthy ? "bg-emerald-100 text-emerald-700" : diagnostics.total_steps === 0 ? "bg-stone-200 text-blue-600" : "bg-amber-100 text-amber-700"
               }`}>
                 {diagnostics.is_healthy ? (
                   <ShieldCheck className="w-4 h-4" />
@@ -655,9 +655,9 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                       <Check className="w-3 h-3 text-emerald-600" />
                       <span>Secuencia Completa y Continua</span>
                     </span>
-                  ) : diagnostics.missing_in_sequence.length > 0 ? (
+                  ) : (diagnostics.missing_in_sequence?.length || 0) > 0 ? (
                     <span className="text-[11px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.2 rounded-full">
-                      ⚠️ {diagnostics.missing_in_sequence.length} pasos faltantes en secuencia
+                      ⚠️ {(diagnostics.missing_in_sequence?.length || 0)} pasos faltantes en secuencia
                     </span>
                   ) : diagnostics.total_steps === 0 ? (
                     <span className="text-[11px] font-bold text-stone-800 bg-stone-200 border border-stone-300 px-2 py-0.2 rounded-full">
@@ -665,10 +665,10 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                     </span>
                   ) : (
                     <span className="text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.2 rounded-full">
-                      {diagnostics.recommendations.length} sugerencia(s)
+                      {(diagnostics.recommendations?.length || 0)} sugerencia(s)
                     </span>
                   )}
-                  {diagnostics.recommendations.length > 0 && (
+                  {(diagnostics.recommendations?.length || 0) > 0 && (
                     <button
                       type="button"
                       onClick={() => setShowDiagnosticDetails(!showDiagnosticDetails)}
@@ -683,7 +683,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
 
             {/* Acciones de reparación directa */}
             <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-              {diagnostics.missing_in_sequence.length > 0 && (
+              {(diagnostics.missing_in_sequence?.length || 0) > 0 && (
                 <>
                   <button
                     type="button"
@@ -698,7 +698,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                     type="button"
                     onClick={() => handleFillMissing("APPEND_MISSING")}
                     disabled={processingAction === "fill"}
-                    className="px-2.5 py-1 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
+                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
                   >
                     {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                     <span>Rellenar Faltantes</span>
@@ -711,14 +711,14 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                   type="button"
                   onClick={() => handleFillMissing("REPLACE")}
                   disabled={processingAction === "fill"}
-                  className="px-3 py-1 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1 transition touch-target"
                 >
                   {processingAction === "fill" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                   <span>Cargar Catálogo (52)</span>
                 </button>
               )}
 
-              {diagnostics.total_steps > 0 && diagnostics.total_steps < 52 && diagnostics.missing_in_sequence.length === 0 && (
+              {diagnostics.total_steps > 0 && diagnostics.total_steps < 52 && (diagnostics.missing_in_sequence?.length || 0) === 0 && (
                 <button
                   type="button"
                   onClick={() => handleFillMissing("APPEND_MISSING")}
@@ -734,7 +734,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
           </div>
 
           {/* Recomendaciones detalladas expandibles */}
-          {showDiagnosticDetails && diagnostics.recommendations.length > 0 && (
+          {showDiagnosticDetails && (diagnostics.recommendations?.length || 0) > 0 && (
             <div className="mt-2 pt-2 border-t border-amber-200 text-xs text-stone-700 space-y-1 fade-in">
               <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide block">Sugerencias del Catálogo:</span>
               <ul className="list-disc list-inside space-y-0.5 text-xs text-stone-600">
@@ -750,7 +750,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
       {/* Lista de pasos o Estado Vacío */}
       {steps.length === 0 ? (
         <Card className="p-8 text-center border-dashed border-2">
-          <div className="w-14 h-14 rounded-full bg-stone-100 text-primary flex items-center justify-center mx-auto mb-3">
+          <div className="w-14 h-14 rounded-full bg-stone-100 text-blue-600 flex items-center justify-center mx-auto mb-3">
             <ClipboardList className="w-7 h-7" />
           </div>
           <h3 className="text-sm font-bold text-gray-900">Checklist vacío para {selectedModel}</h3>
@@ -761,7 +761,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
             <button
               onClick={() => handleFillMissing("REPLACE")}
               disabled={processingAction === "fill"}
-              className="text-xs bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow transition touch-target"
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow transition touch-target"
             >
               {processingAction === "fill" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
               <span>Cargar Pasos Estándar</span>
@@ -807,7 +807,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
           <div className="space-y-3">
             <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
                   <Wrench className="w-5 h-5" />
                 </div>
                 <div>
@@ -819,7 +819,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                     <button
                       type="button"
                       onClick={() => handleSelectFilterType("ASSEMBLY")}
-                      className="text-[11px] font-semibold text-primary hover:underline ml-1"
+                      className="text-[11px] font-semibold text-blue-600 hover:underline ml-1"
                       title="Abrir vista exclusiva de Ensamblaje con su propia ruta (/checklists/ensamblaje)"
                     >
                       Aislar apartado →
@@ -944,14 +944,14 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
           {filterType === "ASSEMBLY" && (
             <div className="p-3 bg-stone-100 border border-stone-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Wrench className="w-4 h-4 text-primary" />
+                <Wrench className="w-4 h-4 text-blue-600" />
                 <span className="font-bold text-stone-900">Apartado de Ensamblaje</span>
                 <span className="text-stone-500 font-normal">({filteredAssembly.length} pasos)</span>
               </div>
               <button
                 type="button"
                 onClick={() => setFilterType("GROUPED")}
-                className="text-xs font-semibold text-primary hover:text-[#2D6A4F] flex items-center gap-1 transition"
+                className="text-xs font-semibold text-blue-600 hover:text-[#0077ED] flex items-center gap-1 transition"
               >
                 <Layers className="w-3.5 h-3.5" />
                 <span>Ver vista por secciones</span>
@@ -1004,7 +1004,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                         type="button"
                         onClick={() => handleFillMissing("APPEND_MISSING")}
                         disabled={processingAction === "fill"}
-                        className="px-2 py-1 bg-primary hover:bg-primary text-white rounded-lg text-[10px] font-bold shadow-2xs transition"
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-600 text-white rounded-lg text-[10px] font-bold shadow-2xs transition"
                         title="Rellenar los pasos estándar correspondientes"
                       >
                         <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-white" /> Rellenar</span>
@@ -1066,7 +1066,7 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
             <div>
               <h3 className="text-sm font-bold text-gray-900">¿Eliminar todos los pasos?</h3>
               <p className="text-xs text-gray-500 mt-1">
-                Modelo: <span className="font-bold text-primary">{selectedModel}</span> · <span className="font-semibold text-gray-700">{steps.length} pasos</span>
+                Modelo: <span className="font-bold text-blue-600">{selectedModel}</span> · <span className="font-semibold text-gray-700">{steps.length} pasos</span>
               </p>
             </div>
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-left flex items-start gap-2 text-rose-800">

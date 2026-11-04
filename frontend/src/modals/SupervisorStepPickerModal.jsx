@@ -67,7 +67,7 @@ export default function SupervisorStepPickerModal({
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header del Modal */}
-        <div className="bg-primary text-white p-4 flex justify-between items-center flex-shrink-0">
+        <div className="bg-blue-600 text-white p-4 flex justify-between items-center flex-shrink-0">
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
             <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center font-bold text-sm flex-shrink-0 text-emerald-300">
               <ShieldCheck className="w-4 h-4" />
@@ -108,7 +108,7 @@ export default function SupervisorStepPickerModal({
                   activeTab === "ASSEMBLY" ? "bg-white text-stone-900 shadow-2xs font-bold" : "text-stone-600 hover:text-stone-900"
                 }`}
               >
-                <Wrench className="w-3.5 h-3.5 text-primary" />
+                <Wrench className="w-3.5 h-3.5 text-blue-600" />
                 <span>Ensamblaje ({assemblySteps.length})</span>
               </button>
               <button
@@ -128,7 +128,7 @@ export default function SupervisorStepPickerModal({
               <button
                 type="button"
                 onClick={onSelectAll}
-                className="text-[11px] text-primary hover:underline font-bold"
+                className="text-[11px] text-blue-600 hover:underline font-bold"
               >
                 Todos
               </button>
@@ -225,7 +225,7 @@ export default function SupervisorStepPickerModal({
                 {/* Badge número */}
                 <div className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs ${
                   isSupervised
-                    ? "bg-primary text-white"
+                    ? "bg-blue-600 text-white"
                     : isClean
                       ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
                       : "bg-stone-100 text-stone-700 border border-stone-200"
@@ -255,7 +255,7 @@ export default function SupervisorStepPickerModal({
                         <span className="text-rose-600 font-extrabold ml-1 hover:text-rose-800" title="Quitar">✕</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] font-medium text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full flex-shrink-0 hover:bg-primary/10 hover:text-primary">
+                      <span className="text-[10px] font-medium text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full flex-shrink-0 hover:bg-blue-600/10 hover:text-blue-600">
                         + Supervisar
                       </span>
                     )}
@@ -286,12 +286,12 @@ export default function SupervisorStepPickerModal({
         {/* Footer */}
         <div className="p-3 bg-stone-100 border-t border-stone-200 flex items-center justify-between flex-shrink-0">
           <div className="text-xs font-semibold text-stone-700">
-            Total a supervisar: <strong className="text-primary">{currentStepNumbers.size} pasos</strong>
+            Total a supervisar: <strong className="text-blue-600">{currentStepNumbers.size} pasos</strong>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-primary hover:bg-primary-light text-white text-xs font-bold rounded-xl shadow-xs transition touch-target flex items-center gap-1.5"
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition touch-target flex items-center gap-1.5"
           >
             <Check className="w-4 h-4" />
             <span>Guardar y Cerrar</span>

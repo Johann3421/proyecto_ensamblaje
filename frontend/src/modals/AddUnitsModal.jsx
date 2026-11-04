@@ -30,7 +30,7 @@ export default function AddUnitsModal({ order, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm overflow-hidden shadow-2xl">
-        <div className="bg-[#1B4332] text-white p-4 flex justify-between items-center">
+        <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <PlusCircle className="w-5 h-5" />
             <h3 className="text-sm font-bold">Agregar PCs a la Orden</h3>
@@ -47,7 +47,7 @@ export default function AddUnitsModal({ order, onClose, onSuccess }) {
         )}
           <div className="bg-stone-100 p-3 rounded-xl border border-stone-200">
             <p className="font-semibold text-stone-900">Orden activa: {order.order_id}</p>
-            <p className="text-primary text-[11px] mt-0.5">Modelo: {order.model_name} · Total actual: {order.total_units} PCs</p>
+            <p className="text-blue-600 text-[11px] mt-0.5">Modelo: {order.model_name} · Total actual: {order.total_units} PCs</p>
           </div>
 
           <div>
@@ -59,7 +59,7 @@ export default function AddUnitsModal({ order, onClose, onSuccess }) {
                   key={n}
                   onClick={() => setCount(n)}
                   className={`py-2 rounded-lg font-bold border transition ${
-                    count === n ? "bg-primary text-white border-blue-600 shadow-sm" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                    count === n ? "bg-blue-600 text-white border-blue-600 shadow-sm" : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                   }`}
                 >
                   +{n}
@@ -89,7 +89,7 @@ export default function AddUnitsModal({ order, onClose, onSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
+              className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
             >
               {loading ? "Agregando..." : `Confirmar (+${count} PCs)`}
             </button>

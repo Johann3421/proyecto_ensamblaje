@@ -610,7 +610,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
         {/* Fila 1: Nro de Estación, Nombre y Resumen */}
         <div className="flex items-center gap-2">
           <div className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 text-white ${
-            isClean ? "bg-emerald-700" : "bg-[#1B4332]"
+            isClean ? "bg-emerald-700" : "bg-blue-600"
           }`}>
             {st.station_number}
           </div>
@@ -716,7 +716,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
             onClick={() => setVisualPickerTarget({ type, idx })}
             className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
           >
-            <Layers className="w-3.5 h-3.5 text-primary" />
+            <Layers className="w-3.5 h-3.5 text-blue-600" />
             <span>Selector Visual</span>
           </button>
           <button
@@ -752,7 +752,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
             type="button"
             onClick={() => isClean ? handleAddCleaningQuickSteps(idx) : handleAddAssemblyQuickSteps(idx)}
             className={`px-3 py-1.5 text-white rounded-lg text-xs font-bold transition flex-shrink-0 ${
-              isClean ? "bg-emerald-700 hover:bg-emerald-800" : "bg-[#1B4332] hover:bg-[#2D6A4F]"
+              isClean ? "bg-emerald-700 hover:bg-emerald-800" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
             + Añadir
@@ -777,7 +777,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                       isClean ? "border-emerald-300" : "border-gray-200 hover:border-rose-300"
                     }`}
                   >
-                    <span className={isClean ? "text-emerald-700 font-mono" : "text-[#1B4332] font-mono"}>
+                    <span className={isClean ? "text-emerald-700 font-mono" : "text-[#0071E3] font-mono"}>
                       #{num}
                     </span>
                     {stepInfo && (
@@ -809,9 +809,9 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 fade-in pb-8">
-      <Card className="p-4">
+      <div className="bg-white rounded-3xl border border-stone-200/80 shadow-bento p-5 sm:p-6">
         <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <PlusCircle className="w-5 h-5 text-primary" />
+          <PlusCircle className="w-5 h-5 text-blue-600" />
           <span>Nueva Orden de Producción</span>
         </h2>
 
@@ -826,7 +826,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                   <button
                     type="button"
                     onClick={() => setCreateModelModalOpen(true)}
-                    className="text-[11px] font-bold text-[#1B4332] hover:text-[#2D6A4F] flex items-center gap-1 hover:underline"
+                    className="text-[11px] font-bold text-[#0071E3] hover:text-[#0077ED] flex items-center gap-1 hover:underline"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>+ Nuevo Modelo</span>
@@ -857,7 +857,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                         type="button"
                         onClick={() => handlePopulateStandardSteps(modelName)}
                         disabled={populatingSteps}
-                        className="px-3 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg font-bold text-xs shadow-xs flex items-center gap-1.5 transition touch-target"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-xs flex items-center gap-1.5 transition touch-target"
                       >
                         {populatingSteps ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                         <span>Cargar Pasos Estándar</span>
@@ -887,7 +887,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                   value={totalUnits} 
                   onChange={(e) => setTotalUnits(e.target.value)} 
                   required 
-                  className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-bold text-primary touch-target" 
+                  className="w-full text-xs border border-gray-300 rounded-lg p-2.5 bg-white font-bold text-blue-600 touch-target" 
                 />
               </div>
 
@@ -906,7 +906,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
               <div className="col-span-2 pt-2 border-t border-gray-200">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-semibold text-stone-800 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#1B4332]" />
+                    <ShieldCheck className="w-4 h-4 text-[#0071E3]" />
                     <span>Inspectores / Supervisores de Calidad</span>
                   </label>
                   <span className="text-[10px] text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full border border-stone-200 font-medium">
@@ -932,7 +932,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                     type="button"
                     onClick={() => handleAddSupervisor(tempSupervisorId)}
                     disabled={!tempSupervisorId}
-                    className="px-3.5 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:bg-stone-300 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-stone-300 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 flex-shrink-0"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
                     <span>+ Añadir Inspector</span>
@@ -947,7 +947,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                         key={sup.id}
                         className="inline-flex items-center gap-2 bg-stone-100 hover:bg-stone-200/80 text-stone-900 px-2.5 py-1 rounded-lg text-xs font-bold border border-stone-300 shadow-2xs"
                       >
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#1B4332]" />
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#0071E3]" />
                         <span>{sup.name}</span>
                         <span className="text-[10px] text-stone-500 font-mono">({sup.id})</span>
                         <button
@@ -973,11 +973,11 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-stone-900 text-xs">Pasos a Supervisar:</span>
-                        <span className="font-bold px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary border border-primary/20">
+                        <span className="font-bold px-2 py-0.5 rounded text-[10px] bg-blue-600/10 text-blue-600 border border-primary/20">
                           {supervisorSteps.length > 0 ? `${supervisorSteps.length} pasos asignados` : `Todos los pasos (${modelSteps.length || 0})`}
                         </span>
                         {supervisorSteps.length > 0 && (
-                          <span className="text-primary font-mono text-[11px]">
+                          <span className="text-blue-600 font-mono text-[11px]">
                             {formatStepNumbersRange(supervisorSteps)}
                           </span>
                         )}
@@ -989,7 +989,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                           onClick={() => setSupervisorPickerOpen(true)}
                           className="px-2.5 py-1 bg-white hover:bg-stone-100 border border-stone-300 text-stone-800 font-bold rounded-lg text-[11px] transition flex items-center gap-1"
                         >
-                          <Layers className="w-3.5 h-3.5 text-primary" />
+                          <Layers className="w-3.5 h-3.5 text-blue-600" />
                           <span>Selector Visual</span>
                         </button>
                         {hasCleaningSteps && (
@@ -1041,7 +1041,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                       <button
                         type="button"
                         onClick={handleAddSupervisorQuickSteps}
-                        className="px-3 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold transition flex-shrink-0"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex-shrink-0"
                       >
                         + Añadir
                       </button>
@@ -1074,7 +1074,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                 <button
                   type="submit"
                   disabled={submitting || !isGlobalComplete}
-                  className="px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:bg-stone-300 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 flex-shrink-0"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-stone-300 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 flex-shrink-0"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
                   <span>Crear Orden</span>
@@ -1144,7 +1144,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
             {/* Header del Bloque Ensamblaje */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-stone-200">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#1B4332] text-white flex items-center justify-center shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
                   <Wrench className="w-4 h-4" />
                 </div>
                 <div>
@@ -1169,7 +1169,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                   <select
                     value={assemblyCount}
                     onChange={(e) => setAssemblyCount(parseInt(e.target.value, 10))}
-                    className="text-xs border border-stone-300 rounded-lg px-2.5 py-1.5 bg-white font-bold text-[#1B4332] touch-target shadow-2xs"
+                    className="text-xs border border-stone-300 rounded-lg px-2.5 py-1.5 bg-white font-bold text-[#0071E3] touch-target shadow-2xs"
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
                       <option key={n} value={n}>{n} {n === 1 ? 'estación' : 'estaciones'}</option>
@@ -1183,7 +1183,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
                   className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-900 font-bold text-xs rounded-lg border border-stone-300 transition flex items-center gap-1"
                   title="Dividir únicamente los pasos de ensamblaje entre las estaciones de este bloque"
                 >
-                  <RotateCcw className="w-3 h-3 text-[#1B4332]" />
+                  <RotateCcw className="w-3 h-3 text-[#0071E3]" />
                   <span>Repartir Ensamblaje</span>
                 </button>
               </div>
@@ -1208,7 +1208,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
               </div>
             ) : (
               <div className="p-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-700 flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-[#1B4332] flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 text-[#0071E3] flex-shrink-0" />
                 <span>
                   <strong>100% Cobertura de Ensamblaje:</strong> Todos los {assemblyCoverage.total} pasos de ensamble están asignados.
                 </span>
@@ -1323,7 +1323,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
           <button
             type="submit"
             disabled={submitting || !isGlobalComplete}
-            className="w-full py-3.5 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:bg-gray-400 text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target disabled:cursor-not-allowed"
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition touch-target disabled:cursor-not-allowed"
           >
             {submitting ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -1337,7 +1337,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
             )}
           </button>
         </form>
-      </Card>
+      </div>
 
       {/* Modal Selector Visual de Pasos (Adaptado para Ensamblaje o Limpieza) */}
       {visualPickerTarget !== null && (

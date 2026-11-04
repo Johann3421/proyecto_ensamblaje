@@ -12,7 +12,7 @@ export default function MediaViewerModal({ item, onClose }) {
         className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl relative z-10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-[#1B4332] text-white p-4 flex justify-between items-start">
+        <div className="bg-blue-600 text-white p-4 flex justify-between items-start">
           <div className="min-w-0 pr-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Guía Visual</span>
             <h3 className="text-sm font-bold leading-tight">Paso #{item.step_number}: {item.operation}</h3>
@@ -41,7 +41,7 @@ export default function MediaViewerModal({ item, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-sm rounded-xl shadow touch-target transition"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow touch-target transition"
           >
             Entendido, Regresar
           </button>

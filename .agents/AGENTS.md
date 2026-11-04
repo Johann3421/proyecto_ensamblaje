@@ -2,17 +2,21 @@
 
 > **REGLA ABSOLUTA:** Antes de diseñar o programar cualquier parte de este sistema, sigue siempre estas reglas base, sin excepción, junto con las instrucciones específicas de cada tarea.
 
-1. **Ley de Tesler**: Toda la complejidad va en el backend (validaciones, cálculos, reglas de negocio, orquestación de datos). El frontend debe ser lo más simple posible, con pocos pasos y decisiones visibles, de modo que hasta un niño o una persona sin conocimientos técnicos pueda usarlo sin explicación previa. Nunca traslades al usuario una decisión que el sistema puede resolver solo.
-
-2. **Evita que el diseño "huela" a IA**: No uses paletas genéricas de gradientes morado-azul, glassmorphism excesivo, sombras neón ni emojis como iconografía principal. Usa paletas simples de 2-3 colores más neutros, buen contraste, tipografía sobria y coherente con el rubro del sistema, como si lo hubiera diseñado una persona que conoce el negocio, no un template genérico repetido.
-
-3. **Patrones reales vs patrones automáticos**: No repitas siempre el mismo layout ni patrones por defecto solo porque son los más fáciles de generar. Antes de definir una interfaz o flujo, busca referencias reales de sistemas del mismo rubro hechos por personas o empresas (competencia, casos reales en producción) e imita esos patrones reales de uso en vez de estructuras automáticas típicas.
-
-4. **Prioriza simplicidad funcional**: Menos pantallas, menos clics, menos campos. Si algo se puede inferir o automatizar, no se le pregunta al usuario. Usa mensajes de error y ayuda en lenguaje humano, no técnico. Los flujos deben ser lineales y predecibles.
-
-5. **Mantén el backend limpio y mantenible**: Separa lógica de negocio, acceso a datos y presentación; usa nomenclatura clara y consistente en todo el proyecto; nunca pongas lógica de negocio en el frontend.
-
-6. **Verificación obligatoria antes de finalizar**: ¿Un usuario nuevo entendería qué hacer sin instrucciones?, ¿el diseño se ve simple y no genérico de IA?, ¿se buscaron referencias reales antes de diseñar?, ¿toda la complejidad quedó en el backend?, ¿el frontend tiene solo lo mínimo indispensable?
+## Sistema de Diseño Oficial: Bento Grid / Apple Modular
+El proyecto utiliza de forma oficial y obligatoria el sistema visual **Bento Apple**:
+1. **Paleta Luminosa y Ergonomía Visual**:
+   - **Fondo de aplicación**: Platino ultra suave (`#F5F5F7`), nunca negro, gris plomo ni colores sombríos que provoquen depresión o fatiga visual.
+   - **Tarjetas y Módulos**: Blanco puro (`#FFFFFF`) con bordes sutiles ultra limpios (`#E5E5EA` o `#F0F0F2`) y sombras tenues (`box-shadow: 0 4px 20px rgba(0,0,0,0.02)`).
+   - **Acentos Funcionales**: Azul Apple (`#0071E3`), verde menta para aprobaciones/éxito (`#34C759`), naranja cítrico para alertas o fotos pendientes (`#FF9500`), texto primario gris carbón nítido (`#1D1D1F`) y secundario (`#86868B`).
+2. **Geometría y Bordes Redondeados (Bento Apple)**:
+   - Tarjetas y contenedores modulares: `rounded-2xl` a `rounded-3xl` (16px a 24px).
+   - Botones, selectores e inputs: `rounded-xl` (10px a 12px) o cápsula completa (`rounded-full` / 9999px para píldoras y badges).
+   - Distribución en bloques modulares que agrupen la información de forma intuitiva, con espaciado generoso (`gap-4` a `gap-6`).
+3. **Ley de Tesler**: Toda la complejidad va en el backend (validaciones, cálculos, reglas de negocio, orquestación de datos). El frontend debe ser lo más simple posible, con pocos pasos y decisiones visibles, de modo que hasta un niño o una persona sin conocimientos técnicos pueda usarlo sin explicación previa. Nunca traslades al usuario una decisión que el sistema puede resolver solo.
+4. **Evita que el diseño "huela" a IA**: No uses gradientes genéricos morado-azul, glassmorphism excesivo, sombras neón ni emojis como iconografía principal. Usa iconografía sobria (Lucide React) y una arquitectura limpia y profesional.
+5. **Patrones reales vs patrones automáticos**: Inspirarse en el diseño ergonómico de Apple Settings/macOS, Linear Insights y tableros modernos de operaciones, optimizados tanto para pantallas táctiles en línea de producción como para escritorios de supervisión.
+6. **Prioriza simplicidad funcional**: Menos pantallas, menos clics, menos campos. Si algo se puede inferir o automatizar, no se le pregunta al usuario. Usa mensajes de error y ayuda en lenguaje humano, no técnico. Los flujos deben ser lineales y predecibles.
+7. **Mantén el backend limpio y mantenible**: Separa lógica de negocio, acceso a datos y presentación; usa nomenclatura clara y consistente en todo el proyecto; nunca pongas lógica de negocio en el frontend.
 
 ---
 

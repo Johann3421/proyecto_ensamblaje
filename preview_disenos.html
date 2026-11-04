@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explorador de Estilos de Diseño - Sistema de Ensamblaje</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f1115;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 24px 20px 60px;
+    }
+    .top-header {
+      max-width: 1200px;
+      margin: 0 auto 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .badge-pill {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      margin-bottom: 8px;
+    }
+    .top-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    .top-header p {
+      font-size: 14px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    
+    /* Selector de pestañas */
+    .tab-bar {
+      max-width: 1200px;
+      margin: 0 auto 24px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .tab-btn {
+      background: #181b22;
+      border: 1px solid #282e3e;
+      border-radius: 12px;
+      padding: 14px 16px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #94a3b8;
+    }
+    .tab-btn:hover {
+      background: #1e222d;
+      border-color: #3b445d;
+      color: #e2e8f0;
+    }
+    .tab-btn.active {
+      background: #1e2433;
+      border-color: #6366f1;
+      color: #ffffff;
+      box-shadow: 0 0 0 1px #6366f1;
+    }
+    .tab-btn .tab-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: #6366f1;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      display: block;
+    }
+    .tab-btn .tab-name {
+      font-size: 14px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .tab-btn .tab-desc {
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.3;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .style-panel {
+      display: none;
+      animation: fadeIn 0.25s ease;
+    }
+    .style-panel.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Meta Info Bar */
+    .meta-card {
+      background: #16181f;
+      border: 1px solid #232733;
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .meta-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .meta-tag {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: #202432;
+      color: #cbd5e1;
+    }
+
+    /* ==============================================================
+       ESTILO 1: LINEAR MODERN CLEAN (SaaS Ágil y Nítido)
+       ============================================================== */
+    .theme-linear {
+      background: #ffffff;
+      color: #0f172a;
+      border-radius: 16px;
+      padding: 32px;
+      font-family: 'Geist', 'Inter', sans-serif;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.05);
+      border: 1px solid #e2e8f0;
+    }
+    .theme-linear .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .theme-linear .title-group h2 {
+      font-size: 19px;
+      font-weight: 600;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+    }
+    .theme-linear .title-group p {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .theme-linear .actions-group {
+      display: flex;
+      gap: 8px;
+    }
+    .theme-linear .btn-secondary {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .theme-linear .btn-secondary:hover { background: #f1f5f9; }
+    .theme-linear .btn-primary {
+      background: #0f172a;
+      color: #ffffff;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .theme-linear .btn-primary:hover { background: #27272a; }
+
+    /* Métricas Linear */
+    .theme-linear .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .theme-linear .kpi-card {
+      background: #f8fafc;
+      border: 1px solid #f1f5f9;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .theme-linear .kpi-label {
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 500;
+    }
+    .theme-linear .kpi-val {
+      font-size: 22px;
+      font-weight: 600;
+      color: #0f172a;
+      margin-top: 4px;
+      letter-spacing: -0.03em;
+    }
+
+    /* Checklist Step Card Linear */
+    .theme-linear .step-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .theme-linear .step-card:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+    .theme-linear .step-card.active-step {
+      border-color: #2563eb;
+      background: #fafcff;
+      box-shadow: 0 0 0 1px #2563eb;
+    }
+    .theme-linear .step-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: 1;
+    }
+    .theme-linear .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #f1f5f9;
+      color: #475569;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .theme-linear .active-step .step-num {
+      background: #2563eb;
+      color: #ffffff;
+    }
+    .theme-linear .step-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #0f172a;
+    }
+    .theme-linear .step-meta {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .theme-linear .badge {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .theme-linear .badge-blue {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    .theme-linear .badge-amber {
+      background: #fffbeb;
+      color: #b45309;
+    }
+    .theme-linear .step-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .theme-linear .tech-select {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .theme-linear .btn-action {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .theme-linear .btn-action:hover { background: #f1f5f9; }
+
+    /* ==============================================================
+       ESTILO 2: STRIPE / TAILWIND ENTERPRISE (Profesional & Confiable)
+       ============================================================== */
+    .theme-stripe {
+      background: #f8fafc;
+      color: #1e293b;
+      border-radius: 16px;
+      padding: 32px;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid #e2e8f0;
+    }
+    .theme-stripe .preview-header {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .theme-stripe .title-group h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .theme-stripe .title-group p {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 3px;
+    }
+    .theme-stripe .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+    }
+    .theme-stripe .btn-secondary {
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      color: #374151;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .theme-stripe .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .theme-stripe .kpi-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .theme-stripe .kpi-label {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .theme-stripe .kpi-val {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 4px;
+    }
+    .theme-stripe .step-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .theme-stripe .step-card.active-step {
+      border-left: 4px solid #2563eb;
+    }
+    .theme-stripe .step-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 1;
+    }
+    .theme-stripe .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #e0e7ff;
+      color: #4338ca;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .theme-stripe .step-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .theme-stripe .step-meta {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .theme-stripe .badge-green {
+      background: #dcfce7;
+      color: #15803d;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    /* ==============================================================
+       ESTILO 3: BENTO GRID / APPLE MODULAR (Limpio, Curvo & Espacioso)
+       ============================================================== */
+    .theme-bento {
+      background: #f5f5f7;
+      color: #1d1d1f;
+      border-radius: 24px;
+      padding: 36px;
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    }
+    .theme-bento .preview-header {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+    .theme-bento .title-group h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1d1d1f;
+      letter-spacing: -0.02em;
+    }
+    .theme-bento .title-group p {
+      font-size: 13px;
+      color: #86868b;
+      margin-top: 4px;
+    }
+    .theme-bento .btn-primary {
+      background: #0071e3;
+      color: #ffffff;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 9999px;
+      cursor: pointer;
+    }
+    .theme-bento .bento-layout {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+    .theme-bento .bento-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+    }
+    .theme-bento .bento-title {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #86868b;
+      margin-bottom: 16px;
+    }
+    .theme-bento .step-item {
+      padding: 16px;
+      border-radius: 14px;
+      background: #fbfbfd;
+      border: 1px solid #efeff2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .theme-bento .step-item.active {
+      background: #f0f7ff;
+      border-color: #cce4ff;
+    }
+    .theme-bento .step-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+    .theme-bento .step-item-sub {
+      font-size: 12px;
+      color: #86868b;
+      margin-top: 2px;
+    }
+    .theme-bento .progress-ring-box {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .theme-bento .big-pct {
+      font-size: 44px;
+      font-weight: 800;
+      color: #0071e3;
+      letter-spacing: -0.04em;
+    }
+    .theme-bento .pct-sub {
+      font-size: 13px;
+      color: #86868b;
+      margin-top: 4px;
+    }
+
+    /* ==============================================================
+       ESTILO 4: NORDIC WARM / NOTION MINIMAL (Cálido, Calmado & Humano)
+       ============================================================== */
+    .theme-nordic {
+      background: #fafaf8;
+      color: #2f3437;
+      border-radius: 16px;
+      padding: 34px;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid #ebe9e5;
+    }
+    .theme-nordic .preview-header {
+      padding-bottom: 22px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid #ebe9e5;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .theme-nordic .title-group h2 {
+      font-size: 21px;
+      font-weight: 600;
+      color: #2f3437;
+      letter-spacing: -0.01em;
+    }
+    .theme-nordic .title-group p {
+      font-size: 13px;
+      color: #787774;
+      margin-top: 3px;
+    }
+    .theme-nordic .btn-primary {
+      background: #37352f;
+      color: #ffffff;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .theme-nordic .btn-secondary {
+      background: #ffffff;
+      border: 1px solid #dcdad5;
+      color: #37352f;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .theme-nordic .kpi-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .theme-nordic .kpi-pill {
+      background: #ffffff;
+      border: 1px solid #ebe9e5;
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .theme-nordic .kpi-num {
+      font-size: 16px;
+      font-weight: 700;
+      color: #2f3437;
+    }
+    .theme-nordic .kpi-txt {
+      font-size: 12px;
+      color: #787774;
+    }
+    .theme-nordic .step-row {
+      background: #ffffff;
+      border: 1px solid #ebe9e5;
+      border-radius: 8px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      transition: background 0.1s;
+    }
+    .theme-nordic .step-row:hover {
+      background: #fdfdfc;
+    }
+    .theme-nordic .step-row.done {
+      background: #f7f6f3;
+      border-color: #e3e2de;
+    }
+    .theme-nordic .step-text-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #2f3437;
+    }
+    .theme-nordic .step-text-sub {
+      font-size: 12px;
+      color: #787774;
+      margin-top: 2px;
+    }
+    .theme-nordic .badge-sage {
+      background: #eef3ef;
+      color: #2d5a3c;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .theme-nordic .badge-terracotta {
+      background: #faece6;
+      color: #8c3b1c;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* Comparison Table */
+    .compare-section {
+      max-width: 1200px;
+      margin: 40px auto 0;
+      background: #16181f;
+      border: 1px solid #232733;
+      border-radius: 16px;
+      padding: 28px;
+    }
+    .compare-section h3 {
+      font-size: 18px;
+      color: #ffffff;
+      margin-bottom: 16px;
+    }
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .compare-table th {
+      text-align: left;
+      padding: 12px 14px;
+      background: #1c202b;
+      color: #94a3b8;
+      font-weight: 600;
+      border-bottom: 1px solid #282e3e;
+    }
+    .compare-table td {
+      padding: 14px;
+      border-bottom: 1px solid #202432;
+      color: #cbd5e1;
+    }
+    .compare-table tr:hover td {
+      background: #1a1e28;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-header">
+    <span class="badge-pill">Propuesta de Rediseño Visual</span>
+    <h1>Explorador de Sistemas de Diseño Web</h1>
+    <p>Selecciona una pestaña para ver en vivo cómo lucirá el sistema (órdenes, checklists, operarios y estados) en cada arquetipo visual moderno.</p>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('linear')">
+      <span class="tab-num">Estilo 01</span>
+      <span class="tab-name">Linear Modern Clean</span>
+      <span class="tab-desc">SaaS de alta precisión, ultra limpio, micro-bordes finos y espaciado ágil.</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('stripe')">
+      <span class="tab-num">Estilo 02</span>
+      <span class="tab-name">Stripe Enterprise</span>
+      <span class="tab-desc">Estándar corporativo, sombras multicapa suaves, máxima legibilidad 8h+.</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('bento')">
+      <span class="tab-num">Estilo 03</span>
+      <span class="tab-name">Bento Grid / Apple</span>
+      <span class="tab-desc">Tarjetas modulares redondeadas (16-20px), visual, intuitivo y moderno.</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('nordic')">
+      <span class="tab-num">Estilo 04</span>
+      <span class="tab-name">Nordic Warm (Notion)</span>
+      <span class="tab-desc">Tonos cálidos marfil/crema, cero estrés visual, tipografía calmada y amigable.</span>
+    </button>
+  </div>
+
+  <div class="container">
+
+    <!-- ==================== ESTILO 1 ==================== -->
+    <div id="panel-linear" class="style-panel active">
+      <div class="meta-card">
+        <div>
+          <strong style="color: #fff; font-size: 15px;">Estilo 1: Linear Modern Clean (Recomendado)</strong>
+          <p style="color: #94a3b8; font-size: 13px; margin-top: 3px;">Inspirado en Linear.app, Vercel y Raycast. Fondos blancos/grises neutros, bordes de 1px muy nítidos, tipografía Geist/Inter, alta densidad de información sin saturar.</p>
+        </div>
+        <div class="meta-tags">
+          <span class="meta-tag">Fondo: #FFFFFF / #F8FAFC</span>
+          <span class="meta-tag">Bordes: #E2E8F0 (1px)</span>
+          <span class="meta-tag">Acento: #2563EB (Azul Nítido)</span>
+          <span class="meta-tag">Radio: 8px - 12px</span>
+        </div>
+      </div>
+
+      <div class="theme-linear">
+        <div class="preview-header">
+          <div class="title-group">
+            <div style="display:flex; align-items:center; gap: 10px;">
+              <h2>Orden OP-2026-084 &bull; EZENT</h2>
+              <span class="badge badge-blue">En Producción</span>
+              <span class="badge badge-amber">Estación 2: Cableado</span>
+            </div>
+            <p>Cliente: TechPeru SAC &bull; Meta: 40 PCs &bull; Lote #14 &bull; Supervisor: Gianfranco (OP-105)</p>
+          </div>
+          <div class="actions-group">
+            <button class="btn-secondary">&larr; Volver al Pipeline</button>
+            <button class="btn-secondary">&#128269; Buscar Paso</button>
+            <button class="btn-primary">+ Nuevo Paso</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Progreso Global</div>
+            <div class="kpi-val">68%</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Pasos Completados</div>
+            <div class="kpi-val">37 / 55</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Técnico Actual</div>
+            <div class="kpi-val" style="font-size: 17px; margin-top: 8px;">Jhoan (OP-102)</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Fotos de Evidencia</div>
+            <div class="kpi-val">12 Registradas</div>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; margin-bottom: 12px;">
+          Checklist Activo &bull; Estación 2: Cableado y Fuente
+        </div>
+
+        <!-- Paso 1 -->
+        <div class="step-card">
+          <div class="step-left">
+            <div class="step-num">&#10003;</div>
+            <div>
+              <div class="step-title">12. Instalar fuente de poder 650W y asegurar con 4 pernos</div>
+              <div class="step-meta">
+                <span class="badge">Estación 1: Ensamble</span>
+                <span>Completado por <strong>Giancarlos</strong> &bull; Hace 14 min</span>
+                <span style="color: #16a34a;">&#128247; Foto verificada</span>
+              </div>
+            </div>
+          </div>
+          <div class="step-right">
+            <span class="badge" style="background: #ecfdf5; color: #15803d;">Aprobado</span>
+          </div>
+        </div>
+
+        <!-- Paso 2 Activo -->
+        <div class="step-card active-step">
+          <div class="step-left">
+            <div class="step-num">13</div>
+            <div>
+              <div class="step-title">13. Conectar cable ATX 24 pines a placa madre y peinar ruteo posterior</div>
+              <div class="step-meta">
+                <span class="badge badge-blue">Estación 2: Cableado</span>
+                <span style="color: #2563eb; font-weight: 500;">En progreso ahora</span>
+                <span style="color: #b45309;">&#128248; Requiere foto de evidencia</span>
+              </div>
+            </div>
+          </div>
+          <div class="step-right">
+            <select class="tech-select">
+              <option selected>Jhoan (OP-102)</option>
+              <option>Giancarlos (OP-101)</option>
+              <option>Supervisor Gianfranco</option>
+            </select>
+            <button class="btn-action" style="background: #2563eb; color: #fff; border-color: #2563eb;">&#128247; Subir Foto</button>
+            <button class="btn-action" style="background: #0f172a; color: #fff; border-color: #0f172a;">&#10003; Completar Paso</button>
+          </div>
+        </div>
+
+        <!-- Paso 3 Siguiente -->
+        <div class="step-card">
+          <div class="step-left">
+            <div class="step-num">14</div>
+            <div>
+              <div class="step-title">14. Conectar alimentación EPS CPU 8 pines y asegurar con cincho plástico</div>
+              <div class="step-meta">
+                <span class="badge">Estación 2: Cableado</span>
+                <span>Pendiente &bull; Estimado: 2 min</span>
+              </div>
+            </div>
+          </div>
+          <div class="step-right">
+            <button class="btn-action">Iniciar Paso</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ==================== ESTILO 2 ==================== -->
+    <div id="panel-stripe" class="style-panel">
+      <div class="meta-card">
+        <div>
+          <strong style="color: #fff; font-size: 15px;">Estilo 2: Stripe / Tailwind Enterprise (Corporativo Moderno)</strong>
+          <p style="color: #94a3b8; font-size: 13px; margin-top: 3px;">Inspirado en Stripe Dashboard y Shopify. Tarjetas blancas sobre fondo perla (#F8FAFC), sombras suaves multicapa, bordes acentuados, altísima claridad para jornadas largas.</p>
+        </div>
+        <div class="meta-tags">
+          <span class="meta-tag">Fondo: #F8FAFC</span>
+          <span class="meta-tag">Tarjetas: #FFFFFF + Shadow-sm</span>
+          <span class="meta-tag">Acento: #2563EB / #059669</span>
+          <span class="meta-tag">Radio: 10px</span>
+        </div>
+      </div>
+
+      <div class="theme-stripe">
+        <div class="preview-header">
+          <div class="title-group">
+            <h2>Orden OP-2026-084 &bull; Modelo EZENT</h2>
+            <p>Cliente: TechPeru SAC &bull; Lote: 40 Unidades &bull; Estación 2: Cableado</p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn-secondary">Exportar Reporte</button>
+            <button class="btn-primary">+ Registrar Inspección</button>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Progreso de Orden</div>
+            <div class="kpi-val">68%</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Pasos Validados</div>
+            <div class="kpi-val">37 / 55</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Tiempo Promedio</div>
+            <div class="kpi-val">4.2 min</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Calidad</div>
+            <div class="kpi-val" style="color: #16a34a;">100% OK</div>
+          </div>
+        </div>
+
+        <!-- Paso en Stripe -->
+        <div class="step-card active-step">
+          <div class="step-left">
+            <div class="step-num">13</div>
+            <div>
+              <div class="step-title">13. Conectar cable ATX 24 pines a placa madre y peinar ruteo posterior</div>
+              <div class="step-meta">
+                <span class="badge-green">Estación 2: Cableado</span>
+                <span>Asignado a: <strong>Jhoan (OP-102)</strong></span>
+                <span>Evidencia requerida</span>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary">&#128247; Foto Evidencia</button>
+            <button class="btn-primary">&#10003; Validar y Continuar</button>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-left">
+            <div class="step-num" style="background: #f1f5f9; color: #64748b;">14</div>
+            <div>
+              <div class="step-title">14. Conectar alimentación EPS CPU 8 pines y asegurar con cincho plástico</div>
+              <div class="step-meta">
+                <span>Estación 2: Cableado</span>
+                <span>En espera de paso anterior</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <span style="font-size: 13px; color: #94a3b8; font-weight: 500;">En Cola</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ==================== ESTILO 3 ==================== -->
+    <div id="panel-bento" class="style-panel">
+      <div class="meta-card">
+        <div>
+          <strong style="color: #fff; font-size: 15px;">Estilo 3: Bento Grid / Apple Modular (Limpio & Ergonómico)</strong>
+          <p style="color: #94a3b8; font-size: 13px; margin-top: 3px;">Inspirado en la interfaz de Apple, Figma y Linear Insights. Cero rigidez, tarjetas modulares con esquinas generosas (18-24px), espaciado abierto y lectura sin fricción.</p>
+        </div>
+        <div class="meta-tags">
+          <span class="meta-tag">Fondo: #F5F5F7</span>
+          <span class="meta-tag">Tarjetas: Blancas redondeadas 20px</span>
+          <span class="meta-tag">Acento: #0071E3 (Apple Blue)</span>
+          <span class="meta-tag">Radio: 16px - 24px</span>
+        </div>
+      </div>
+
+      <div class="theme-bento">
+        <div class="preview-header">
+          <div class="title-group">
+            <h2>OP-2026-084 &bull; Ensamble EZENT</h2>
+            <p>40 Unidades &bull; Cliente TechPeru &bull; Supervisión Activa</p>
+          </div>
+          <button class="btn-primary">Continuar Ensamble &rarr;</button>
+        </div>
+
+        <div class="bento-layout">
+          <!-- Columna Izquierda: Checklist Modular -->
+          <div class="bento-card">
+            <div class="bento-title">Checklist en Curso &bull; Estación 2</div>
+
+            <div class="step-item active">
+              <div>
+                <div class="step-item-title">13. Conectar cable ATX 24 pines y ruteo posterior</div>
+                <div class="step-item-sub">En ejecución por Jhoan &bull; Requiere foto de confirmación</div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button style="border: 1px solid #d1d5db; background: #fff; padding: 8px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; cursor: pointer;">&#128247; Foto</button>
+                <button style="border: none; background: #0071e3; color: #fff; padding: 8px 16px; border-radius: 9999px; font-size: 12px; font-weight: 600; cursor: pointer;">Completar</button>
+              </div>
+            </div>
+
+            <div class="step-item">
+              <div>
+                <div class="step-item-title">14. Conectar alimentación EPS CPU 8 pines</div>
+                <div class="step-item-sub">Estación 2 &bull; Próximo en cola</div>
+              </div>
+              <span style="font-size: 12px; color: #86868b; font-weight: 600;">Espera</span>
+            </div>
+
+            <div class="step-item">
+              <div>
+                <div class="step-item-title">15. Peinar y colocar precintos en bahía posterior</div>
+                <div class="step-item-sub">Estación 2 &bull; Cierre de cableado</div>
+              </div>
+              <span style="font-size: 12px; color: #86868b; font-weight: 600;">Espera</span>
+            </div>
+          </div>
+
+          <!-- Columna Derecha: KPI Bento -->
+          <div class="bento-card">
+            <div class="bento-title">Estado de la Estación</div>
+            <div class="progress-ring-box">
+              <div class="big-pct">68%</div>
+              <div class="pct-sub">37 de 55 pasos aprobados</div>
+            </div>
+            <div style="border-top: 1px solid #f2f2f7; padding-top: 16px; margin-top: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
+                <span style="color: #86868b;">Supervisor:</span>
+                <strong style="color: #1d1d1f;">Gianfranco</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px;">
+                <span style="color: #86868b;">Técnico Activo:</span>
+                <strong style="color: #1d1d1f;">Jhoan</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                <span style="color: #86868b;">Tiempo por PC:</span>
+                <strong style="color: #34c759;">Dentro de meta</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ==================== ESTILO 4 ==================== -->
+    <div id="panel-nordic" class="style-panel">
+      <div class="meta-card">
+        <div>
+          <strong style="color: #fff; font-size: 15px;">Estilo 4: Nordic Warm / Notion Minimal (Cálido y Humano)</strong>
+          <p style="color: #94a3b8; font-size: 13px; margin-top: 3px;">Inspirado en Notion, Basecamp y Craft. Fondos cálidos marfil (#FAFAF8), tipografía humana, acentos salvia y terracota, cero agresividad visual para un entorno de trabajo relajado.</p>
+        </div>
+        <div class="meta-tags">
+          <span class="meta-tag">Fondo: #FAFAF8 / Marfil</span>
+          <span class="meta-tag">Bordes: #EBE9E5 (Piedra suave)</span>
+          <span class="meta-tag">Acentos: Verde Salvia / Carbón</span>
+          <span class="meta-tag">Radio: 8px</span>
+        </div>
+      </div>
+
+      <div class="theme-nordic">
+        <div class="preview-header">
+          <div class="title-group">
+            <h2>Orden OP-2026-084 &mdash; EZENT</h2>
+            <p>Lote de 40 unidades &bull; Estación 2 de Ensamble</p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary">Volver al tablero</button>
+            <button class="btn-primary">Guardar avance</button>
+          </div>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-pill">
+            <span class="kpi-num">37/55</span>
+            <span class="kpi-txt">Pasos verificados</span>
+          </div>
+          <div class="kpi-pill">
+            <span class="kpi-num">68%</span>
+            <span class="kpi-txt">Avance total</span>
+          </div>
+          <div class="kpi-pill">
+            <span class="kpi-num">Jhoan</span>
+            <span class="kpi-txt">Operario actual</span>
+          </div>
+        </div>
+
+        <!-- Paso en Nordic -->
+        <div class="step-row done">
+          <div>
+            <div class="step-text-title" style="text-decoration: line-through; color: #787774;">12. Instalar fuente de poder 650W y asegurar</div>
+            <div class="step-text-sub">Completado por Giancarlos &bull; Con foto</div>
+          </div>
+          <span class="badge-sage">Aprobado</span>
+        </div>
+
+        <div class="step-row" style="border: 2px solid #2f3437;">
+          <div>
+            <div class="step-text-title">13. Conectar cable ATX 24 pines y ruteo posterior</div>
+            <div class="step-text-sub">En progreso con Jhoan &bull; Evidencia fotográfica pendiente</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <span class="badge-terracotta">&#128247; Foto Requerida</span>
+            <button class="btn-primary" style="padding: 4px 12px; font-size: 12px;">Completar</button>
+          </div>
+        </div>
+
+        <div class="step-row">
+          <div>
+            <div class="step-text-title">14. Conectar alimentación EPS CPU 8 pines</div>
+            <div class="step-text-sub">Siguiente en Estación 2</div>
+          </div>
+          <span style="font-size: 12px; color: #787774;">Pendiente</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Comparativa Directa -->
+    <div class="compare-section">
+      <h3>Comparativa Técnica de los 4 Enfoques</h3>
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Estilo</th>
+            <th>Filosofía Visual</th>
+            <th>Sensación de Uso</th>
+            <th>Fatiga Visual (8h)</th>
+            <th>Ideal Para</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong style="color: #60a5fa;">1. Linear Modern Clean</strong></td>
+            <td>Líneas ultra finas (1px), blanco puro y gris pizarra, densidad nítida, badges sutiles.</td>
+            <td>Ágil, quirúrgico, moderno, parece app de Silicon Valley (Linear/Raycast).</td>
+            <td>Mínima (excelente contraste equilibrado sin saturación).</td>
+            <td>Edición de checklists, supervisión técnica rápida, dashboards de alta información.</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #38bdf8;">2. Stripe Enterprise</strong></td>
+            <td>Tarjetas blancas sobre fondo perla suave, sombras suaves, cabeceras estructuradas.</td>
+            <td>Sólido, corporativo, muy claro, estándar de la industria.</td>
+            <td>Muy baja (colores contrastados con fondos relajados).</td>
+            <td>Creación de órdenes, reportes de gerencia, auditoría y métricas.</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #a78bfa;">3. Bento Grid / Apple</strong></td>
+            <td>Módulos y bloques redondeados (16-24px), métricas destacadas, espaciado generoso.</td>
+            <td>Intuitivo, premium, espacioso, muy fácil de aprender sin manuales.</td>
+            <td>Mínima (grandes zonas de descanso visual).</td>
+            <td>Puestos de operarios en pantalla táctil/tablet, pipeline visual kanban.</td>
+          </tr>
+          <tr>
+            <td><strong style="color: #fbbf24;">4. Nordic Warm</strong></td>
+            <td>Tonos marfil/crema cálidos, bordes piedra suave, acentos terrosos orgánicos.</td>
+            <td>Calmado, humano, relajado, nada intimidante.</td>
+            <td>Mínima (muy acogedor para la vista).</td>
+            <td>Equipos que buscan un software amigable y sin frialdad técnica.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.style-panel').forEach(panel => panel.classList.remove('active'));
+
+      event.currentTarget.classList.add('active');
+      document.getElementById('panel-' + name).classList.add('active');
+    }
+  </script>
+</body>
+</html>
+

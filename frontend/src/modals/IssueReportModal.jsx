@@ -159,7 +159,7 @@ export default function IssueReportModal({ data, currentUser, orderId, stationNu
                       <button
                         type="button"
                         onClick={() => setCameraOpen(true)}
-                        className="px-2.5 py-1 bg-primary hover:bg-primary-light text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1"
+                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1"
                       >
                         <Camera className="w-3 h-3" />
                         Cambiar

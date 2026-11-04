@@ -105,7 +105,7 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
     <>
       <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
         <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl max-h-[92vh] overflow-y-auto">
-          <div className="bg-[#1B4332] text-white p-4 flex justify-between items-center sticky top-0 z-10">
+          <div className="bg-blue-600 text-white p-4 flex justify-between items-center sticky top-0 z-10">
             <div className="flex items-center gap-2">
               <Cpu className="w-5 h-5" />
               <h3 className="text-sm font-bold">PC #{unit.unit_number.toString().padStart(2, '0')} — Ficha de Unidad</h3>
@@ -122,7 +122,7 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
               </div>
               <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
                 <span className="text-[10px] text-gray-500 font-semibold block">Orden</span>
-                <p className="font-bold text-primary">{order.order_id}</p>
+                <p className="font-bold text-blue-600">{order.order_id}</p>
               </div>
               <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
                 <span className="text-[10px] text-gray-500 font-semibold block">Estado Actual</span>
@@ -312,9 +312,9 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                 type="button"
                 disabled={loading}
                 onClick={() => setTransferModalOpen(true)}
-                className="w-full py-2.5 px-3 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-primary font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
+                className="w-full py-2.5 px-3 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-blue-600 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 touch-target"
               >
-                <ArrowRightCircle className="w-3.5 h-3.5 text-primary" />
+                <ArrowRightCircle className="w-3.5 h-3.5 text-blue-600" />
                 <span>Derivar / Mover a otra Estación</span>
               </button>
 

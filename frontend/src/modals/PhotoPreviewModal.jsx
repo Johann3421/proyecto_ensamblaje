@@ -96,7 +96,7 @@ export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhoto
               </a>
               <button 
                 onClick={onClose} 
-                className="px-4 py-1.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-lg text-xs font-bold transition shadow-xs"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs"
               >
                 Cerrar
               </button>

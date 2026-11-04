@@ -63,7 +63,7 @@ export default function StepPickerModal({
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header del Modal */}
-        <div className={`${isCleaningStation ? "bg-emerald-800" : "bg-[#1B4332]"} text-white p-4 flex justify-between items-center flex-shrink-0`}>
+        <div className={`${isCleaningStation ? "bg-emerald-800" : "bg-blue-600"} text-white p-4 flex justify-between items-center flex-shrink-0`}>
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm flex-shrink-0">
               {station.station_number}
@@ -128,7 +128,7 @@ export default function StepPickerModal({
               />
               <button
                 type="submit"
-                className="px-2.5 py-1 bg-primary hover:bg-primary text-white rounded text-xs font-bold transition flex-shrink-0"
+                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-600 text-white rounded text-xs font-bold transition flex-shrink-0"
               >
                 + Asignar
               </button>
@@ -144,7 +144,7 @@ export default function StepPickerModal({
               <button
                 type="button"
                 onClick={() => onClaimAllFreeSteps(stationIdx)}
-                className="text-[11px] text-primary hover:underline font-bold"
+                className="text-[11px] text-blue-600 hover:underline font-bold"
               >
                 + Asignar pasos libres
               </button>
@@ -181,7 +181,7 @@ export default function StepPickerModal({
                 {/* Badge número */}
                 <div className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-2xs ${
                   isAssignedToThis
-                    ? "bg-primary text-white"
+                    ? "bg-blue-600 text-white"
                     : otherOwner
                       ? "bg-amber-500 text-white"
                       : "bg-gray-100 text-gray-700 border border-gray-300"
@@ -206,10 +206,10 @@ export default function StepPickerModal({
                     ) : otherOwner ? (
                       <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0" title="Transferir a esta estación">
                         <span>En E{otherOwner.stationNumber} ({otherOwner.stationName})</span>
-                        <span className="text-primary font-extrabold ml-1">→ Mover aquí</span>
+                        <span className="text-blue-600 font-extrabold ml-1">→ Mover aquí</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full flex-shrink-0 hover:bg-stone-200 hover:text-primary">
+                      <span className="text-[10px] font-bold text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full flex-shrink-0 hover:bg-stone-200 hover:text-blue-600">
                         + Asignar libre
                       </span>
                     )}
@@ -240,12 +240,12 @@ export default function StepPickerModal({
         {/* Footer */}
         <div className="p-3 bg-gray-100 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
           <div className="text-xs font-semibold text-gray-700">
-            Total en Estación {station.station_number}: <strong className="text-primary">{currentStepNumbers.size} pasos</strong>
+            Total en Estación {station.station_number}: <strong className="text-blue-600">{currentStepNumbers.size} pasos</strong>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-bold rounded-xl shadow-xs transition touch-target"
+            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition touch-target"
           >
             ✓ Guardar y Cerrar
           </button>

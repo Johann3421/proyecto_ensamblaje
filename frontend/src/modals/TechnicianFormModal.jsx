@@ -12,7 +12,7 @@ export default function TechnicianFormModal({ data, loading, onClose, onSave }) 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl">
-        <div className="bg-[#1B4332] text-white p-4 flex justify-between items-center">
+        <div className="bg-blue-600 text-white p-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5" />
             <h3 className="text-sm font-bold">
@@ -86,7 +86,7 @@ export default function TechnicianFormModal({ data, loading, onClose, onSave }) 
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
+              className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow transition disabled:opacity-50 touch-target"
             >
               {loading ? "Guardando..." : "Guardar Técnico"}
             </button>

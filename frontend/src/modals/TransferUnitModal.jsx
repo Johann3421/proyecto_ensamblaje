@@ -58,7 +58,7 @@ export default function TransferUnitModal({
             <p className="font-semibold text-[11px]">
               📍 Estación actual: <strong>Estación {currentStation}</strong>
             </p>
-            <p className="text-[11px] text-primary leading-snug">
+            <p className="text-[11px] text-blue-600 leading-snug">
               La PC viajará a la estación de destino para que otro técnico continúe o finalice las asignaciones pendientes.
             </p>
           </div>
@@ -70,7 +70,7 @@ export default function TransferUnitModal({
             <select
               value={targetStation}
               onChange={(e) => setTargetStation(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded-xl p-2.5 font-bold touch-target bg-white focus:ring-2 focus:ring-primary/20"
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5 font-bold touch-target bg-white focus:ring-2 focus:ring-blue-500/20"
             >
               {availableStations.map(st => (
                 <option key={st.station_number} value={st.station_number}>
@@ -90,7 +90,7 @@ export default function TransferUnitModal({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Ej: Completar pruebas de arranque y cerrar tapa en Estación 5..."
-              className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full text-xs border border-gray-300 rounded-xl p-2.5 touch-target focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             ></textarea>
           </div>
 
@@ -105,7 +105,7 @@ export default function TransferUnitModal({
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 py-3 text-xs font-bold bg-primary hover:bg-primary text-white rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5"
+              className="flex-1 py-3 text-xs font-bold bg-blue-600 hover:bg-blue-600 text-white rounded-xl shadow transition touch-target flex items-center justify-center gap-1.5"
             >
               {submitting ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /><span>Derivando...</span></>

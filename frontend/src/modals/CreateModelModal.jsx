@@ -59,7 +59,7 @@ export default function CreateModelModal({ isOpen, onClose, onSuccess, existingM
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-4 bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-4 bg-gradient-to-r from-[#0071E3] to-[#0077ED] text-white flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-white/15 rounded-xl">
               <PlusCircle className="w-5 h-5 text-white" />
@@ -130,11 +130,11 @@ export default function CreateModelModal({ isOpen, onClose, onSuccess, existingM
                   value="STANDARD"
                   checked={initStrategy === "STANDARD"}
                   onChange={() => setInitStrategy("STANDARD")}
-                  className="mt-0.5 text-primary focus:ring-primary/20"
+                  className="mt-0.5 text-blue-600 focus:ring-blue-500/20"
                 />
                 <div className="text-xs">
                   <div className="font-bold text-gray-900 flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
                     <span>⚡ Plantilla Maestra SekaiTech (52 Pasos)</span>
                     <span className="text-[9px] bg-stone-200 text-stone-800 px-1.5 py-0.5 rounded font-bold">Recomendado</span>
                   </div>
@@ -216,7 +216,7 @@ export default function CreateModelModal({ isOpen, onClose, onSuccess, existingM
             <button
               type="submit"
               disabled={submitting || !modelName.trim()}
-              className="px-5 py-2.5 bg-[#1B4332] hover:bg-[#2D6A4F] disabled:bg-gray-300 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 transition touch-target disabled:cursor-not-allowed"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 transition touch-target disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <>

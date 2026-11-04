@@ -36,7 +36,7 @@ export default function ChecklistStepModal({
     <>
       <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4 fade-in">
         <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
-          <div className="bg-[#1B4332] text-white p-4 flex justify-between items-center sticky top-0 z-10">
+          <div className="bg-blue-600 text-white p-4 flex justify-between items-center sticky top-0 z-10">
             <h3 className="text-sm font-bold">
               {formData.id ? `Editar Paso #${formData.step_number}` : "Nuevo Paso"}
             </h3>
@@ -100,7 +100,7 @@ export default function ChecklistStepModal({
             }`}>
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                  {formData.is_cleaning ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-primary" />}
+                  {formData.is_cleaning ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-blue-600" />}
                   <span>Clasificación del Paso (Asignación)</span>
                 </label>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
@@ -164,7 +164,7 @@ export default function ChecklistStepModal({
                 className="w-full text-xs border border-gray-300 rounded-xl p-2.5"
               />
               <div className="grid grid-cols-2 gap-2">
-                <label className="block w-full py-2.5 bg-stone-100 text-primary border border-stone-200 text-xs font-semibold rounded-xl cursor-pointer hover:bg-stone-200 text-center touch-target transition flex items-center justify-center gap-1.5">
+                <label className="block w-full py-2.5 bg-stone-100 text-blue-600 border border-stone-200 text-xs font-semibold rounded-xl cursor-pointer hover:bg-stone-200 text-center touch-target transition flex items-center justify-center gap-1.5">
                   <Upload className="w-4 h-4" />
                   <span>{uploading ? "Subiendo..." : "📁 Subir Archivo"}</span>
                   <input type="file" accept="image/*,.gif" onChange={handleFileUpload} className="hidden" />
@@ -207,7 +207,7 @@ export default function ChecklistStepModal({
                   <span>Eliminar</span>
                 </button>
               )}
-              <button type="submit" className="flex-1 py-3 text-xs font-bold bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-xl shadow transition touch-target">
+              <button type="submit" className="flex-1 py-3 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition touch-target">
                 Guardar Paso
               </button>
             </div>

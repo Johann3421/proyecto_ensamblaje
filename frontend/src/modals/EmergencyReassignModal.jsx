@@ -74,7 +74,7 @@ export default function EmergencyReassignModal({
             <select
               value={newUserId}
               onChange={(e) => setNewUserId(e.target.value)}
-              className="w-full text-xs border border-gray-300 rounded-xl p-3 font-bold text-primary touch-target"
+              className="w-full text-xs border border-gray-300 rounded-xl p-3 font-bold text-blue-600 touch-target"
             >
               {operators.map(op => <option key={op.id} value={op.id}>{op.name}</option>)}
             </select>

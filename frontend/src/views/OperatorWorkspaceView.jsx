@@ -16,7 +16,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         <Coffee className="w-12 h-12 text-amber-500 mx-auto mb-3" />
         <h3 className="text-sm font-bold text-gray-900">Sin Tareas Asignadas</h3>
         <p className="text-xs text-gray-500 mt-1">{workspace?.message || 'El administrador no ha lanzado un lote o no estás asignado.'}</p>
-        <button onClick={onRefresh} className="mt-4 text-xs bg-primary text-white px-4 py-2 rounded-lg font-semibold touch-target">
+        <button onClick={onRefresh} className="mt-4 text-xs bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold touch-target">
           Comprobar Nuevamente
         </button>
       </Card>
@@ -534,18 +534,18 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       )}
 
       {/* Header estación y Selector de Orden */}
-      <Card className="p-3.5 border-l-4 border-l-[#1B4332] space-y-3">
+      <Card className="p-3.5 border border border-stone-200/80 space-y-3">
         {/* Selector de Orden Activa para el Técnico */}
         {available_orders && available_orders.length > 1 && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
             <label className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
-              <ClipboardList className="w-3.5 h-3.5 text-primary" />
+              <ClipboardList className="w-3.5 h-3.5 text-blue-600" />
               <span>Cambiar Orden de Trabajo:</span>
             </label>
             <select
               value={order.order_id}
               onChange={(e) => onSelectOrder && onSelectOrder(e.target.value)}
-              className="text-xs font-bold border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-primary/20 focus:outline-none touch-target"
+              className="text-xs font-bold border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-blue-400/20 focus:outline-none touch-target"
             >
               {available_orders.map(o => (
                 <option key={o.order_id} value={o.order_id}>
@@ -560,7 +560,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-xs font-bold text-white px-2 py-0.5 rounded shadow-xs ${
-                assignment.station_number === 0 ? 'bg-amber-600' : (assignment.is_cleaning_station ? 'bg-emerald-600' : 'bg-[#1B4332]')
+                assignment.station_number === 0 ? 'bg-amber-600' : (assignment.is_cleaning_station ? 'bg-emerald-600' : 'bg-blue-600')
               }`}>
                 {assignment.station_number === 0 ? 'SUPERVISIÓN' : `E${assignment.station_number}`}
               </span>
@@ -576,7 +576,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               )}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Orden: <strong className="text-primary font-mono">{order.order_id}</strong> · Modelo: <strong>{order.model_name}</strong> ({order.total_units} PCs)
+              Orden: <strong className="text-blue-600 font-mono">{order.order_id}</strong> · Modelo: <strong>{order.model_name}</strong> ({order.total_units} PCs)
             </p>
           </div>
           <div className="text-right flex-shrink-0">
@@ -595,14 +595,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         <Card className="p-2.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-stone-200 shadow-sm">
           <div className="flex items-center justify-between mb-1.5 px-0.5">
             <span className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-primary" />
+              <Layers className="w-3.5 h-3.5 text-blue-600" />
               <span>
                 {isSupervisorMode 
                   ? `Todas las PCs de la Orden (${units_in_station.length}):` 
                   : `PCs en tu estación (${units_in_station.length}):`}
               </span>
             </span>
-            <span className="text-[9px] font-bold text-primary bg-white px-2 py-0.5 rounded-md border border-stone-200">
+            <span className="text-[9px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-stone-200">
               Toca para cambiar
             </span>
           </div>
@@ -628,7 +628,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   }}
                   className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1.5 ${
                     isCurrent
-                      ? "bg-[#1B4332] text-white shadow-md scale-105"
+                      ? "bg-blue-600 text-white shadow-md scale-105"
                       : "bg-white hover:bg-stone-200 text-gray-700 border border-gray-200"
                   }`}
                 >
@@ -696,14 +696,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           )}
 
           {/* Header PC activa */}
-          <div className="bg-gradient-to-r from-[#1B4332] to-[#2D6A4F] text-white p-3 space-y-2.5">
+          <div className="bg-white border-b border-stone-100 text-stone-900 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
                   {!isSupervisorMode && active_unit.current_station > assignment.station_number ? 'Consultando Historial' : 'Trabajando en'}
                 </span>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-black">PC #{active_unit.unit_number.toString().padStart(2, '0')}</h3>
+                  <h3 className="text-lg font-black text-stone-900">PC #{active_unit.unit_number.toString().padStart(2, '0')}</h3>
                   {(units_in_station.length > 1 || (completed_units && completed_units.length > 0)) && (
                     <select
                       value={active_unit.unit_number}
@@ -715,7 +715,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                           onSelectUnit && onSelectUnit(nextUnit);
                         }
                       }}
-                      className="text-xs bg-white/20 text-white font-bold border border-white/40 rounded-lg px-2 py-0.5 focus:outline-none touch-target"
+                      className="text-xs bg-stone-100 text-stone-800 font-bold border border-stone-200 rounded-lg px-2 py-0.5 focus:outline-none touch-target"
                       title="Cambiar a otra PC disponible"
                     >
                       <optgroup label="PCs en tu estación">
@@ -737,28 +737,28 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     </select>
                   )}
                 </div>
-                <p className="text-xs text-blue-200 font-mono">{active_unit.serial_number}</p>
+                <p className="text-xs text-stone-400 font-mono">{active_unit.serial_number}</p>
               </div>
               <div className="flex items-center gap-1.5">
                 {!isSupervisorMode && (
                   <button
                     type="button"
                     onClick={() => setTransferModalOpen(true)}
-                    className="flex flex-col items-center gap-0.5 bg-white/20 hover:bg-white/30 px-2.5 py-1.5 rounded-xl transition touch-target"
+                    className="flex flex-col items-center gap-0.5 bg-stone-100 hover:bg-stone-200 text-stone-700 px-2.5 py-1.5 rounded-xl transition touch-target border border-stone-200/60"
                     title="Derivar PC a otra estación"
                   >
-                    <ArrowRightCircle className="w-4 h-4 text-sky-200" />
-                    <span className="text-[9px] font-bold text-white">Derivar</span>
+                    <ArrowRightCircle className="w-4 h-4 text-blue-600" />
+                    <span className="text-[9px] font-bold text-stone-700">Derivar</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => onOpenIssue(active_unit, uniqueStationSteps[0] || { step_number: 1, operation: "Inspección de Unidad" })}
-                  className="flex flex-col items-center gap-0.5 bg-white/20 hover:bg-white/30 px-2.5 py-1.5 rounded-xl transition touch-target"
+                  className="flex flex-col items-center gap-0.5 bg-stone-100 hover:bg-stone-200 text-stone-700 px-2.5 py-1.5 rounded-xl transition touch-target border border-stone-200/60"
                   title="Reportar Falla"
                 >
-                  <AlertTriangle className="w-4 h-4 text-amber-300" />
-                  <span className="text-[9px] font-bold text-white">Falla</span>
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span className="text-[9px] font-bold text-stone-700">Falla</span>
                 </button>
               </div>
             </div>
@@ -787,10 +787,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                 <div className="pt-1 border-t border-white/10">
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-amber-200 flex items-center gap-1 text-[11px] font-semibold">
-                      <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
                       <span>Certificación Oficial (V°B° Supervisor)</span>
                     </span>
-                    <span className="font-extrabold text-amber-300 font-mono text-[11px]">
+                    <span className="font-extrabold text-amber-600 font-mono text-[11px]">
                       {supervisorVerifiedCount}/{totalStationSteps}
                     </span>
                   </div>
@@ -1037,7 +1037,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                         <button
                           type="button"
                           onClick={() => setPhotoStepModal(st)}
-                          className="p-1.5 bg-stone-200 hover:bg-stone-200 text-primary rounded-lg text-xs"
+                          className="p-1.5 bg-stone-200 hover:bg-stone-200 text-blue-600 rounded-lg text-xs"
                           title="Tomar foto para este paso"
                         >
                           <Camera className="w-3.5 h-3.5" />
@@ -1066,7 +1066,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             <div className="p-2.5 bg-stone-50 border-b border-stone-200 space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-stone-900 flex items-center gap-1.5">
-                  <ArrowRightCircle className="w-3.5 h-3.5 text-primary" />
+                  <ArrowRightCircle className="w-3.5 h-3.5 text-blue-600" />
                   <span>Procesos derivados a otras áreas ({transferred_out_steps.length}):</span>
                 </span>
                 <span className="text-[9px] bg-stone-200 text-stone-900 font-semibold px-1.5 py-0.5 rounded">
@@ -1079,7 +1079,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     <span className="text-[11px] font-semibold text-gray-800 truncate max-w-[220px]">
                       #{to.step_number} {to.operation}
                     </span>
-                    <span className="text-[10px] font-bold text-primary bg-stone-100 px-2 py-0.5 rounded border border-stone-200 flex-shrink-0">
+                    <span className="text-[10px] font-bold text-blue-600 bg-stone-100 px-2 py-0.5 rounded border border-stone-200 flex-shrink-0">
                       ➔ Estación {to.target_station}
                     </span>
                   </div>
@@ -1100,7 +1100,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               </div>
             ) : displayedStationSteps.length === 0 && (
               <div className="p-6 text-center text-stone-500 bg-stone-50 border border-dashed border-stone-300 rounded-2xl text-xs">
-                <ShieldCheck className="w-8 h-8 text-primary mx-auto mb-2" />
+                <ShieldCheck className="w-8 h-8 text-blue-600 mx-auto mb-2" />
                 <p className="font-bold text-stone-900">No hay pasos con tu filtro de supervisión en esta estación</p>
                 <p className="text-[11px] text-stone-500 mt-0.5">
                   Los pasos asignados a tu supervisión se encuentran en otras estaciones de la línea.
@@ -1108,7 +1108,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                 <button
                   type="button"
                   onClick={() => setFilterSupervisorOnly(false)}
-                  className="mt-3 px-3 py-1.5 bg-primary text-white font-bold rounded-lg text-xs hover:bg-stone-800 transition shadow-xs"
+                  className="mt-3 px-3 py-1.5 bg-blue-600 text-white font-bold rounded-lg text-xs hover:bg-stone-800 transition shadow-xs"
                 >
                   Ver todos los pasos de la estación
                 </button>
@@ -1481,7 +1481,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                             className={`w-8 h-8 rounded-xl flex items-center justify-center transition shadow-xs ${
                               isStepComplete
                                 ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300"
-                                : "bg-stone-200 hover:bg-stone-200 text-primary border border-stone-300"
+                                : "bg-stone-200 hover:bg-stone-200 text-blue-600 border border-stone-300"
                             }`}
                             title={isStepComplete ? "Volver a tomar / actualizar foto" : "Tomar foto y verificar paso"}
                           >
@@ -1492,7 +1492,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); onOpenMedia(st); }}
-                              className="w-8 h-8 bg-stone-100 hover:bg-stone-200 text-primary border border-stone-200 rounded-xl flex items-center justify-center transition"
+                              className="w-8 h-8 bg-stone-100 hover:bg-stone-200 text-blue-600 border border-stone-200 rounded-xl flex items-center justify-center transition"
                               title="Ver guía visual"
                             >
                               <PlayCircle className="w-4 h-4" />
@@ -1585,7 +1585,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         <Card className="p-3">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-              <RefreshCw className="w-4 h-4 text-primary" />
+              <RefreshCw className="w-4 h-4 text-blue-600" />
               <span>Otras PCs en tu estación ({queue_units.length}):</span>
             </h4>
             <span className="text-[10px] text-gray-400">Toca para cambiar</span>
@@ -1603,7 +1603,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                 </div>
                 <button
                   type="button"
-                  className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-primary border border-stone-200 font-bold text-[11px] rounded-lg transition"
+                  className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-blue-600 border border-stone-200 font-bold text-[11px] rounded-lg transition"
                 >
                   Trabajar en esta PC
                 </button>

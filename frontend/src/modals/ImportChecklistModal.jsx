@@ -195,7 +195,7 @@ export default function ImportChecklistModal({ modelName, category = "ASSEMBLY",
                   </div>
                   <p className="text-xs font-bold text-gray-900">{selectedFile.name}</p>
                   <p className="text-[10px] text-gray-500">{(selectedFile.size / 1024).toFixed(1)} KB · Listo para procesar</p>
-                  <p className="text-[10px] text-primary underline">Clic para seleccionar otro archivo</p>
+                  <p className="text-[10px] text-blue-600 underline">Clic para seleccionar otro archivo</p>
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -253,7 +253,7 @@ export default function ImportChecklistModal({ modelName, category = "ASSEMBLY",
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                 : isCleaning
                 ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                : "bg-[#1B4332] hover:bg-[#2D6A4F] text-white"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
             }`}
           >
             {isUploading ? (

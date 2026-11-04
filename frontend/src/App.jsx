@@ -117,7 +117,7 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('qc_token');
     localStorage.removeItem('qc_user');
-    // Conservar qc_active_unit para que al alternar cuentas (ej: llamar al supervisor) no se pierda la PC en curso
+    localStorage.removeItem('qc_active_unit');
     setOperatorStationFilter(null);
     setAuthToken(null);
     setIsAuthenticated(false);
@@ -179,9 +179,10 @@ export default function App() {
 
   const loadOperatorWorkspace = (unitNumber = null, orderId = null, stationNumber = null) => {
     if (!currentUser?.id) return;
+    const isChangingStation = stationNumber !== null && stationNumber !== undefined && stationNumber !== operatorStationFilter;
     const targetUnit = (unitNumber !== null && unitNumber !== undefined)
       ? unitNumber
-      : (localStorage.getItem('qc_active_unit') ? parseInt(localStorage.getItem('qc_active_unit'), 10) : null);
+      : (isChangingStation ? null : (localStorage.getItem('qc_active_unit') ? parseInt(localStorage.getItem('qc_active_unit'), 10) : null));
     const params = new URLSearchParams();
     if (targetUnit) params.append('unit_number', targetUnit);
     if (orderId) params.append('order_id', orderId);
@@ -203,6 +204,8 @@ export default function App() {
           }
           if (data.active_unit?.unit_number) {
             localStorage.setItem('qc_active_unit', data.active_unit.unit_number);
+          } else {
+            localStorage.removeItem('qc_active_unit');
           }
           if (data.order?.order_id && data.order.order_id !== selectedOrder) {
             setSelectedOrder(data.order.order_id);
@@ -404,7 +407,7 @@ export default function App() {
               onPreviewPhoto={(p) => setActivePhotoPreview(p)}
               onSelectUnit={(unitNum) => loadOperatorWorkspace(unitNum, selectedOrder, null)}
               onSelectOrder={(ordId) => { setOperatorStationFilter(null); handleSelectOrder(ordId); loadOperatorWorkspace(null, ordId, null); }}
-              onSelectStation={(stNum) => { setOperatorStationFilter(stNum); loadOperatorWorkspace(null, selectedOrder, stNum); }}
+              onSelectStation={(stNum) => { localStorage.removeItem('qc_active_unit'); setOperatorStationFilter(stNum); loadOperatorWorkspace(null, selectedOrder, stNum); }}
               onRefresh={() => loadOperatorWorkspace(null, selectedOrder, operatorStationFilter)}
               notify={notify}
             />

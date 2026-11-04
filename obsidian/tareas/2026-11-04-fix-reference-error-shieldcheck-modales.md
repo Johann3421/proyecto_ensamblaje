@@ -27,3 +27,4 @@ Al presionar "+ Nuevo Modelo" o "+ Nuevo Paso", React intentaba renderizar `<Shi
 - `frontend/src/modals/ChecklistStepModal.jsx`
 - `frontend/src/modals/ImportChecklistModal.jsx`
 - `frontend/src/modals/StepPickerModal.jsx`
+

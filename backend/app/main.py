@@ -1691,8 +1691,20 @@ def get_operator_workspace(
 
     # Identificar si la solicitud es para el Puesto de Supervisión (Estación 0)
     target_sup_ids = [s.strip() for s in (target_order.supervisor_id or "").split(",") if s.strip()] if target_order else []
+    user_assignments = db.query(QCStationAssignment).filter(
+        QCStationAssignment.order_id == target_order.order_id,
+        (QCStationAssignment.user_id == user_id) | (QCStationAssignment.secondary_user_id == user_id)
+    ).all() if target_order else []
+
     is_supervisor_role = (requesting_user and requesting_user.role in ["SUPERVISOR", "ADMIN"]) or (user_id in target_sup_ids)
-    wants_supervisor_station = (station_number == 0) or (is_supervisor_role and (station_number is None or station_number == 0))
+    wants_supervisor_station = (station_number == 0) or (
+        is_supervisor_role 
+        and not user_assignments 
+        and (station_number is None or station_number == 0)
+    ) or (
+        requesting_user and requesting_user.role in ["SUPERVISOR", "ADMIN"]
+        and (station_number is None or station_number == 0)
+    )
 
     # MODO SUPERVISIÓN EXCLUSIVO: Estación propia del Supervisor (Estación 0)
     if target_order and wants_supervisor_station:
@@ -1996,13 +2008,20 @@ def get_operator_workspace(
         QCPCUnit.overall_status.in_(["PENDING", "IN_PROGRESS"])
     ).order_by(QCPCUnit.unit_number).all()
 
-    # Selección libre de PC: si se especificó una PC concreta, buscarla en la orden
+    # Selección de PC en estación física (operario):
     active_unit = None
     if unit_number is not None:
-        active_unit = db.query(QCPCUnit).filter(
+        cand_unit = db.query(QCPCUnit).filter(
             QCPCUnit.order_id == order.order_id,
             QCPCUnit.unit_number == unit_number
         ).first()
+        if cand_unit:
+            # Solo permitir si está en la estación actual o ya pasó (modo histórico)
+            if cand_unit.current_station >= assignment.station_number:
+                active_unit = cand_unit
+            # Si cand_unit.current_station < assignment.station_number:
+            # La PC aún se encuentra en una estación anterior, ¡ignorar y no seleccionarla como activa!
+
     if not active_unit and units_in_station:
         # 1. Priorizar la unidad de esta estación con actividad real más reciente registrada en QCStepLog
         station_unit_nums = [u.unit_number for u in units_in_station]
@@ -2210,16 +2229,30 @@ def get_operator_workspace(
         ]
 
         # Identificar si hay pasos de estaciones previas que aún falten completar por técnicos
-        current_station_step_nums = {s["step_number"] for s in station_steps}
-        min_own_step = min(assigned_step_numbers) if assigned_step_numbers else assignment.start_step
-        seen_prior_step_nums = set()
-        for s in all_steps:
-            if (s.step_number < min_own_step 
-                and s.step_number not in technician_step_numbers 
-                and s.step_number not in current_station_step_nums
-                and s.step_number not in seen_prior_step_nums):
-                pending_prior_steps.append(s)
-                seen_prior_step_nums.add(s.step_number)
+        # CONDICIÓN ESTRICTA: Solo calcular si la unidad está FÍSICAMENTE en esta estación actual
+        # (si la unidad ya pasó la estación o no hay unidad activa, pending_prior_steps debe ser vacío)
+        if active_unit and active_unit.current_station == assignment.station_number:
+            # Extraer únicamente los números de pasos asignados a estaciones PREVIAS a esta
+            prior_station_step_nums = set()
+            for st in all_stations:
+                if st.station_number < assignment.station_number:
+                    if st.step_numbers:
+                        try:
+                            prior_station_step_nums.update(int(x.strip()) for x in st.step_numbers.split(",") if x.strip().isdigit())
+                        except Exception:
+                            pass
+                    elif st.start_step and st.end_step:
+                        prior_station_step_nums.update(range(st.start_step, st.end_step + 1))
+
+            current_station_step_nums = {s["step_number"] for s in station_steps}
+            seen_prior_step_nums = set()
+            for s in all_steps:
+                if (s.step_number in prior_station_step_nums
+                    and s.step_number not in technician_step_numbers 
+                    and s.step_number not in current_station_step_nums
+                    and s.step_number not in seen_prior_step_nums):
+                    pending_prior_steps.append(s)
+                    seen_prior_step_nums.add(s.step_number)
 
     queue_units = [u for u in units_in_station if active_unit and u.unit_number != active_unit.unit_number]
     # Priorizar unidades despachadas que tengan actividad real de pasos registrada en QCStepLog
@@ -2501,7 +2534,14 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
         QCPCUnit.order_id == real_order_id,
         QCPCUnit.unit_number == req.unit_number
     ).first()
-    
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidad no encontrada")
+    if unit.current_station != req.station_number:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La PC #{req.unit_number} se encuentra en la Estación {unit.current_station}, no en la Estación {req.station_number}."
+        )
+
     if unit:
         if unit.overall_status == "PENDING":
             unit.overall_status = "IN_PROGRESS"
@@ -2598,6 +2638,12 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
     
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
+
+    if unit.current_station != station_number:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede despachar: La PC #{unit_number} se encuentra en la Estación {unit.current_station}, no en la Estación {station_number}."
+        )
 
     # Obtener los pasos asignados a esta estación
     assignment = db.query(QCStationAssignment).filter(

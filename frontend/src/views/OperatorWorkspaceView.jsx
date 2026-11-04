@@ -70,8 +70,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   const isSupervisorMode = Boolean(
     workspace.is_supervisor_mode || 
     assignment.is_supervisor_station || 
-    assignment.station_number === 0 || 
-    (isSupervisorUser && !isAssignedTechToCurrentStation)
+    assignment.station_number === 0
   );
 
   useEffect(() => {

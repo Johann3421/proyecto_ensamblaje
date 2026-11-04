@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Distribución y Jerarquía de Botones - Bento Apple</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Inter", sans-serif;
+      background: #F5F5F7;
+      color: #1D1D1F;
+      padding: 30px 20px 80px;
+      line-height: 1.5;
+    }
+    .wrapper {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .page-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #1D1D1F;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+    .page-subtitle {
+      font-size: 14px;
+      color: #86868B;
+      margin-bottom: 28px;
+    }
+
+    /* Grid principal */
+    .section-card {
+      background: #FFFFFF;
+      border: 1px solid #E5E5EA;
+      border-radius: 24px;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03);
+      padding: 26px;
+      margin-bottom: 26px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #F2F2F7;
+    }
+    .section-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 9999px;
+    }
+    .badge-bad {
+      background: #FEECEB;
+      color: #FF3B30;
+      border: 1px solid #FDC8C6;
+    }
+    .badge-good {
+      background: #EAF9EE;
+      color: #34C759;
+      border: 1px solid #B6EECD;
+    }
+    .section-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #1D1D1F;
+    }
+    .section-desc {
+      font-size: 13px;
+      color: #86868B;
+      margin-top: 2px;
+    }
+
+    /* =========================================================
+       BOTONES ESTÁNDAR BENTO APPLE
+       ========================================================= */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 10px;
+    }
+    .btn-lg {
+      padding: 12px 24px;
+      font-size: 14px;
+      border-radius: 14px;
+    }
+    
+    /* Jerarquías */
+    .btn-primary {
+      background: #0071E3;
+      color: #FFFFFF;
+      box-shadow: 0 2px 6px rgba(0, 113, 227, 0.2);
+    }
+    .btn-primary:hover {
+      background: #0077ED;
+      box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+    }
+
+    .btn-secondary {
+      background: #FFFFFF;
+      color: #1D1D1F;
+      border-color: #D1D1D6;
+    }
+    .btn-secondary:hover {
+      background: #F5F5F7;
+      border-color: #AEAEB2;
+    }
+
+    .btn-tertiary {
+      background: #F5F5F7;
+      color: #1D1D1F;
+      border-color: transparent;
+    }
+    .btn-tertiary:hover {
+      background: #E5E5EA;
+    }
+
+    .btn-destructive {
+      background: #FEECEB;
+      color: #FF3B30;
+      border-color: #FDC8C6;
+    }
+    .btn-destructive:hover {
+      background: #FF3B30;
+      color: #FFFFFF;
+      border-color: #FF3B30;
+    }
+
+    .btn-icon-only {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: 12px;
+    }
+
+    /* Grupos de botones encapsulados (Segmented Group) */
+    .btn-group {
+      display: inline-flex;
+      background: #F5F5F7;
+      padding: 3px;
+      border-radius: 14px;
+      border: 1px solid #E5E5EA;
+    }
+    .btn-group .btn-group-item {
+      background: transparent;
+      border: none;
+      color: #86868B;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn-group .btn-group-item:hover {
+      color: #1D1D1F;
+    }
+    .btn-group .btn-group-item.active {
+      background: #FFFFFF;
+      color: #1D1D1F;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Caja de Demostración */
+    .demo-box {
+      background: #FBFBFD;
+      border: 1px solid #E5E5EA;
+      border-radius: 18px;
+      padding: 20px;
+      margin-top: 12px;
+    }
+
+    /* Menú desplegable Overflow "···" */
+    .dropdown-relative {
+      position: relative;
+      display: inline-block;
+    }
+    .dropdown-menu {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 6px;
+      background: #FFFFFF;
+      border: 1px solid #E5E5EA;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      width: 220px;
+      padding: 6px;
+      z-index: 50;
+      display: none;
+    }
+    .dropdown-relative:hover .dropdown-menu {
+      display: block;
+    }
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 9px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #1D1D1F;
+      border: none;
+      background: transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .dropdown-item:hover {
+      background: #F5F5F7;
+    }
+    .dropdown-item.danger {
+      color: #FF3B30;
+    }
+    .dropdown-item.danger:hover {
+      background: #FEECEB;
+    }
+    .dropdown-divider {
+      height: 1px;
+      background: #F2F2F7;
+      margin: 4px 0;
+    }
+
+    /* Tarjeta de Reglas */
+    .rule-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #0071E3;
+      background: #EBF5FF;
+      padding: 4px 12px;
+      border-radius: 8px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrapper">
+    <h1 class="page-title">Sistema Oficial de Distribución y Jerarquía de Botones</h1>
+    <p class="page-subtitle">Parámetros de estructura para evitar la dispersión de botones y mantener orden visual en toda la aplicación.</p>
+
+    <!-- REGLAS PRIMORDIALES -->
+    <div class="section-card">
+      <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">📐 Las 4 Reglas de Oro de Estructura</h3>
+      <div>
+        <span class="rule-pill">1. Regla 1-1-···</span>
+        <span class="rule-pill">2. Ley de Fitts (Pulgar en Taller)</span>
+        <span class="rule-pill">3. Encapsulamiento de Utilidades</span>
+        <span class="rule-pill">4. Aislamiento de Acciones Destructivas</span>
+      </div>
+      <p style="font-size: 13px; color: #636366; margin-top: 8px;">
+        <strong>Principio:</strong> Nunca coloques más de 1 botón primario en la misma barra. No satures con 6 colores diferentes a la vez. Agrupa las acciones secundarias e infrecuentes bajo un menú de desbordamiento (<code>···</code>).
+      </p>
+    </div>
+
+    <!-- COMPARATIVA 1: HEADER DE LA ORDEN / BARRA PRINCIPAL -->
+    <div class="section-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Patrón 1: Header de Orden / Barra Principal</h2>
+          <p class="section-desc">Comparativa entre el anti-patrón disperso vs. la barra estructurada 1-1-···</p>
+        </div>
+      </div>
+
+      <!-- ANTI-PATRÓN -->
+      <div style="margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="section-badge badge-bad">Anti-Patrón (Desordenado y Saturado)</span>
+          <span style="font-size: 12px; color: #86868B;">7 botones con 5 colores distintos compitiendo por atención</span>
+        </div>
+        <div class="demo-box" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <strong style="font-size: 14px;">OP-2026-084 · EZENT</strong>
+            <p style="font-size: 12px; color: #86868B;">40 PCs · 5 Estaciones</p>
+          </div>
+          <!-- 7 Botones compitiendo -->
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <select style="font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ccc;"><option>OP-2026-084</option></select>
+            <button style="background: #F2F2F7; border: 1px solid #ccc; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;">Editar Orden</button>
+            <button style="background: #0071E3; color: #fff; border: none; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;">+ Agregar PC</button>
+            <button style="background: #FFF7EB; color: #D97706; border: 1px solid #FCD34D; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;">Reiniciar Lote</button>
+            <button style="background: #F3F4F6; color: #374151; border: 1px solid #D1D5DB; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;">Reasignar</button>
+            <button style="background: #FEECEB; color: #EF4444; border: 1px solid #FCA5A5; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;">Eliminar</button>
+            <button style="background: #E5E7EB; border: none; padding: 6px 10px; border-radius: 8px; font-size: 12px;">🔄</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PATRÓN CORRECTO BENTO APPLE -->
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="section-badge badge-good">Patrón Estructurado Bento Apple (Regla 1-1-···)</span>
+          <span style="font-size: 12px; color: #86868B;">1 Primario (+ PC), 1 Secundario (Editar) y Acciones Especiales agrupadas en "Más Opciones"</span>
+        </div>
+        <div class="demo-box" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; background: #FFFFFF; border: 1px solid #E5E5EA;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 40px; height: 40px; border-radius: 12px; background: #EBF5FF; color: #0071E3; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;">OP</div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <strong style="font-size: 15px; color: #1D1D1F;">OP-2026-084</strong>
+                <span style="background: #F5F5F7; color: #48484A; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9999px;">EZENT</span>
+              </div>
+              <p style="font-size: 12px; color: #86868B;">40 PCs · Supervisor: Gianfranco</p>
+            </div>
+          </div>
+
+          <!-- Estructura Limpia -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <select class="btn btn-secondary btn-sm" style="font-weight: 600; background: #F5F5F7; border: 1px solid #E5E5EA;">
+              <option>OP-2026-084 (EZENT)</option>
+            </select>
+
+            <!-- 1. Acción Secundaria Frecuente -->
+            <button class="btn btn-secondary btn-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              <span>Editar</span>
+            </button>
+
+            <!-- 2. ÚNICA Acción Primaria Destacada -->
+            <button class="btn btn-primary btn-sm">
+              <span>+ Agregar PC</span>
+            </button>
+
+            <!-- 3. Menú de Desbordamiento (Overflow ···) para Acciones Críticas o Secundarias -->
+            <div class="dropdown-relative">
+              <button class="btn btn-tertiary btn-sm btn-icon-only" title="Más opciones del lote">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+              </button>
+              <div class="dropdown-menu">
+                <button class="dropdown-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                  <span>Actualizar Datos</span>
+                </button>
+                <button class="dropdown-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7.5" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                  <span>Reasignar Técnico</span>
+                </button>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item" style="color: #D97706;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  <span>Reiniciar Todo el Lote</span>
+                </button>
+                <button class="dropdown-item danger">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  <span>Eliminar Orden</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPARATIVA 2: TOOLBAR DE CHECKLISTS Y UTILIDADES -->
+    <div class="section-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Patrón 2: Toolbar de Checklists (Cápsulas Fusionadas)</h2>
+          <p class="section-desc">Cómo unificar "Importar", "Exportar" y "Plantilla" para no saturar el área de trabajo.</p>
+        </div>
+      </div>
+
+      <div class="demo-box" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: #FFFFFF;">
+        <!-- Pestañas de Vista Segmentada -->
+        <div class="btn-group">
+          <button class="btn-group-item active">Secciones</button>
+          <button class="btn-group-item">Todos (55)</button>
+          <button class="btn-group-item">Ensamblaje (50)</button>
+          <button class="btn-group-item">Limpieza QC (5)</button>
+        </div>
+
+        <!-- Barra de Búsqueda Centrada -->
+        <div style="flex: 1; max-width: 320px; position: relative;">
+          <input type="text" placeholder="Buscar paso..." style="width: 100%; padding: 8px 12px 8px 34px; border-radius: 12px; border: 1px solid #E5E5EA; background: #FBFBFD; font-size: 13px; outline: none;">
+          <svg style="position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #AEAEB2;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </div>
+
+        <!-- Grupo de Acciones Derecha -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- Cápsula Encapsulada de Archivos (Importar | Exportar | Plantilla) -->
+          <div class="btn-group">
+            <button class="btn-group-item" title="Importar Excel/CSV">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <span>Importar</span>
+            </button>
+            <button class="btn-group-item" title="Descargar Excel">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Exportar</span>
+            </button>
+            <button class="btn-group-item" title="Descargar Formato Vacío">Plantilla</button>
+          </div>
+
+          <!-- Botón de Creación Principal -->
+          <button class="btn btn-primary btn-sm">
+            <span>+ Nuevo Paso</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPARATIVA 3: TARJETA DE PASO DE TRABAJO (OPERARIO Y LEY DE FITTS) -->
+    <div class="section-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Patrón 3: Tarjeta de Paso del Operario (Ergonomía de Taller)</h2>
+          <p class="section-desc">Ley de Fitts: La acción principal debe ser la más grande y accesible; la destructiva, aislada.</p>
+        </div>
+      </div>
+
+      <div class="demo-box" style="background: #FFFFFF; border: 1px solid #0071E3; border-radius: 20px; padding: 22px; box-shadow: 0 4px 20px rgba(0, 113, 227, 0.06);">
+        <!-- Encabezado del paso -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 16px;">
+          <div style="display: flex; gap: 14px;">
+            <div style="width: 36px; height: 36px; border-radius: 12px; background: #0071E3; color: #FFFFFF; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              13
+            </div>
+            <div>
+              <span style="background: #EBF5FF; color: #0071E3; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;">Paso Activo · Estación 2</span>
+              <h3 style="font-size: 15px; font-weight: 700; color: #1D1D1F; margin-top: 4px;">Conectar cable ATX 24 pines a placa madre y peinar ruteo posterior</h3>
+              <p style="font-size: 12px; color: #86868B; margin-top: 2px;">Criterio QC: Conector totalmente acoplado sin holgura y cincho plástico instalado.</p>
+            </div>
+          </div>
+          <span style="font-size: 11px; font-weight: 700; color: #FF9500; background: #FFF7EB; border: 1px solid #FFE4B5; padding: 4px 10px; border-radius: 9999px;">
+            📸 Evidencia Requerida
+          </span>
+        </div>
+
+        <!-- BARRA DE ACCIÓN DISTRIBUIDA (Bento Apple Step Actions) -->
+        <div style="display: flex; align-items: center; justify-content: space-between; pt-4; border-top: 1px solid #F2F2F7; padding-top: 14px; flex-wrap: wrap; gap: 10px;">
+          <!-- Zona Izquierda: Acción de Contingencia / Falla (Aislada para no cliquearla por error) -->
+          <button class="btn btn-tertiary btn-sm" style="color: #FF3B30;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>Reportar Falla</span>
+          </button>
+
+          <!-- Zona Derecha: Flujo de Completado Natural (Foto -> Validar) -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <!-- Selector de Técnico asignado -->
+            <select class="btn btn-secondary btn-sm" style="font-size: 12px; font-weight: 600;">
+              <option>Jhoan (OP-102)</option>
+              <option>Giancarlos (OP-101)</option>
+            </select>
+
+            <!-- Botón de Evidencia (Paso previo) -->
+            <button class="btn btn-secondary btn-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              <span>Subir Foto</span>
+            </button>
+
+            <!-- Botón Principal de Completar (El más destacado y grande de la fila) -->
+            <button class="btn btn-primary btn-sm" style="padding: 9px 20px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>Completar Paso</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPARATIVA 4: DIÁLOGOS MODALES (REGLA DE SALIDA Y CONFIRMACIÓN) -->
+    <div class="section-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Patrón 4: Estructura de Botones en Modales</h2>
+          <p class="section-desc">Estandarización de pie de modal: Cancelar a la izquierda, Acción primaria a la derecha.</p>
+        </div>
+      </div>
+
+      <div class="demo-box" style="max-width: 440px; margin: 0 auto; background: #FFFFFF; border-radius: 20px; padding: 22px; box-shadow: 0 10px 30px rgba(0,0,0,0.06);">
+        <h4 style="font-size: 15px; font-weight: 700; color: #1D1D1F; margin-bottom: 6px;">¿Reasignar Técnico de Emergencia?</h4>
+        <p style="font-size: 12.5px; color: #86868B; margin-bottom: 20px;">Esta acción transferirá la titularidad de los pasos pendientes de la Estación 2 al técnico seleccionado.</p>
+
+        <!-- Footer Modal Estándar -->
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; pt-3; border-top: 1px solid #F2F2F7; padding-top: 16px;">
+          <button class="btn btn-secondary btn-sm" style="flex: 1;">Cancelar</button>
+          <button class="btn btn-primary btn-sm" style="flex: 1;">Confirmar Reasignación</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

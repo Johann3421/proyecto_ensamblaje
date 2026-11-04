@@ -17,6 +17,11 @@ El proyecto utiliza de forma oficial y obligatoria el sistema visual **Bento App
 5. **Patrones reales vs patrones automáticos**: Inspirarse en el diseño ergonómico de Apple Settings/macOS, Linear Insights y tableros modernos de operaciones, optimizados tanto para pantallas táctiles en línea de producción como para escritorios de supervisión.
 6. **Prioriza simplicidad funcional**: Menos pantallas, menos clics, menos campos. Si algo se puede inferir o automatizar, no se le pregunta al usuario. Usa mensajes de error y ayuda en lenguaje humano, no técnico. Los flujos deben ser lineales y predecibles.
 7. **Mantén el backend limpio y mantenible**: Separa lógica de negocio, acceso a datos y presentación; usa nomenclatura clara y consistente en todo el proyecto; nunca pongas lógica de negocio en el frontend.
+8. **Distribución y Jerarquía Estricta de Botones (Regla 1-1-··· y Fitts)**:
+   - **Nunca acumular más de 1 botón primario por barra o bloque**: El ojo del usuario solo debe percibir una acción principal destacada a la vez.
+   - **Regla 1-1-···**: 1 botón primario (Azul Apple), 1 secundario frecuente (blanco con borde neutro), y menú de desbordamiento (`···`) para acciones destructivas (*Eliminar*, *Reiniciar Lote*) o infrecuentes (*Reasignar*, *Refrescar*).
+   - **Cápsulas de utilidades fusionadas**: Herramientas complementarias (*Importar*, *Exportar*, *Plantilla*) deben agruparse en una sola cápsula segmentada (`btn-group`), eliminando el desorden de botones sueltos.
+   - **Ley de Fitts en tarjetas de paso y operario**: Acción principal al extremo derecho (área táctil amplia), paso previo de evidencia (*Subir Foto*) en el medio, y acciones de riesgo o incidencia (*Reportar Falla*) aisladas al extremo izquierdo para evitar clics accidentales.
 
 ---
 

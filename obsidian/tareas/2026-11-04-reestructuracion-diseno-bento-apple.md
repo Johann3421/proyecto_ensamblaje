@@ -43,3 +43,4 @@ Por instrucción del usuario, se abandonó definitivamente el enfoque rígido "s
   - `bento_apple_checklists.png`
   - `bento_apple_create_order.png`
   - `bento_apple_tecnicos.png`
+

@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-04** | Definición de parámetros y patrones de distribución de botones (Regla 1-1-···, Fitts, cápsulas de utilidades) | ux / rquitectura | ✅ Completado | [[2026-11-04-guia-distribucion-botones-y-estructuras]] |
 | **2026-11-04** | Reestructuración integral al Sistema de Diseño Bento Apple y actualización de bases globales | ux / rquitectura | ✅ Completado | [[2026-11-04-reestructuracion-diseno-bento-apple]] |
 | **2026-11-04** | Investigación de estilos de diseño web modernos, maquetación HTML interactiva y eliminación de sesgo sombrío | ux / rquitectura | ✅ Completado | [[2026-11-04-investigacion-sistemas-diseno-web]] |
 | **2026-11-04** | Compactación de diagnóstico en editor de checklists, eliminación de botones redundantes y despliegue Dokploy | `ux` / `tesler` | ✅ Completado | [[2026-11-03-auditoria-frontend-dom-capturas-distribucion-ui]] |

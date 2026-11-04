@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Download, Upload, Loader2, X, Wrench } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Download, Upload, Loader2, X, Wrench, ShieldCheck } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
 export default function ImportChecklistModal({ modelName, category = "ASSEMBLY", onClose, onSuccess, notify }) {

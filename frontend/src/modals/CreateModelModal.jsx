@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, AlertCircle, Plus, Loader2, X, PlusCircle, ClipboardList } from 'lucide-react';
+import { Check, AlertCircle, Plus, Loader2, X, PlusCircle, ClipboardList, ShieldCheck } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
 export default function CreateModelModal({ isOpen, onClose, onSuccess, existingModels = [], notify }) {

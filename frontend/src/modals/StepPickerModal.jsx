@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, X, Search, Wrench } from 'lucide-react';
+import { Check, X, Search, Wrench, ShieldCheck } from 'lucide-react';
 import { formatStepNumbersRange, isStepCleaning } from '../utils/steps';
 
 export default function StepPickerModal({

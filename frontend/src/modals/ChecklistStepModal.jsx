@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, X, Wrench, Trash2, Trash, Camera } from 'lucide-react';
+import { Upload, X, Wrench, Trash2, Trash, Camera, ShieldCheck } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
 import { isStepCleaning } from '../utils/steps';

@@ -38,3 +38,4 @@ Aprobada la **Opción 2** por el usuario para eliminar el desorden y dispersión
 ## 4. Verificación
 - Compilación de Vite: `npm --prefix frontend run build` exitoso en 4.32s sin advertencias de sintaxis.
 - Cero botones redundantes o compitiendo por atención visual.
+

@@ -3138,5 +3138,12 @@ if os.path.exists(STATIC_DIR):
             return FileResponse(file_path)
         index_file = os.path.join(STATIC_DIR, "index.html")
         if os.path.exists(index_file):
-            return FileResponse(index_file)
+            return FileResponse(
+                index_file,
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0"
+                }
+            )
         return {"message": "QC KENYA API activa", "status": "ok"}

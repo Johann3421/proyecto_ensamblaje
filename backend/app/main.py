@@ -3189,7 +3189,22 @@ if os.path.exists(STATIC_DIR):
 
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
+        # Filtro estricto contra escaneos de seguridad y path traversal
+        clean_path = full_path.strip().lower()
+        blocked_prefixes = (".env", ".git", ".kube", ".docker", ".npmrc", ".pypirc", "actuator", "php", "wp-", "bin/", "etc/")
+        blocked_extensions = (".php", ".bak", ".old", "~", ".ini", ".conf", ".sql", ".sh", ".yml", ".yaml")
+        
+        # Denegar archivos ocultos, extensiones prohibidas o rutas de reconocimiento
+        if any(part.startswith(".") for part in full_path.split("/") if part) or \
+           any(clean_path.startswith(p) or f"/{p}" in clean_path for p in blocked_prefixes) or \
+           any(clean_path.endswith(ext) for ext in blocked_extensions):
+            raise HTTPException(status_code=404, detail="Recurso no encontrado")
+
         file_path = os.path.join(STATIC_DIR, full_path)
+        # Prevención contra path traversal
+        if not os.path.abspath(file_path).startswith(os.path.abspath(STATIC_DIR)):
+            raise HTTPException(status_code=403, detail="Acceso denegado")
+
         if full_path and os.path.isfile(file_path):
             return FileResponse(file_path)
         index_file = os.path.join(STATIC_DIR, "index.html")

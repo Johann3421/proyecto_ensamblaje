@@ -455,7 +455,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-3.5 fade-in pb-4">
+    <div className="max-w-7xl mx-auto space-y-4 fade-in pb-8">
+      {/* Selector de Estaciones para Operadores con Múltiples Puestos Asignados */}
       {/* Selector de Estaciones para Operadores con Múltiples Puestos Asignados */}
       {!isSupervisorMode && user_assigned_stations && user_assigned_stations.length > 1 && (
         <Card className="p-3 bg-emerald-50/80 border border-emerald-300 shadow-sm">
@@ -502,6 +503,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         </Card>
       )}
 
+      {/* Selector de Inspección para Supervisor y Admin */}
       {/* Selector de Inspección para Supervisor y Admin */}
       {isSupervisorUser && all_stations && all_stations.length > 0 && (
         <Card className="p-3 bg-amber-50/80 border border-amber-300 shadow-sm">
@@ -558,6 +560,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         </Card>
       )}
 
+      {/* Header de Estación y Selector de Orden */}
       {/* Header estación y Selector de Orden */}
       <Card className="p-3.5 border border border-stone-200/80 space-y-3">
         {/* Selector de Orden Activa para el Técnico */}
@@ -615,102 +618,16 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         </div>
       </Card>
 
-      {/* SELECTOR RÁPIDO DE PCs (Libre Selección por el Técnico) */}
-      {((units_in_station && units_in_station.length > 0) || (completed_units && completed_units.length > 0) || isSupervisorMode) && (
-        <Card className="p-2.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-stone-200 shadow-sm">
-          <div className="flex items-center justify-between mb-1.5 px-0.5">
-            <span className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-blue-600" />
-              <span>
-                {isSupervisorMode 
-                  ? `Todas las PCs de la Orden (${units_in_station.length}):` 
-                  : `PCs en tu estación (${units_in_station.length}):`}
-              </span>
-            </span>
-            <span className="text-[9px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-stone-200">
-              Toca para cambiar
-            </span>
-          </div>
-
-          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-            {units_in_station.length === 0 && (
-              <span className="text-[11px] text-stone-500 italic py-1 px-1">
-                No hay PCs pendientes en esta estación.
-              </span>
-            )}
-            {units_in_station.map(u => {
-              const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
-              return (
-                <button
-                  key={u.unit_number}
-                  type="button"
-                  onClick={() => {
-                    if (!isCurrent) {
-                      setCompletedSteps([]);
-                      setStepLogsMap({});
-                      onSelectUnit && onSelectUnit(u.unit_number);
-                    }
-                  }}
-                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1.5 ${
-                    isCurrent
-                      ? "bg-blue-600 text-white shadow-md scale-105"
-                      : "bg-white hover:bg-stone-200 text-gray-700 border border-gray-200"
-                  }`}
-                >
-                  <span>#{u.unit_number.toString().padStart(2, '0')}</span>
-                  {isSupervisorMode && u.current_station && (
-                    <span className={`text-[9px] px-1 rounded font-bold ${
-                      isCurrent ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600 border border-stone-200'
-                    }`}>
-                      E{u.current_station}
-                    </span>
-                  )}
-                  {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Fila de acceso a PCs ya completadas y despachadas de la estación */}
-          {completed_units && completed_units.length > 0 && !isSupervisorMode && (
-            <div className="mt-2 pt-2 border-t border-indigo-100 flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-bold text-stone-600 flex items-center gap-1 mr-1">
-                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Despachadas a siguiente estación:</span>
-              </span>
-              {completed_units.map(u => {
-                const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
-                return (
-                  <button
-                    key={u.unit_number}
-                    type="button"
-                    onClick={() => {
-                      if (!isCurrent) {
-                        setCompletedSteps([]);
-                        setStepLogsMap({});
-                        onSelectUnit && onSelectUnit(u.unit_number);
-                      }
-                    }}
-                    className={`flex-shrink-0 px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 touch-target ${
-                      isCurrent
-                        ? "bg-emerald-700 text-white shadow-xs"
-                        : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
-                    }`}
-                    title={`Ver historial de PC #${u.unit_number} (enviada a Estación ${u.current_station})`}
-                  >
-                    <span>✓ PC #{u.unit_number.toString().padStart(2, '0')}</span>
-                    <span className="text-[8px] opacity-80">(E{u.current_station})</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      )}
-
       {active_unit ? (
-        <Card className="overflow-hidden border-2 border-stone-300 shadow-md">
-          {/* Banner histórico con botón de regreso si la PC ya pasó esta estación */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          {/* ============================================================ */}
+          {/* PANEL ASIDE IZQUIERDO: UNIDAD ACTIVA, PROGRESO Y DESPACHO     */}
+          {/* ============================================================ */}
+          <aside className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-18 space-y-4 flex-shrink-0">
+            
+            {/* Tarjeta de Control de la PC Activa */}
+            <Card className="overflow-hidden border border-stone-200/90 shadow-sm bg-white rounded-3xl">
           {isHistorical && (
             <div className="bg-amber-50/90 border-b border-amber-300 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <div className="flex items-center gap-2">
@@ -739,8 +656,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
           )}
 
-          {/* Header PC activa */}
-          <div className="bg-white border-b border-stone-100 text-stone-900 p-4 space-y-3">
+              <div className="bg-white text-stone-900 p-4 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
@@ -807,6 +723,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               </div>
             </div>
 
+                {/* Barra de Progreso */}
             {/* Barra de Progreso Bento Apple */}
             <div className="space-y-2">
               <div>
@@ -848,7 +765,97 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               )}
             </div>
 
-            {/* Indicador Normativo de Evidencias de Calidad (Ley de Tesler) */}
+
+                {/* BOTÓN DE DESPACHO / ACCIÓN PRINCIPAL EN EL ASIDE (LEY DE FITTS) */}
+                <div className="pt-2 border-t border-stone-100 space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                    Acción de Estación
+                  </span>
+          <div className="p-3 pt-0">
+            {isSupervisorMode ? (
+              <button
+                type="button"
+                onClick={() => setSupervisorAuditModalOpen(true)}
+                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-sm rounded-2xl shadow-md flex items-center justify-center gap-2 transition touch-target"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                <span>
+                  {activeSupervisorAudit?.status === "APPROVED"
+                    ? `V°B° Oficial Otorgado a PC #${active_unit.unit_number.toString().padStart(2, '0')} (Ver / Modificar)`
+                    : `🛡️ Emitir V°B° Oficial Normativo a PC #${active_unit.unit_number.toString().padStart(2, '0')}`}
+                </span>
+              </button>
+            ) : isHistorical ? (
+              <div className="bg-stone-50 p-4 rounded-2xl text-center border border-stone-200 space-y-2.5">
+                <div className="flex items-center justify-center gap-2 text-stone-800">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-bold">
+                    PC #{active_unit.unit_number.toString().padStart(2, '0')} ya completada y despachada
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-500">
+                  Esta unidad se encuentra actualmente en la <strong>Estación {active_unit.current_station}</strong>. Puedes revisar sus evidencias arriba.
+                </p>
+                {units_in_station && units_in_station.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem('qc_active_unit', units_in_station[0].unit_number);
+                      onSelectUnit && onSelectUnit(units_in_station[0].unit_number);
+                    }}
+                    className="mt-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1.5 transition touch-target"
+                  >
+                    <span>Continuar con PC #{units_in_station[0].unit_number.toString().padStart(2, '0')} en tu estación →</span>
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-stone-400 italic block mt-1">
+                    No tienes más PCs en cola en este momento.
+                  </span>
+                )}
+              </div>
+            ) : isStationComplete ? (
+              <button
+                onClick={handleFinishStation}
+                disabled={finishingUnit}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-base rounded-2xl shadow-lg flex items-center justify-center gap-3 transition touch-target pulse-glow"
+              >
+                {finishingUnit ? (
+                  <><Loader2 className="w-6 h-6 animate-spin" /><span>Despachando...</span></>
+                ) : assignment.station_number >= order.total_stations ? (
+                  <><CheckCircle className="w-6 h-6" /><span>🎉 Finalizar y Aprobar PC #{active_unit.unit_number.toString().padStart(2, '0')} (Fin de Línea)</span></>
+                ) : (
+                  <><ArrowRightCircle className="w-6 h-6" /><span>Despachar PC #{active_unit.unit_number.toString().padStart(2, '0')} a Estación {assignment.station_number + 1} →</span></>
+                )}
+              </button>
+            ) : allStepsDone && !hasLastStepPhoto ? (
+              <div className="bg-amber-50 p-3.5 rounded-2xl text-center border border-amber-300 space-y-2">
+                <p className="text-xs font-bold text-amber-900 flex items-center justify-center gap-1.5">
+                  <Camera className="w-4 h-4 text-amber-700" />
+                  <span>Foto obligatoria requerida en Paso #{lastStationStep?.step_number}</span>
+                </p>
+                <p className="text-[11px] text-amber-800 leading-snug">
+                  Para despachar la PC a la siguiente estación debes tomar la foto de evidencia del último paso: <strong>{lastStationStep?.operation}</strong>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPhotoStepModal(lastStationStep)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition inline-flex items-center gap-1.5 shadow-xs touch-target"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Tomar Foto del Paso #{lastStationStep?.step_number} Ahora</span>
+                </button>
+              </div>
+            ) : (
+              <div className="bg-stone-50 p-3.5 rounded-2xl text-center text-xs text-stone-500 border border-stone-200">
+                Completa los {totalStationSteps} pasos de la <strong>PC #{active_unit.unit_number.toString().padStart(2, '0')}</strong> para habilitar su despacho.
+              </div>
+            )}
+          </div>
+
+                </div>
+
+                {/* Indicador de calidad fotográfica */}
+                <div className="pt-2 border-t border-stone-100">
             <div className="flex items-center justify-between pt-2 border-t border-stone-100">
               <span className="text-[11px] font-bold text-stone-600 flex items-center gap-1.5">
                 <Camera className="w-3.5 h-3.5 text-emerald-600" />
@@ -858,9 +865,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                 <span>Norma QC Oficial</span>
               </span>
             </div>
-          </div>
 
-          {/* BANNER DE CERTIFICACIÓN / V°B° OFICIAL SI YA ESTÁ APROBADA */}
+                </div>
+              </div>
+
           {activeSupervisorAudit?.status === "APPROVED" && (
             <div className="p-3 bg-emerald-50/90 border-b border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
               <div className="flex items-center gap-2">
@@ -892,8 +900,6 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               )}
             </div>
           )}
-
-          {/* PROTOCOLO OFICIAL DE VERIFICACIÓN DEL SUPERVISOR QC (VISIBLE SOLO PARA SUPERVISOR/ADMIN) */}
           {isSupervisorUser && (
             <div className="p-3 bg-gradient-to-br from-amber-50/90 via-orange-50/40 to-white border-b-2 border-amber-300 space-y-2.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1001,7 +1007,176 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
           )}
 
-          {/* PASOS HEREDADOS DE OTRAS ESTACIONES (SI EXISTEN, DEDUPLICADOS) */}
+            </Card>
+
+            {/* Selector Rápido de PCs en la Estación */}
+      {/* SELECTOR RÁPIDO DE PCs (Libre Selección por el Técnico) */}
+      {((units_in_station && units_in_station.length > 0) || (completed_units && completed_units.length > 0) || isSupervisorMode) && (
+        <Card className="p-2.5 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border border-stone-200 shadow-sm">
+          <div className="flex items-center justify-between mb-1.5 px-0.5">
+            <span className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-blue-600" />
+              <span>
+                {isSupervisorMode 
+                  ? `Todas las PCs de la Orden (${units_in_station.length}):` 
+                  : `PCs en tu estación (${units_in_station.length}):`}
+              </span>
+            </span>
+            <span className="text-[9px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-md border border-stone-200">
+              Toca para cambiar
+            </span>
+          </div>
+
+          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {units_in_station.length === 0 && (
+              <span className="text-[11px] text-stone-500 italic py-1 px-1">
+                No hay PCs pendientes en esta estación.
+              </span>
+            )}
+            {units_in_station.map(u => {
+              const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
+              return (
+                <button
+                  key={u.unit_number}
+                  type="button"
+                  onClick={() => {
+                    if (!isCurrent) {
+                      setCompletedSteps([]);
+                      setStepLogsMap({});
+                      onSelectUnit && onSelectUnit(u.unit_number);
+                    }
+                  }}
+                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1.5 ${
+                    isCurrent
+                      ? "bg-blue-600 text-white shadow-md scale-105"
+                      : "bg-white hover:bg-stone-200 text-gray-700 border border-gray-200"
+                  }`}
+                >
+                  <span>#{u.unit_number.toString().padStart(2, '0')}</span>
+                  {isSupervisorMode && u.current_station && (
+                    <span className={`text-[9px] px-1 rounded font-bold ${
+                      isCurrent ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600 border border-stone-200'
+                    }`}>
+                      E{u.current_station}
+                    </span>
+                  )}
+                  {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Fila de acceso a PCs ya completadas y despachadas de la estación */}
+          {completed_units && completed_units.length > 0 && !isSupervisorMode && (
+            <div className="mt-2 pt-2 border-t border-indigo-100 flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold text-stone-600 flex items-center gap-1 mr-1">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Despachadas a siguiente estación:</span>
+              </span>
+              {completed_units.map(u => {
+                const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
+                return (
+                  <button
+                    key={u.unit_number}
+                    type="button"
+                    onClick={() => {
+                      if (!isCurrent) {
+                        setCompletedSteps([]);
+                        setStepLogsMap({});
+                        onSelectUnit && onSelectUnit(u.unit_number);
+                      }
+                    }}
+                    className={`flex-shrink-0 px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 touch-target ${
+                      isCurrent
+                        ? "bg-emerald-700 text-white shadow-xs"
+                        : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
+                    }`}
+                    title={`Ver historial de PC #${u.unit_number} (enviada a Estación ${u.current_station})`}
+                  >
+                    <span>✓ PC #{u.unit_number.toString().padStart(2, '0')}</span>
+                    <span className="text-[8px] opacity-80">(E{u.current_station})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+            {/* Cola de otras PCs disponibles */}
+      {/* Cola de otras PCs disponibles en esta estación */}
+      {queue_units.length > 0 && (
+        <Card className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+              <RefreshCw className="w-4 h-4 text-blue-600" />
+              <span>Otras PCs en tu estación ({queue_units.length}):</span>
+            </h4>
+            <span className="text-[10px] text-gray-400">Toca para cambiar</span>
+          </div>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+            {queue_units.map(u => (
+              <div
+                key={u.unit_number}
+                onClick={() => onSelectUnit && onSelectUnit(u.unit_number)}
+                className="flex justify-between items-center p-2.5 bg-gray-50 hover:bg-stone-100 active:bg-stone-200 rounded-xl border border-gray-200 cursor-pointer transition touch-target"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gray-900 text-xs">PC #{u.unit_number.toString().padStart(2, '0')}</span>
+                  <span className="text-gray-400 font-mono text-[10px] hidden sm:inline">{u.serial_number}</span>
+                </div>
+                <button
+                  type="button"
+                  className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-blue-600 border border-stone-200 font-bold text-[11px] rounded-lg transition"
+                >
+                  Trabajar en esta PC
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+          </aside>
+
+          {/* ============================================================ */}
+          {/* ÁREA PRINCIPAL (MAIN): LISTA DE PASOS DEL CHECKLIST           */}
+          {/* ============================================================ */}
+          <main className="lg:col-span-8 xl:col-span-8 space-y-4 min-w-0">
+            
+            {/* Encabezado del Checklist */}
+            <Card className="p-4 bg-white border border-stone-200/90 shadow-sm rounded-3xl flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                  <span>Checklist Estación {assignment.station_number}: {assignment.station_name}</span>
+                  <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
+                    {uniqueStationSteps.length} Pasos
+                  </span>
+                </h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Marca cada paso completado con su respectiva evidencia técnica o fotográfica.
+                </p>
+              </div>
+
+              {isSupervisorMode && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase">Filtro:</span>
+                  <button
+                    type="button"
+                    onClick={() => setFilterSupervisorOnly(!filterSupervisorOnly)}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition ${
+                      filterSupervisorOnly
+                        ? "bg-amber-600 text-white shadow-xs"
+                        : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                    }`}
+                  >
+                    {filterSupervisorOnly ? "Solo mis pasos" : "Ver todos"}
+                  </button>
+                </div>
+              )}
+            </Card>
+
+            {/* Pasos Heredados de Otras Estaciones (si existen) */}
           {!isSupervisorMode && filteredPendingPriorSteps && filteredPendingPriorSteps.length > 0 && (
             <div className="p-3 bg-amber-50 border-b border-amber-200 space-y-2">
               <div className="flex items-center justify-between">
@@ -1105,7 +1280,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
           )}
 
-          {/* PASOS DERIVADOS A OTRAS ESTACIONES */}
+            {/* Pasos Derivados a Otras Estaciones (si existen) */}
           {!isSupervisorMode && transferred_out_steps && transferred_out_steps.length > 0 && (
             <div className="p-2.5 bg-stone-50 border-b border-stone-200 space-y-1.5">
               <div className="flex items-center justify-between">
@@ -1132,7 +1307,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
           )}
 
-          {/* Lista de pasos principales de la estación (Deduplicados) */}
+            {/* Lista Principal de Pasos de la Estación */}
+            <Card className="overflow-hidden border border-stone-200/90 shadow-sm bg-white rounded-3xl">
           <div className="p-3 space-y-3">
             {totalStationSteps === 0 ? (
               <div className="p-6 text-center text-stone-500 bg-stone-50 border border-dashed border-stone-300 rounded-2xl text-xs">
@@ -1564,7 +1740,21 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             })}
           </div>
 
-          {/* Botón de V°B° para Supervisor vs Despacho de Estación para Operario (Ley de Tesler) */}
+            </Card>
+
+            {/* Confirmación al Final del Checklist */}
+            <Card className="p-4 bg-white border border-stone-200/90 shadow-sm rounded-3xl text-center">
+              <div className="flex items-center justify-center gap-2 text-xs font-bold text-stone-700">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span>Fin del Checklist · Estación {assignment.station_number}</span>
+              </div>
+              <p className="text-[11px] text-stone-400 mt-0.5">
+                {isStationComplete
+                  ? "✓ Todos los pasos y fotos han sido registrados. Puedes despachar la unidad desde el panel lateral izquierdo o aquí:"
+                  : `Progreso: ${technicianVerifiedCount} de ${totalStationSteps} pasos completados.`}
+              </p>
+              {isStationComplete && (
+                <div className="mt-3 max-w-sm mx-auto">
           <div className="p-3 pt-0">
             {isSupervisorMode ? (
               <button
@@ -1645,8 +1835,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               </div>
             )}
           </div>
-        </Card>
+
+                </div>
+              )}
+            </Card>
+          </main>
+        </div>
       ) : (
+        <div className="max-w-lg mx-auto py-8">
         <Card className="p-8 text-center bg-white border border-stone-200/80 rounded-3xl shadow-sm">
           <div className="w-14 h-14 rounded-2xl bg-stone-100 text-stone-400 flex items-center justify-center mx-auto mb-3 shadow-2xs">
             <Inbox className="w-7 h-7" />
@@ -1679,41 +1875,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
           )}
         </Card>
+
+        </div>
       )}
 
-      {/* Cola de otras PCs disponibles en esta estación */}
-      {queue_units.length > 0 && (
-        <Card className="p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-              <RefreshCw className="w-4 h-4 text-blue-600" />
-              <span>Otras PCs en tu estación ({queue_units.length}):</span>
-            </h4>
-            <span className="text-[10px] text-gray-400">Toca para cambiar</span>
-          </div>
-          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
-            {queue_units.map(u => (
-              <div
-                key={u.unit_number}
-                onClick={() => onSelectUnit && onSelectUnit(u.unit_number)}
-                className="flex justify-between items-center p-2.5 bg-gray-50 hover:bg-stone-100 active:bg-stone-200 rounded-xl border border-gray-200 cursor-pointer transition touch-target"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-gray-900 text-xs">PC #{u.unit_number.toString().padStart(2, '0')}</span>
-                  <span className="text-gray-400 font-mono text-[10px] hidden sm:inline">{u.serial_number}</span>
-                </div>
-                <button
-                  type="button"
-                  className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-blue-600 border border-stone-200 font-bold text-[11px] rounded-lg transition"
-                >
-                  Trabajar en esta PC
-                </button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
+      {/* Modales */}
       {/* Modal Captura de Foto para Paso */}
       {photoStepModal && active_unit && (
         <CameraCaptureModal

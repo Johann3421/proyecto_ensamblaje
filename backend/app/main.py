@@ -143,25 +143,63 @@ def auto_migrate_schema():
     print("[DB Migration] Esquema de base de datos verificado y actualizado.")
 
 # Inicialización de base de datos en startup
-def auto_heal_cleaning_flags(db: Optional[Session] = None):
-    """Sincroniza y corrige automáticamente los flags is_cleaning de todos los modelos (Ley de Tesler)"""
+def canonical_resequence_model(db: Session, model_name: str) -> List[QCChecklistItem]:
+    """
+    Garantiza que la secuencia de pasos de un modelo sea estrictamente canónica y ordenada (Ley de Tesler):
+    1. Pasos de Ensamblaje (is_cleaning=False) ordenados y numerados consecutivamente de 1 a K.
+    2. Pasos de Limpieza y Empaque final (is_cleaning=True) ordenados y numerados de K+1 a Total.
+    3. Cero duplicados, cero huecos y partición estricta sin saltos numéricos en interfaz ni estaciones.
+    """
+    clean_name = model_name.strip().upper()
+    items = db.query(QCChecklistItem).filter(
+        QCChecklistItem.model_name == clean_name
+    ).order_by(
+        QCChecklistItem.is_cleaning.asc(),
+        QCChecklistItem.step_number.asc(),
+        QCChecklistItem.id.asc()
+    ).all()
+
+    for idx, it in enumerate(items, start=1):
+        if it.step_number != idx:
+            it.step_number = idx
+
+    db.commit()
+    return items
+
+def auto_heal_checklist_sequence(db: Optional[Session] = None):
+    """
+    Auto-healing para sanear y garantizar la secuencia canónica de todos los modelos:
+    1. Corrige flags is_cleaning erróneamente asignados a pasos de ensamble.
+    2. Normaliza todos los modelos para que Ensamblaje sea 1..N y Limpieza N+1..Total.
+    """
     own_session = False
     if db is None:
         db = SessionLocal()
         own_session = True
     try:
-        items = db.query(QCChecklistItem).all()
-        updated = 0
-        for it in items:
-            should_clean = infer_step_is_cleaning(it.operation, it.description, it.qc_criteria)
-            if bool(it.is_cleaning) != should_clean:
-                it.is_cleaning = should_clean
-                updated += 1
-        if updated > 0:
-            db.commit()
-            print(f"[DB Auto-Healing] Se sincronizaron {updated} pasos de limpieza en checklist de modelos.")
+        # Corregir pasos de ensamble que fueron forzados erróneamente como limpieza
+        db.execute(text("""
+            UPDATE qc_checklist_items
+            SET is_cleaning = FALSE
+            WHERE is_cleaning = TRUE
+              AND (
+                  LOWER(operation) LIKE '%(ensamblaje)%'
+                  OR LOWER(operation) LIKE '%retirar película de tapa frontal%'
+                  OR LOWER(operation) LIKE '%retirar pelicula de tapa frontal%'
+                  OR model_name IN ('ALL IN ONE', 'ENSAMBLAJE')
+              );
+        """))
+        db.commit()
+
+        # Resecuenciar canónicamente todos los modelos existentes
+        models = db.query(QCModel).all()
+        for m in models:
+            canonical_resequence_model(db, m.name)
+
+        print("[DB Auto-Healing] Checklists de todos los modelos resecuenciados canónicamente (Ensamblaje 1..N, Limpieza N+1..M).")
     except Exception as e:
-        print(f"[DB Auto-Healing Warning] No se pudo auto-corregir flags de limpieza: {e}")
+        db.rollback()
+        print(f"[DB Auto-Healing Warning] No se pudo resecuenciar modelos: {e}")
     finally:
         if own_session and db:
             db.close()
@@ -216,7 +254,7 @@ def startup_db_init():
             auto_migrate_schema()
             db_session = SessionLocal()
             seed_database(db_session)
-            auto_heal_cleaning_flags(db_session)
+            auto_heal_checklist_sequence(db_session)
             reorder_ezent_checklist(db_session)
             print(f"[DB] Base de datos y orden inicial sembrada correctamente.")
             break
@@ -572,22 +610,15 @@ def populate_model_template(model_name: str, data: dict = {}, db: Session = Depe
 
 @api_router.post("/models/{model_name}/resequence")
 def resequence_model_steps(model_name: str, db: Session = Depends(get_db)):
-    """Renumbra todos los pasos del checklist de 1 a N de forma consecutiva sin huecos"""
-    model_name = model_name.strip().upper()
-    items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number, QCChecklistItem.id).all()
+    """Renumbra y particiona todos los pasos: Ensamblaje (1..N) y Limpieza (N+1..Total) sin huecos (Ley de Tesler)"""
+    clean_name = model_name.strip().upper()
+    items = canonical_resequence_model(db, clean_name)
     if not items:
-        return {"message": f"El modelo '{model_name}' no tiene pasos registrados", "updated_count": 0, "total_steps": 0}
+        return {"message": f"El modelo '{clean_name}' no tiene pasos registrados", "updated_count": 0, "total_steps": 0}
 
-    updated_count = 0
-    for idx, it in enumerate(items, start=1):
-        if it.step_number != idx:
-            it.step_number = idx
-            updated_count += 1
-    
-    db.commit()
     return {
-        "message": f"Secuencia reordenada consecutivamente (1 a {len(items)}). {updated_count} pasos renumerados.",
-        "updated_count": updated_count,
+        "message": f"Secuencia reordenada consecutivamente (1 a {len(items)}). Ensamblaje primero (1..N) y Limpieza al final (N+1..{len(items)}).",
+        "updated_count": len(items),
         "total_steps": len(items)
     }
 
@@ -690,10 +721,14 @@ def get_model_checklist(model_name: str, db: Session = Depends(get_db)):
 
 @api_router.post("/models/{model_name}/checklist")
 def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session = Depends(get_db)):
-    clean_val = bool(item.is_cleaning) if item.is_cleaning is not None else infer_step_is_cleaning(item.operation, item.description, item.qc_criteria)
-    if not clean_val and infer_step_is_cleaning(item.operation, item.description, item.qc_criteria):
-        clean_val = True
+    clean_name = model_name.strip().upper()
+    # Respetar la clasificación explícita del usuario sin sobrescrituras forzadas
+    if item.is_cleaning is not None:
+        clean_val = bool(item.is_cleaning)
+    else:
+        clean_val = infer_step_is_cleaning(item.operation, item.description, item.qc_criteria)
 
+    target_item = None
     if item.id:
         existing = db.query(QCChecklistItem).filter(QCChecklistItem.id == item.id).first()
         if existing:
@@ -704,48 +739,52 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
             existing.media_url = item.media_url
             existing.media_type = item.media_type
             existing.is_cleaning = clean_val
-            db.commit()
-            db.refresh(existing)
-            return existing
-    
-    new_item = QCChecklistItem(
-        model_name=model_name,
-        step_number=item.step_number,
-        operation=item.operation,
-        description=item.description,
-        qc_criteria=item.qc_criteria,
-        media_url=item.media_url,
-        media_type=item.media_type,
-        is_cleaning=clean_val
-    )
-    db.add(new_item)
+            target_item = existing
+
+    if not target_item:
+        step_num = item.step_number if item.step_number and item.step_number > 0 else 9999
+        target_item = QCChecklistItem(
+            model_name=clean_name,
+            step_number=step_num,
+            operation=item.operation,
+            description=item.description,
+            qc_criteria=item.qc_criteria,
+            media_url=item.media_url,
+            media_type=item.media_type,
+            is_cleaning=clean_val
+        )
+        db.add(target_item)
+
     db.commit()
-    db.refresh(new_item)
-    return new_item
+    db.refresh(target_item)
+    
+    # Auto-resecuenciación canónica garantizada: Ensamblaje 1..N y Limpieza N+1..Total
+    canonical_resequence_model(db, clean_name)
+    db.refresh(target_item)
+    return target_item
 
 @api_router.delete("/models/{model_name}/checklist/{step_id}")
 def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(get_db)):
-    item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == model_name).first()
+    clean_name = model_name.strip().upper()
+    item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == clean_name).first()
     if not item:
         raise HTTPException(status_code=404, detail="Paso no encontrado")
     deleted_num = item.step_number
     db.delete(item)
-    db.flush()
-    # Auto-renumerar en backend para garantizar secuencia continua 1..N sin huecos (Ley de Tesler)
-    remaining = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == model_name).order_by(QCChecklistItem.step_number).all()
-    for new_idx, it in enumerate(remaining, start=1):
-        it.step_number = new_idx
     db.commit()
-    return {"message": f"Paso #{deleted_num} eliminado y secuencia renumerada automáticamente"}
+    canonical_resequence_model(db, clean_name)
+    return {"message": f"Paso #{deleted_num} eliminado y secuencia renumerada canónicamente"}
 
 @api_router.post("/models/{model_name}/checklist/{step_id}/toggle-cleaning")
 def toggle_step_cleaning(model_name: str, step_id: int, db: Session = Depends(get_db)):
-    """Cambia directamente el estado is_cleaning (Limpieza vs Ensamblaje) de un paso"""
-    item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == model_name).first()
+    """Cambia directamente el estado is_cleaning (Limpieza vs Ensamblaje) y reordena canónicamente"""
+    clean_name = model_name.strip().upper()
+    item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == clean_name).first()
     if not item:
         raise HTTPException(status_code=404, detail="Paso no encontrado")
     item.is_cleaning = not bool(item.is_cleaning)
     db.commit()
+    canonical_resequence_model(db, clean_name)
     db.refresh(item)
     return {
         "message": f"Paso #{item.step_number} marcado como {'LIMPIEZA' if item.is_cleaning else 'ENSAMBLAJE'}",

@@ -617,15 +617,18 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
             {/* Único Botón Primario de Acción */}
             <button
               type="button"
-              onClick={() => setEditingItem({
-                model_name: selectedModel,
-                step_number: steps.length + 1,
-                operation: "",
-                description: "",
-                qc_criteria: "",
-                media_url: "",
-                is_cleaning: filterType === "CLEANING"
-              })}
+              onClick={() => {
+                const isClean = filterType === "CLEANING";
+                setEditingItem({
+                  model_name: selectedModel,
+                  step_number: isClean ? (steps.length + 1) : (assemblySteps.length + 1),
+                  operation: "",
+                  description: "",
+                  qc_criteria: "",
+                  media_url: "",
+                  is_cleaning: isClean
+                });
+              }}
               className="text-xs bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition touch-target"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -843,6 +846,24 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
                 </div>
               </div>
 
+              <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem({
+                    model_name: selectedModel,
+                    step_number: assemblySteps.length + 1,
+                    operation: "",
+                    description: "",
+                    qc_criteria: "",
+                    media_url: "",
+                    is_cleaning: false
+                  })}
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Nuevo Paso de Ensamblaje</span>
+                </button>
+              </div>
             </div>
 
             {filteredAssembly.length === 0 ? (

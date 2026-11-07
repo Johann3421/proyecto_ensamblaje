@@ -106,6 +106,7 @@ class QCStepLog(Base):
     photo_url = Column(String(500), nullable=True) # Evidencia fotográfica del paso verificado
     is_supervisor_verified = Column(Boolean, default=False) # True si la foto/verificación fue realizada por el supervisor
     notes = Column(Text, nullable=True)
+    duration_seconds = Column(Integer, nullable=True) # Tiempo en segundos transcurrido desde el paso anterior o inicio
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 class QCIssue(Base):

@@ -84,3 +84,4 @@ Al completar todos los pasos de una PC en una estación de trabajo, el flujo de 
 - Backend test suite ejecutado exitosamente con TestClient:
   - Guardias de despacho y verificación de estación aprobados.
 - Compilación de producción con Vite: `rtk npm --prefix frontend run build` (0 errores, 4.12s).
+

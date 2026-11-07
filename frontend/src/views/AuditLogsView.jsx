@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Shield, FileText, Camera, Filter, Layers, CheckCircle2, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Shield, FileText, Camera, Filter, Layers, CheckCircle2, AlertTriangle, ChevronRight, Clock, Timer } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
+import { formatPeruTime, formatDuration } from '../utils/timeFormat';
 
 export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrder, onPreviewPhoto }) {
   const [logs, setLogs] = useState([]);
@@ -192,7 +193,10 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                           subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
                           operation: l.operation,
                           user_name: l.user_name,
-                          timestamp: l.timestamp
+                          timestamp: l.timestamp,
+                          peru_time: l.peru_time || formatPeruTime(l.timestamp),
+                          duration_seconds: l.duration_seconds,
+                          duration_formatted: l.duration_formatted || formatDuration(l.duration_seconds)
                         })}
                         className="group relative rounded-xl overflow-hidden border border-stone-200 bg-slate-950 cursor-pointer shadow-xs hover:shadow-md transition flex flex-col aspect-square"
                       >
@@ -202,14 +206,22 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                           loading="lazy"
                         />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2 text-white">
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/75 to-transparent p-2 text-white">
                           <span className="text-[11px] font-bold block leading-tight truncate">
                             #{l.step_number} {l.operation || `Paso ${l.step_number}`}
                           </span>
                           <div className="flex items-center justify-between text-[9px] text-slate-300 mt-0.5">
                             <span>E{l.station_number} · {l.user_name}</span>
+                            <span className="font-mono text-amber-300">{l.peru_time || formatPeruTime(l.timestamp, false)}</span>
+                          </div>
+                          <div className="flex items-center justify-between mt-1 text-[8px]">
+                            {(l.duration_seconds !== null && l.duration_seconds !== undefined) ? (
+                              <span className="font-bold text-sky-200 bg-sky-950/90 border border-sky-600/60 px-1.5 py-0.2 rounded">
+                                ⏱️ {l.duration_formatted || formatDuration(l.duration_seconds)}
+                              </span>
+                            ) : <span></span>}
                             {l.is_supervisor_verified && (
-                              <span className="text-amber-300 font-bold">SUP</span>
+                              <span className="text-amber-300 font-bold bg-amber-950/80 px-1 rounded border border-amber-500/40">SUP</span>
                             )}
                           </div>
                         </div>
@@ -259,7 +271,18 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                   <p className="text-xs font-semibold text-gray-800 truncate">
                     Técnico: <span className="font-bold text-slate-900">{l.user_name}</span>
                   </p>
-                  <p className="text-[10px] text-gray-400 font-mono">{new Date(l.timestamp).toLocaleString("es-PE")}</p>
+                  <div className="flex items-center gap-2 text-[10px] font-mono flex-wrap pt-0.5">
+                    <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-amber-600" />
+                      <span>Hora Perú: {l.peru_time || formatPeruTime(l.timestamp)}</span>
+                    </span>
+                    {(l.duration_seconds !== null && l.duration_seconds !== undefined) && (
+                      <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 font-sans font-bold flex items-center gap-1">
+                        <Timer className="w-3 h-3 text-blue-600" />
+                        <span>Tomó: {l.duration_formatted || formatDuration(l.duration_seconds)}</span>
+                      </span>
+                    )}
+                  </div>
                   {l.notes && <p className="text-[10px] text-gray-600 bg-stone-50 p-1.5 rounded border border-stone-200 italic">{l.notes}</p>}
 
                   {l.photo_url && (
@@ -276,7 +299,10 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                           subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
                           operation: l.operation,
                           user_name: l.user_name,
-                          timestamp: l.timestamp
+                          timestamp: l.timestamp,
+                          peru_time: l.peru_time || formatPeruTime(l.timestamp),
+                          duration_seconds: l.duration_seconds,
+                          duration_formatted: l.duration_formatted || formatDuration(l.duration_seconds)
                         })}
                         className="inline-flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg text-[10px] font-bold text-emerald-800 transition group"
                       >

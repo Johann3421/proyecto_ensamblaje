@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-07** | Verificador de tiempo entre pasos con Hora Perú (UTC-5) y duración en puesto y evidencias internas | `feat` / `auditoria` / `backend` / `frontend` | ✅ Completado | [[2026-11-07-verificador-tiempo-entre-pasos-hora-peru]] |
 | **2026-11-07** | Blindaje estricto de evidencia fotográfica obligatoria en pasos y despacho de estación | `fix` / `seguridad` / `tesler` | ✅ Completado | [[2026-11-07-blindaje-evidencia-fotografica-pasos-y-despacho]] |
 | **2026-11-05** | Fix: Resecuenciación canónica de pasos de checklist y protección contra desorden | `fix` / `arquitectura` / `tesler` | ✅ Completado | [[2026-11-05-fix-desorden-pasos-checklist-resecuenciacion-canonica]] |
 | **2026-11-05** | Layout Aside en Puesto de Operario (Bento Apple) & Blindaje de Seguridad en Logs | `ux` / `seguridad` / `arquitectura` | ✅ Completado | [[2026-11-05-aside-puesto-operario-y-blindaje-seguridad]] |

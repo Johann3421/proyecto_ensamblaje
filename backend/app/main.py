@@ -2,7 +2,7 @@ import os
 import shutil
 import time
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Request, Query
 from fastapi.responses import FileResponse
@@ -66,6 +66,7 @@ def auto_migrate_schema():
         "ALTER TABLE qc_issues ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         "ALTER TABLE qc_step_logs ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         "ALTER TABLE qc_step_logs ADD COLUMN IF NOT EXISTS is_supervisor_verified BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE qc_step_logs ADD COLUMN IF NOT EXISTS duration_seconds INTEGER;",
         "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS is_cleaning_station BOOLEAN DEFAULT FALSE;",
         "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS station_type VARCHAR(50) DEFAULT 'ASSEMBLY';",
         "ALTER TABLE qc_station_assignments ADD COLUMN IF NOT EXISTS step_numbers TEXT;",
@@ -141,6 +142,59 @@ def auto_migrate_schema():
         print(f"[Migration] Nota al limpiar nombres de usuarios: {e}")
 
     print("[DB Migration] Esquema de base de datos verificado y actualizado.")
+
+# Utilidades de Zona Horaria (Hora Perú UTC-5) y Medición de Tiempos entre Pasos
+PERU_TZ = timezone(timedelta(hours=-5))
+
+def format_peru_time(dt: Optional[datetime]) -> Optional[str]:
+    """Convierte una fecha UTC a formato Hora Perú (America/Lima / UTC-5) en formato 12h: ej. '10:34:12 a. m.'"""
+    if not dt:
+        return None
+    dt_utc = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    peru_dt = dt_utc.astimezone(PERU_TZ)
+    hour = peru_dt.strftime("%I:%M:%S")
+    am_pm = "a. m." if peru_dt.hour < 12 else "p. m."
+    return f"{hour} {am_pm}"
+
+def format_duration(seconds: Optional[int]) -> Optional[str]:
+    """Formatea segundos a formato amigable: ej. '45s', '2m 15s', '1h 05m'"""
+    if seconds is None:
+        return None
+    s = max(0, int(seconds))
+    if s < 60:
+        return f"{s}s"
+    m = s // 60
+    rem_s = s % 60
+    if m < 60:
+        return f"{m}m {rem_s}s" if rem_s > 0 else f"{m}m"
+    h = m // 60
+    rem_m = m % 60
+    return f"{h}h {rem_m:02d}m"
+
+def compute_log_dict(l: QCStepLog, prev_log: Optional[QCStepLog] = None, unit_start: Optional[datetime] = None) -> dict:
+    dur = getattr(l, "duration_seconds", None)
+    if dur is None:
+        if prev_log and prev_log.timestamp and l.timestamp:
+            delta = (l.timestamp - prev_log.timestamp).total_seconds()
+            if delta >= 0:
+                dur = int(delta)
+        elif unit_start and l.timestamp:
+            delta = (l.timestamp - unit_start).total_seconds()
+            if delta >= 0:
+                dur = int(delta)
+
+    return {
+        "id": getattr(l, "id", None),
+        "step_number": l.step_number,
+        "photo_url": l.photo_url,
+        "user_name": l.user_name,
+        "user_id": getattr(l, "user_id", None),
+        "is_supervisor_verified": bool(l.is_supervisor_verified),
+        "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+        "peru_time": format_peru_time(l.timestamp),
+        "duration_seconds": dur,
+        "duration_formatted": format_duration(dur)
+    }
 
 # Inicialización de base de datos en startup
 def canonical_resequence_model(db: Session, model_name: str) -> List[QCChecklistItem]:
@@ -1868,28 +1922,19 @@ def get_operator_workspace(
             supervisor_step_numbers = [l.step_number for l in deduped_sup_logs]
             completed_steps_ids = supervisor_step_numbers
 
-            completed_step_logs = [
-                {
-                    "step_number": l.step_number,
-                    "photo_url": l.photo_url,
-                    "user_name": l.user_name,
-                    "is_supervisor_verified": False,
-                    "timestamp": l.timestamp.isoformat() if l.timestamp else None,
-                    "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
-                }
-                for l in deduped_op_logs
-            ]
-            supervisor_step_logs = [
-                {
-                    "step_number": l.step_number,
-                    "photo_url": l.photo_url,
-                    "user_name": l.user_name,
-                    "is_supervisor_verified": True,
-                    "timestamp": l.timestamp.isoformat() if l.timestamp else None,
-                    "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
-                }
-                for l in deduped_sup_logs
-            ]
+            completed_step_logs = []
+            for idx, l in enumerate(deduped_op_logs):
+                prev_l = deduped_op_logs[idx - 1] if idx > 0 else None
+                entry = compute_log_dict(l, prev_l, active_unit.started_at if active_unit else None)
+                entry["operation"] = step_ops.get(l.step_number, f"Paso {l.step_number}")
+                completed_step_logs.append(entry)
+
+            supervisor_step_logs = []
+            for idx, l in enumerate(deduped_sup_logs):
+                prev_l = deduped_sup_logs[idx - 1] if idx > 0 else None
+                entry = compute_log_dict(l, prev_l, active_unit.started_at if active_unit else None)
+                entry["operation"] = step_ops.get(l.step_number, f"Paso {l.step_number}")
+                supervisor_step_logs.append(entry)
 
         supervisor_audit = None
         if active_unit:
@@ -2244,28 +2289,19 @@ def get_operator_workspace(
 
         # Para el TÉCNICO, sus pasos completados son ESTRICTAMENTE los del técnico:
         completed_steps_ids = technician_step_numbers
-        completed_step_logs = [
-            {
-                "step_number": l.step_number,
-                "photo_url": l.photo_url,
-                "user_name": l.user_name,
-                "is_supervisor_verified": False,
-                "timestamp": l.timestamp.isoformat() if l.timestamp else None,
-                "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
-            }
-            for l in deduped_op_logs
-        ]
-        supervisor_step_logs = [
-            {
-                "step_number": l.step_number,
-                "photo_url": l.photo_url,
-                "user_name": l.user_name,
-                "is_supervisor_verified": True,
-                "timestamp": l.timestamp.isoformat() if l.timestamp else None,
-                "operation": step_ops.get(l.step_number, f"Paso {l.step_number}")
-            }
-            for l in deduped_sup_logs
-        ]
+        completed_step_logs = []
+        for idx, l in enumerate(deduped_op_logs):
+            prev_l = deduped_op_logs[idx - 1] if idx > 0 else None
+            entry = compute_log_dict(l, prev_l, active_unit.started_at if active_unit else None)
+            entry["operation"] = step_ops.get(l.step_number, f"Paso {l.step_number}")
+            completed_step_logs.append(entry)
+
+        supervisor_step_logs = []
+        for idx, l in enumerate(deduped_sup_logs):
+            prev_l = deduped_sup_logs[idx - 1] if idx > 0 else None
+            entry = compute_log_dict(l, prev_l, active_unit.started_at if active_unit else None)
+            entry["operation"] = step_ops.get(l.step_number, f"Paso {l.step_number}")
+            supervisor_step_logs.append(entry)
 
         # Identificar si hay pasos de estaciones previas que aún falten completar por técnicos
         # CONDICIÓN ESTRICTA: Solo calcular si la unidad está FÍSICAMENTE en esta estación actual
@@ -2561,21 +2597,6 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
             QCStepLog.is_supervisor_verified == False
         ).delete()
 
-    new_log = QCStepLog(
-        order_id=real_order_id,
-        unit_number=req.unit_number,
-        step_number=req.step_number,
-        station_number=req.station_number,
-        user_id=req.user_id,
-        user_name=req.user_name,
-        status=req.status,
-        photo_url=req.photo_url,
-        is_supervisor_verified=False,
-        notes=req.notes,
-        timestamp=datetime.utcnow()
-    )
-    db.add(new_log)
-
     unit = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == real_order_id,
         QCPCUnit.unit_number == req.unit_number
@@ -2588,17 +2609,61 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
             detail=f"La PC #{req.unit_number} se encuentra en la Estación {unit.current_station}, no en la Estación {req.station_number}."
         )
 
+    now_utc = datetime.utcnow()
+    duration_s = None
+    if req.status == "PASS":
+        # Buscar el último paso previo aprobado del técnico para medir el tiempo tomado
+        prev_log = db.query(QCStepLog).filter(
+            QCStepLog.order_id == real_order_id,
+            QCStepLog.unit_number == req.unit_number,
+            QCStepLog.status == "PASS",
+            QCStepLog.is_supervisor_verified == False,
+            QCStepLog.step_number < req.step_number
+        ).order_by(QCStepLog.step_number.desc(), QCStepLog.timestamp.desc()).first()
+
+        if prev_log and prev_log.timestamp:
+            delta = (now_utc - prev_log.timestamp).total_seconds()
+            if delta >= 0:
+                duration_s = int(delta)
+        elif unit.started_at:
+            delta = (now_utc - unit.started_at).total_seconds()
+            if delta >= 0:
+                duration_s = int(delta)
+
+    new_log = QCStepLog(
+        order_id=real_order_id,
+        unit_number=req.unit_number,
+        step_number=req.step_number,
+        station_number=req.station_number,
+        user_id=req.user_id,
+        user_name=req.user_name,
+        status=req.status,
+        photo_url=req.photo_url,
+        is_supervisor_verified=False,
+        notes=req.notes,
+        duration_seconds=duration_s,
+        timestamp=now_utc
+    )
+    db.add(new_log)
+
     if unit:
-        if unit.overall_status == "PENDING":
+        if unit.overall_status == "PENDING" or unit.started_at is None:
             unit.overall_status = "IN_PROGRESS"
-            unit.started_at = datetime.utcnow()
+            unit.started_at = now_utc
         if req.status == "PASS":
             unit.current_step_progress = max(unit.current_step_progress, req.step_number)
         elif req.status == "FAIL":
             unit.overall_status = "FAILED"
 
     db.commit()
-    return {"message": "Paso registrado con trazabilidad completa", "log_id": new_log.id, "timestamp": new_log.timestamp}
+    return {
+        "message": "Paso registrado con trazabilidad completa",
+        "log_id": new_log.id,
+        "timestamp": new_log.timestamp.isoformat(),
+        "peru_time": format_peru_time(new_log.timestamp),
+        "duration_seconds": new_log.duration_seconds,
+        "duration_formatted": format_duration(new_log.duration_seconds)
+    }
 
 @api_router.post("/operator/uncheck-step")
 def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
@@ -3200,6 +3265,34 @@ def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
         step_ops = {item.step_number: item.operation for item in items}
 
     logs = db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()
+
+    # Consultar tiempos de inicio de las PCs de esta orden para medir tiempo del paso inicial
+    units = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id).all()
+    unit_starts = {u.unit_number: u.started_at for u in units}
+
+    # Agrupar logs por unidad para calcular duraciones de pasos consecutivos
+    logs_by_unit = {}
+    for l in logs:
+        logs_by_unit.setdefault(l.unit_number, []).append(l)
+
+    duration_map = {}
+    for u_num, u_logs in logs_by_unit.items():
+        # Ordenar cronológicamente ascendente para medir diferencias de tiempo
+        sorted_u_logs = sorted(u_logs, key=lambda x: (x.timestamp or datetime.min, x.step_number, x.id or 0))
+        for i, cur in enumerate(sorted_u_logs):
+            dur = cur.duration_seconds
+            if dur is None:
+                prev_l = sorted_u_logs[i - 1] if i > 0 else None
+                if prev_l and prev_l.timestamp and cur.timestamp:
+                    delta = (cur.timestamp - prev_l.timestamp).total_seconds()
+                    if delta >= 0:
+                        dur = int(delta)
+                elif unit_starts.get(u_num) and cur.timestamp:
+                    delta = (cur.timestamp - unit_starts[u_num]).total_seconds()
+                    if delta >= 0:
+                        dur = int(delta)
+            duration_map[cur.id] = dur
+
     result = []
     for l in logs:
         op_name = step_ops.get(l.step_number)
@@ -3208,6 +3301,7 @@ def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
                 op_name = "Auditoría Supervisor"
             else:
                 op_name = f"Paso {l.step_number}"
+        dur = duration_map.get(l.id, l.duration_seconds)
         result.append({
             "id": l.id,
             "order_id": l.order_id,
@@ -3221,6 +3315,9 @@ def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
             "is_supervisor_verified": bool(l.is_supervisor_verified),
             "notes": l.notes,
             "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+            "peru_time": format_peru_time(l.timestamp),
+            "duration_seconds": dur,
+            "duration_formatted": format_duration(dur),
             "operation": op_name
         })
     return result

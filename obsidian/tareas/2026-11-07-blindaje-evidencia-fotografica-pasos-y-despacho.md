@@ -56,3 +56,4 @@ El usuario reportó: *"se puede avanzar sin adjuntar las imagenes como evidencia
 ## 📁 Archivos Modificados
 - `backend/app/main.py`: Validación obligatoria de fotos en `submit_step_check` y `finish_station`.
 - `frontend/src/views/OperatorWorkspaceView.jsx`: Activación obligatoria de cámara para todos los pasos y comprobación completa de fotos en `isStationComplete`.
+

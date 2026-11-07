@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Download, X, Camera, Video, Wrench } from 'lucide-react';
+import { Download, X, Camera, Video, Wrench, Clock, Timer } from 'lucide-react';
 import AdminPhotoCorrectionModal from './AdminPhotoCorrectionModal';
+import { formatPeruTime, formatDuration } from '../utils/timeFormat';
 
 export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhotoCorrected }) {
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
@@ -64,12 +65,23 @@ export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhoto
           </div>
 
           <div className="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-3 text-slate-300">
+            <div className="flex items-center gap-2.5 text-slate-300 flex-wrap">
               {user_name && (
-                <span>Verificado por: <strong className="text-emerald-400 font-semibold">{user_name}</strong></span>
+                <span className="bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700 text-xs">
+                  Por: <strong className="text-emerald-400 font-semibold">{user_name}</strong>
+                </span>
               )}
               {timestamp && (
-                <span className="text-slate-400 font-mono text-[11px]">{new Date(timestamp).toLocaleString("es-PE")}</span>
+                <span className="inline-flex items-center gap-1 bg-slate-900 px-2.5 py-0.5 rounded-lg border border-slate-700 text-xs font-mono text-amber-300">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Hora PE: {photo.peru_time || formatPeruTime(timestamp)}</span>
+                </span>
+              )}
+              {(photo.duration_seconds !== null && photo.duration_seconds !== undefined) && (
+                <span className="inline-flex items-center gap-1 bg-blue-950 px-2.5 py-0.5 rounded-lg border border-blue-600/70 text-xs font-bold text-blue-300">
+                  <Timer className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Tomó: {photo.duration_formatted || formatDuration(photo.duration_seconds)}</span>
+                </span>
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">

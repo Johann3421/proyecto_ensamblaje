@@ -60,3 +60,4 @@ El usuario reportó que al crear o editar pasos en el editor de checklists, los 
 ## 📁 Archivos Modificados
 - `backend/app/main.py`: `canonical_resequence_model`, `auto_heal_checklist_sequence`, blindaje de `save_checklist_item`, `delete_checklist_item`, `toggle_step_cleaning`.
 - `frontend/src/views/ChecklistEditorView.jsx`: Asignación inteligente de correlativo inicial y flag de limpieza según sección activa.
+

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Check, CheckCircle, AlertTriangle, Shield, Cpu, X, ShieldCheck, ArrowRightCircle, Trash2, RotateCcw, Trash, Camera, Play, Video } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, Shield, Cpu, X, ShieldCheck, ArrowRightCircle, Trash2, RotateCcw, Trash, Camera, Play, Video, Clock, Timer } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import TransferUnitModal from '../modals/TransferUnitModal';
 import SupervisorAuditModal from '../modals/SupervisorAuditModal';
+import { formatPeruTime, formatDuration } from '../utils/timeFormat';
 
 export default function UnitDetailModal({ unit, order, stations, issues = [], currentUser, onPreviewPhoto, onClose, onSuccess, notify }) {
   const [loading, setLoading] = useState(false);
@@ -169,7 +170,10 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                           subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
                           operation: l.operation,
                           user_name: l.user_name,
-                          timestamp: l.timestamp
+                          timestamp: l.timestamp,
+                          peru_time: l.peru_time || formatPeruTime(l.timestamp),
+                          duration_seconds: l.duration_seconds,
+                          duration_formatted: l.duration_formatted || formatDuration(l.duration_seconds)
                         })}
                         className="group relative rounded-xl overflow-hidden border border-emerald-200 bg-slate-900 cursor-pointer shadow-xs aspect-square"
                       >
@@ -188,11 +192,19 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                             loading="lazy"
                           />
                         )}
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-1.5 text-white">
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/75 to-transparent p-1.5 text-white">
                           <span className="text-[10px] font-bold block leading-tight truncate">
                             #{l.step_number} {l.operation || `Paso ${l.step_number}`}
                           </span>
-                          <span className="text-[8px] text-slate-300 block truncate mt-0.5">E{l.station_number} · {l.user_name}</span>
+                          <div className="flex items-center justify-between text-[8px] text-slate-300 mt-0.5">
+                            <span>E{l.station_number} · {l.user_name}</span>
+                            <span className="font-mono text-amber-300">{l.peru_time || formatPeruTime(l.timestamp, false)}</span>
+                          </div>
+                          {(l.duration_seconds !== null && l.duration_seconds !== undefined) && (
+                            <div className="mt-0.5 inline-block text-[8px] font-bold text-sky-200 bg-sky-950/80 border border-sky-600/60 px-1 rounded">
+                              ⏱️ {l.duration_formatted || formatDuration(l.duration_seconds)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

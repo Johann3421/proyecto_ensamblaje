@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Video, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Clock } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Loader2, Play, Video, Coffee, Inbox, Shield, RefreshCw, ShieldCheck, PlayCircle, ArrowRightCircle, ClipboardList, Users, Camera, Layers, Zap, Monitor, Clock, Timer } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Card from '../components/Card';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
@@ -8,6 +8,7 @@ import ReassignStepModal from '../modals/ReassignStepModal';
 import TransferUnitModal from '../modals/TransferUnitModal';
 import SupervisorAuditModal from '../modals/SupervisorAuditModal';
 import { formatStepNumbersRange } from '../utils/steps';
+import { formatPeruTime, formatDuration } from '../utils/timeFormat';
 
 export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onPreviewPhoto, onSelectUnit, onSelectOrder, onSelectStation, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
@@ -333,6 +334,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         })
       });
       if (!res.ok) throw new Error("Error registrando el paso con foto");
+      const data = await res.json().catch(() => ({}));
       
       setTechnicianDoneSteps(prev => [...new Set([...prev, step.step_number])]);
       setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
@@ -341,7 +343,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         photo_url: photoUrl,
         user_name: currentUser.name,
         is_supervisor_verified: false,
-        timestamp: new Date().toISOString()
+        timestamp: data.timestamp || new Date().toISOString(),
+        peru_time: data.peru_time || formatPeruTime(data.timestamp || new Date().toISOString()),
+        duration_seconds: data.duration_seconds,
+        duration_formatted: data.duration_formatted || formatDuration(data.duration_seconds)
       };
       setOperatorStepLogsMap(prev => ({
         ...prev,
@@ -389,12 +394,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       if (isSupervisorMode) {
         setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
       }
+      const nowIso = new Date().toISOString();
       const newSupLog = {
         step_number: step.step_number,
         photo_url: photoUrl,
         user_name: `${currentUser.name} (Supervisor)`,
         is_supervisor_verified: true,
-        timestamp: new Date().toISOString()
+        timestamp: nowIso,
+        peru_time: formatPeruTime(nowIso)
       };
       setSupervisorStepLogsMap(prev => ({
         ...prev,
@@ -1233,13 +1240,16 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                   operation: st.operation,
                                   user_name: stepLog.user_name,
                                   timestamp: stepLog.timestamp,
+                                  peru_time: stepLog.peru_time || formatPeruTime(stepLog.timestamp),
+                                  duration_seconds: stepLog.duration_seconds,
+                                  duration_formatted: stepLog.duration_formatted || formatDuration(stepLog.duration_seconds),
                                   order_id: order?.order_id,
                                   unit_number: active_unit?.unit_number,
                                   step_number: st.step_number,
                                   station_number: assignment?.station_number
                                 });
                               }}
-                              className="mt-1.5 inline-flex items-center gap-1.5 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-900 border border-emerald-300 transition cursor-pointer"
+                              className="mt-1.5 inline-flex items-center gap-1.5 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-emerald-900 border border-emerald-300 transition cursor-pointer flex-wrap"
                             >
                               {isVid ? (
                                 <>
@@ -1251,6 +1261,18 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                   <img src={stepLog.photo_url} alt="Foto" className="w-4 h-4 object-cover rounded border border-emerald-400" />
                                   <span>Ver Foto</span>
                                 </>
+                              )}
+                              {(stepLog.peru_time || stepLog.timestamp) && (
+                                <span className="font-mono text-[9px] text-emerald-800 border-l border-emerald-300 pl-1.5 flex items-center gap-0.5">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  {stepLog.peru_time || formatPeruTime(stepLog.timestamp)}
+                                </span>
+                              )}
+                              {(stepLog.duration_seconds !== null && stepLog.duration_seconds !== undefined) && (
+                                <span className="font-bold text-[9px] text-blue-900 bg-blue-50 px-1 py-0.2 rounded border border-blue-200 flex items-center gap-0.5">
+                                  <Timer className="w-2.5 h-2.5" />
+                                  {stepLog.duration_formatted || formatDuration(stepLog.duration_seconds)}
+                                </span>
                               )}
                             </div>
                           );
@@ -1556,6 +1578,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                         operation: st.operation,
                                         user_name: opLog?.user_name || 'Operario',
                                         timestamp: opLog?.timestamp,
+                                        peru_time: opLog?.peru_time || formatPeruTime(opLog?.timestamp),
+                                        duration_seconds: opLog?.duration_seconds,
+                                        duration_formatted: opLog?.duration_formatted || formatDuration(opLog?.duration_seconds),
                                         order_id: order?.order_id,
                                         unit_number: active_unit?.unit_number,
                                         step_number: st.step_number,
@@ -1582,6 +1607,20 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                     <span className="text-[9px] text-stone-600 block">
                                       {opLog?.user_name || 'Operario'}
                                     </span>
+                                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                      {opLog?.timestamp && (
+                                        <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-emerald-900 bg-emerald-100/90 px-1.5 py-0.5 rounded border border-emerald-300">
+                                          <Clock className="w-2.5 h-2.5 text-emerald-700" />
+                                          <span>{opLog.peru_time || formatPeruTime(opLog.timestamp)}</span>
+                                        </span>
+                                      )}
+                                      {(opLog?.duration_seconds !== null && opLog?.duration_seconds !== undefined) && (
+                                        <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-blue-900 bg-blue-100/90 px-1.5 py-0.5 rounded border border-blue-300">
+                                          <Timer className="w-2.5 h-2.5 text-blue-700" />
+                                          <span>Tomó {opLog.duration_formatted || formatDuration(opLog.duration_seconds)}</span>
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               );
@@ -1604,6 +1643,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                         operation: st.operation,
                                         user_name: supLog?.user_name || 'Supervisor',
                                         timestamp: supLog?.timestamp,
+                                        peru_time: supLog?.peru_time || formatPeruTime(supLog?.timestamp),
                                         order_id: order?.order_id,
                                         unit_number: active_unit?.unit_number,
                                         step_number: st.step_number,
@@ -1630,6 +1670,12 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                     <span className="text-[9px] text-stone-600 block">
                                       {supLog?.user_name || 'Supervisor'}
                                     </span>
+                                    {supLog?.timestamp && (
+                                      <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-indigo-900 bg-indigo-100/90 px-1.5 py-0.5 rounded border border-indigo-300 mt-0.5">
+                                        <Clock className="w-2.5 h-2.5 text-indigo-700" />
+                                        <span>{supLog.peru_time || formatPeruTime(supLog.timestamp)}</span>
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               );

@@ -61,3 +61,4 @@ tags:
 ## Verificación
 - Compilación del frontend Vite: exitosa en 4.93s (`dist/index.html`, `dist/assets/index-D2IQf2M6.js`, `dist/assets/index-dUofOctB.css`).
 - Verificación visual con Playwright: captura de pantalla completa almacenada en `screenshots/bento_apple_operator_aside_view.png`.
+

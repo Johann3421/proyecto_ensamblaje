@@ -142,11 +142,18 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   const totalStationSteps = uniqueStationSteps.length;
   const lastStationStep = uniqueStationSteps[uniqueStationSteps.length - 1];
   const stepsMissingPhotos = useMemo(() => {
-    return uniqueStationSteps.filter(s => !operatorStepLogsMap[s.step_number]?.photo_url);
-  }, [uniqueStationSteps, operatorStepLogsMap]);
-  const hasLastStepPhoto = lastStationStep ? Boolean(operatorStepLogsMap[lastStationStep.step_number]?.photo_url) : false;
+    return uniqueStationSteps.filter(s => {
+      const opPhoto = operatorStepLogsMap[s.step_number]?.photo_url;
+      const supPhoto = supervisorStepLogsMap[s.step_number]?.photo_url;
+      const genPhoto = stepLogsMap[s.step_number]?.photo_url;
+      return !(opPhoto || supPhoto || genPhoto);
+    });
+  }, [uniqueStationSteps, operatorStepLogsMap, supervisorStepLogsMap, stepLogsMap]);
+  const hasLastStepPhoto = lastStationStep ? Boolean(operatorStepLogsMap[lastStationStep.step_number]?.photo_url || supervisorStepLogsMap[lastStationStep.step_number]?.photo_url || stepLogsMap[lastStationStep.step_number]?.photo_url) : false;
   const allStepsHavePhoto = totalStationSteps > 0 && stepsMissingPhotos.length === 0;
-  const allStepsDone = totalStationSteps > 0 && uniqueStationSteps.every(s => technicianDoneSteps.includes(s.step_number));
+  const allStepsDone = totalStationSteps > 0 && uniqueStationSteps.every(s => 
+    technicianDoneSteps.includes(s.step_number) || supervisorDoneSteps.includes(s.step_number) || Boolean(stepLogsMap[s.step_number])
+  );
   const isStationComplete = allStepsDone && allStepsHavePhoto;
 
   // Pasos certificados oficialmente por el supervisor
@@ -443,13 +450,20 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       }
       const data = await res.json();
       
+      if (data.is_finished && confetti) {
+        confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
+      }
+
       const nextUnitNum = data.next_unit_number;
       setCompletedSteps([]);
       setOperatorStepLogsMap({});
       setStepLogsMap({});
 
       if (nextUnitNum) {
-        notify?.(`✓ PC #${active_unit.unit_number} enviada a siguiente estación. Iniciando PC #${nextUnitNum}...`, "success");
+        notify?.(data.is_finished
+          ? `🎉 ¡PC #${active_unit.unit_number} Aprobada y Finalizada (Fin de Línea)! Iniciando PC #${nextUnitNum}...`
+          : `✓ PC #${active_unit.unit_number} enviada a siguiente estación. Iniciando PC #${nextUnitNum}...`, 
+          "success");
         localStorage.setItem('qc_active_unit', nextUnitNum);
         onSelectUnit && onSelectUnit(nextUnitNum);
       } else {

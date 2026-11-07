@@ -31,3 +31,4 @@ export function formatDuration(seconds) {
   const rem_m = m % 60;
   return `${h}h ${rem_m.toString().padStart(2, '0')}m`;
 }
+

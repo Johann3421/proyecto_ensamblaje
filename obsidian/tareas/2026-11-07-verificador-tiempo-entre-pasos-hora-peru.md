@@ -95,3 +95,4 @@ El usuario solicitó:
 - `frontend/src/modals/PhotoPreviewModal.jsx`: Metadatos forenses de tiempo en visor maximizado.
 - `frontend/src/modals/UnitDetailModal.jsx`: Trazabilidad de tiempos en detalle de unidad.
 - `frontend/src/views/AuditLogsView.jsx`: Trazabilidad de tiempos en galería y tabla de auditoría.
+

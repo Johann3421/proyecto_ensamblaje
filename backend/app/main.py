@@ -250,6 +250,29 @@ def auto_heal_checklist_sequence(db: Optional[Session] = None):
         for m in models:
             canonical_resequence_model(db, m.name)
 
+        # Sincronizar estaciones de limpieza de órdenes existentes para que coincidan con los pasos de limpieza del modelo
+        orders = db.query(QCOrder).all()
+        for ord_item in orders:
+            model_clean_steps = [
+                s.step_number for s in db.query(QCChecklistItem).filter(
+                    QCChecklistItem.model_name == ord_item.model_name,
+                    QCChecklistItem.is_cleaning == True
+                ).order_by(QCChecklistItem.step_number.asc()).all()
+            ]
+            if model_clean_steps:
+                clean_asgns = db.query(QCStationAssignment).filter(
+                    QCStationAssignment.order_id == ord_item.order_id,
+                    QCStationAssignment.is_cleaning_station == True
+                ).order_by(QCStationAssignment.station_number.asc()).all()
+                if clean_asgns:
+                    final_clean = clean_asgns[-1]
+                    clean_str = ",".join(str(n) for n in model_clean_steps)
+                    if not final_clean.step_numbers or final_clean.start_step != min(model_clean_steps):
+                        final_clean.step_numbers = clean_str
+                        final_clean.start_step = min(model_clean_steps)
+                        final_clean.end_step = max(model_clean_steps)
+                        db.commit()
+
         print("[DB Auto-Healing] Checklists de todos los modelos resecuenciados canónicamente (Ensamblaje 1..N, Limpieza N+1..M).")
     except Exception as e:
         db.rollback()
@@ -1706,6 +1729,74 @@ def reset_single_unit(order_id: str, unit_number: int, db: Session = Depends(get
     db.commit()
     return {"message": f"PC #{unit_number} reiniciada a Estación 1 con progreso en 0"}
 
+def get_station_effective_steps(
+    db: Session, 
+    order_id: str, 
+    model_name: str, 
+    station_number: int, 
+    unit_number: Optional[int] = None
+) -> List[int]:
+    """
+    Fuente única de verdad (Single Source of Truth) para calcular los pasos
+    efectivos que una estación debe ejecutar y validar, garantizando concordancia
+    al 100% entre lo que ve el operario en pantalla y lo que valida el backend al despachar.
+    """
+    all_model_steps = db.query(QCChecklistItem).filter(
+        QCChecklistItem.model_name == model_name
+    ).order_by(QCChecklistItem.step_number.asc()).all()
+    
+    valid_step_numbers = set()
+    clean_step_numbers = set()
+    for s in all_model_steps:
+        valid_step_numbers.add(s.step_number)
+        if getattr(s, "is_cleaning", False):
+            clean_step_numbers.add(s.step_number)
+            
+    assignment = db.query(QCStationAssignment).filter(
+        QCStationAssignment.order_id == order_id,
+        QCStationAssignment.station_number == station_number
+    ).first()
+    
+    if not assignment:
+        return []
+
+    assigned_step_numbers = set()
+    if assignment.step_numbers:
+        try:
+            assigned_step_numbers = {
+                int(x.strip()) for x in assignment.step_numbers.split(",") if x.strip().isdigit()
+            }
+        except Exception:
+            assigned_step_numbers = set()
+            
+    if not assigned_step_numbers and assignment.start_step and assignment.end_step:
+        raw_range = set(range(assignment.start_step, assignment.end_step + 1))
+        if assignment.is_cleaning_station and clean_step_numbers:
+            inter = raw_range & clean_step_numbers
+            if inter:
+                assigned_step_numbers = inter
+            elif not any(s in raw_range for s in valid_step_numbers - clean_step_numbers):
+                assigned_step_numbers = clean_step_numbers
+            else:
+                assigned_step_numbers = raw_range
+        else:
+            assigned_step_numbers = raw_range
+    elif assignment.is_cleaning_station and clean_step_numbers and not assigned_step_numbers:
+        assigned_step_numbers = clean_step_numbers
+
+    station_own_steps = assigned_step_numbers & valid_step_numbers
+
+    overrides = db.query(QCStepStationOverride).filter(QCStepStationOverride.order_id == order_id).all()
+    active_overrides = [
+        o for o in overrides 
+        if o.unit_number is None or (unit_number is not None and o.unit_number == unit_number)
+    ]
+    out_steps = {o.step_number for o in active_overrides if o.from_station == station_number}
+    in_steps = {o.step_number for o in active_overrides if o.target_station == station_number and o.step_number in valid_step_numbers}
+
+    effective_steps = sorted(list((station_own_steps - out_steps) | in_steps))
+    return effective_steps
+
 @api_router.get("/operator/{user_id}/station")
 def get_operator_workspace(
     user_id: str,
@@ -2130,19 +2221,15 @@ def get_operator_workspace(
     out_step_map = {o.step_number: o for o in active_overrides if o.from_station == assignment.station_number}
     in_step_map = {o.step_number: o for o in active_overrides if o.target_station == assignment.station_number}
 
-    # Determinar qué pasos pertenecen originalmente a esta estación (manual o por rango)
-    assigned_step_numbers = set()
-    if assignment.step_numbers:
-        try:
-            assigned_step_numbers = {
-                int(x.strip()) for x in assignment.step_numbers.split(",") if x.strip().isdigit()
-            }
-        except Exception:
-            assigned_step_numbers = set()
-
-    is_station_own_step = lambda num: (
-        num in assigned_step_numbers if assigned_step_numbers
-        else (assignment.start_step <= num <= assignment.end_step)
+    # Determinar qué pasos pertenecen originalmente a esta estación de manera canónica
+    effective_station_step_nums = set(
+        get_station_effective_steps(
+            db, 
+            order.order_id, 
+            order.model_name, 
+            assignment.station_number, 
+            active_unit.unit_number if active_unit else None
+        )
     )
 
     all_stations = db.query(QCStationAssignment).filter(
@@ -2219,8 +2306,8 @@ def get_operator_workspace(
                 "secondary_technician": assignment.secondary_user_name
             })
             seen_station_step_nums.add(s.step_number)
-        elif is_station_own_step(s.step_number) and s.step_number not in out_step_map:
-            # Paso original propio de la estación
+        elif s.step_number in effective_station_step_nums:
+            # Paso propio de la estación
             station_steps.append({
                 "id": s.id,
                 "model_name": s.model_name,
@@ -2311,13 +2398,15 @@ def get_operator_workspace(
             prior_station_step_nums = set()
             for st in all_stations:
                 if st.station_number < assignment.station_number:
-                    if st.step_numbers:
-                        try:
-                            prior_station_step_nums.update(int(x.strip()) for x in st.step_numbers.split(",") if x.strip().isdigit())
-                        except Exception:
-                            pass
-                    elif st.start_step and st.end_step:
-                        prior_station_step_nums.update(range(st.start_step, st.end_step + 1))
+                    prior_station_step_nums.update(
+                        get_station_effective_steps(
+                            db,
+                            order.order_id,
+                            order.model_name,
+                            st.station_number,
+                            active_unit.unit_number
+                        )
+                    )
 
             current_station_step_nums = {s["step_number"] for s in station_steps}
             seen_prior_step_nums = set()
@@ -2734,13 +2823,19 @@ def uncheck_step(req: StepUncheckRequest, db: Session = Depends(get_db)):
 @api_router.post("/operator/finish-station")
 def finish_station(data: dict, db: Session = Depends(get_db)):
     raw_order_id = data.get("order_id")
-    unit_number = data.get("unit_number")
-    station_number = data.get("station_number")
+    raw_unit_number = data.get("unit_number")
+    raw_station_number = data.get("station_number")
 
     order = resolve_order(db, raw_order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     order_id = order.order_id
+
+    try:
+        unit_number = int(raw_unit_number)
+        station_number = int(raw_station_number)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Número de unidad o estación inválido")
 
     unit = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order_id,
@@ -2756,47 +2851,32 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
             detail=f"No se puede despachar: La PC #{unit_number} se encuentra en la Estación {unit.current_station}, no en la Estación {station_number}."
         )
 
-    # Obtener los pasos asignados a esta estación
-    assignment = db.query(QCStationAssignment).filter(
-        QCStationAssignment.order_id == order_id,
-        QCStationAssignment.station_number == station_number
-    ).first()
-
-    assigned_steps = []
-    if assignment:
-        if assignment.step_numbers:
-            try:
-                assigned_steps = [int(x.strip()) for x in assignment.step_numbers.split(",") if x.strip().isdigit()]
-            except Exception:
-                assigned_steps = []
-        if not assigned_steps and assignment.start_step and assignment.end_step:
-            assigned_steps = list(range(assignment.start_step, assignment.end_step + 1))
-
-    # Filtrar pasos reasignados/transferidos
-    overrides = db.query(QCStepStationOverride).filter(QCStepStationOverride.order_id == order_id).all()
-    out_steps = {o.step_number for o in overrides if o.from_station == station_number and (o.unit_number is None or o.unit_number == unit_number)}
-    in_steps = {o.step_number for o in overrides if o.target_station == station_number and (o.unit_number is None or o.unit_number == unit_number)}
-    
-    effective_steps = sorted(list((set(assigned_steps) - out_steps) | in_steps))
+    # Fuente única de verdad para pasos efectivos de la estación
+    effective_steps = get_station_effective_steps(
+        db=db,
+        order_id=order_id,
+        model_name=order.model_name,
+        station_number=station_number,
+        unit_number=unit_number
+    )
 
     if effective_steps:
-        # 1. Comprobar que todos los pasos de la estación estén completados por el TÉCNICO (is_supervisor_verified == False)
+        # 1. Comprobar que todos los pasos de la estación estén completados (status == "PASS")
         completed_logs = db.query(QCStepLog).filter(
             QCStepLog.order_id == order_id,
             QCStepLog.unit_number == unit_number,
             QCStepLog.step_number.in_(effective_steps),
-            QCStepLog.status == "PASS",
-            QCStepLog.is_supervisor_verified == False
+            QCStepLog.status == "PASS"
         ).all()
         completed_set = {l.step_number for l in completed_logs}
         missing = [s for s in effective_steps if s not in completed_set]
         if missing:
             raise HTTPException(
                 status_code=400,
-                detail=f"No se puede avanzar: El técnico debe completar {len(missing)} paso(s) en la Estación {station_number} (Pasos: {', '.join(map(str, missing[:5]))})."
+                detail=f"No se puede avanzar: Faltan completar {len(missing)} paso(s) en la Estación {station_number} (Pasos: {', '.join(map(str, missing[:5]))})."
             )
 
-        # 2. VALIDACIÓN ESTRICTA: TODOS los pasos de la estación DEBEN tener fotografía de evidencia tomada por el técnico
+        # 2. VALIDACIÓN ESTRICTA: TODOS los pasos de la estación DEBEN tener fotografía de evidencia
         steps_without_photo = [
             s for s in effective_steps
             if not any(l.step_number == s and l.photo_url and l.photo_url.strip() for l in completed_logs)
@@ -2807,8 +2887,16 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
                 detail=f"No se puede avanzar de estación: Faltan fotografías de evidencia obligatoria en {len(steps_without_photo)} paso(s) (Pasos: {', '.join(map(str, steps_without_photo[:5]))})."
             )
 
+    # Cálculo robusto del total real de estaciones
+    max_station_assignment = db.query(func.max(QCStationAssignment.station_number)).filter(
+        QCStationAssignment.order_id == order_id
+    ).scalar()
+    total_stations = max(order.total_stations or 1, max_station_assignment or 1)
+
     next_station = station_number + 1
-    if next_station > order.total_stations:
+    is_finished = next_station > total_stations
+
+    if is_finished:
         unit.current_station = next_station
         unit.overall_status = "PASSED"
         unit.completed_at = datetime.utcnow()
@@ -2827,9 +2915,9 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
     ).order_by(QCPCUnit.unit_number.asc()).first()
 
     return {
-        "message": f"PC #{unit_number} completada y enviada a Estación {next_station if next_station <= order.total_stations else 'FINALIZADO'}",
+        "message": f"PC #{unit_number} completada y aprobada (Fin de Línea)" if is_finished else f"PC #{unit_number} completada y enviada a Estación {next_station}",
         "next_station": next_station,
-        "is_finished": next_station > order.total_stations,
+        "is_finished": is_finished,
         "next_unit_number": next_unit.unit_number if next_unit else None
     }
 

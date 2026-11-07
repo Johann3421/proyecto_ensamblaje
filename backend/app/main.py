@@ -1713,12 +1713,15 @@ def delete_unit_from_order(order_id: str, unit_number: int, db: Session = Depend
 
 @api_router.post("/orders/{order_id}/units/{unit_number}/reset")
 def reset_single_unit(order_id: str, unit_number: int, db: Session = Depends(get_db)):
-    unit = db.query(QCPCUnit).filter(QCPCUnit.order_id == order_id, QCPCUnit.unit_number == unit_number).first()
+    order = resolve_order(db, order_id)
+    real_order_id = order.order_id if order else order_id
+
+    unit = db.query(QCPCUnit).filter(QCPCUnit.order_id == real_order_id, QCPCUnit.unit_number == unit_number).first()
     if not unit:
         raise HTTPException(status_code=404, detail=f"PC #{unit_number} no encontrada")
     
-    db.query(QCStepLog).filter(QCStepLog.order_id == order_id, QCStepLog.unit_number == unit_number).delete()
-    db.query(QCIssue).filter(QCIssue.order_id == order_id, QCIssue.unit_number == unit_number).delete()
+    db.query(QCStepLog).filter(QCStepLog.order_id == real_order_id, QCStepLog.unit_number == unit_number).delete()
+    db.query(QCIssue).filter(QCIssue.order_id == real_order_id, QCIssue.unit_number == unit_number).delete()
     
     unit.current_station = 1
     unit.overall_status = "PENDING"
@@ -1728,6 +1731,130 @@ def reset_single_unit(order_id: str, unit_number: int, db: Session = Depends(get
     
     db.commit()
     return {"message": f"PC #{unit_number} reiniciada a Estación 1 con progreso en 0"}
+
+@api_router.post("/orders/{order_id}/units/{unit_number}/resume")
+async def resume_unit(order_id: str, unit_number: int, request: Request, db: Session = Depends(get_db)):
+    """Subsanar fallas de una unidad y reincorporarla activamente al flujo de producción"""
+    order = resolve_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    real_order_id = order.order_id
+
+    unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == real_order_id, 
+        QCPCUnit.unit_number == unit_number
+    ).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail=f"PC #{unit_number} no encontrada")
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    user_name = body.get("user_name") or "Control de Calidad"
+    user_id = body.get("user_id") or "SUPERVISOR"
+    notes = body.get("notes") or f"Falla subsanada. PC #{unit_number} reanudada en Estación {unit.current_station}."
+
+    # Subsanar todas las fallas abiertas de esta unidad
+    open_issues = db.query(QCIssue).filter(
+        QCIssue.order_id == real_order_id,
+        QCIssue.unit_number == unit_number,
+        QCIssue.status == "OPEN"
+    ).all()
+    for iss in open_issues:
+        iss.status = "RESOLVED"
+
+    # Restaurar el estado de la unidad según su progreso real
+    if unit.completed_at is not None or unit.current_station > order.total_stations:
+        unit.overall_status = "PASSED"
+    else:
+        unit.overall_status = "IN_PROGRESS"
+
+    # Registrar evento RESUME en la auditoría forense
+    resume_log = QCStepLog(
+        order_id=real_order_id,
+        unit_number=unit_number,
+        step_number=0,
+        station_number=unit.current_station,
+        user_id=user_id,
+        user_name=user_name,
+        status="RESUME",
+        notes=notes,
+        timestamp=datetime.utcnow()
+    )
+    db.add(resume_log)
+    db.commit()
+
+    return {
+        "message": f"Falla subsanada exitosamente. PC #{unit_number} reanudada en Estación {unit.current_station}.",
+        "unit_number": unit_number,
+        "current_station": unit.current_station,
+        "overall_status": unit.overall_status,
+        "resolved_issues": len(open_issues)
+    }
+
+@api_router.post("/issues/{issue_id}/resolve")
+async def resolve_issue(issue_id: int, request: Request, db: Session = Depends(get_db)):
+    """Subsanar un reporte de falla individual y desbloquear la PC si ya no tiene fallas abiertas"""
+    issue = db.query(QCIssue).filter(QCIssue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Falla no encontrada")
+
+    issue.status = "RESOLVED"
+    db.flush()
+    order = resolve_order(db, issue.order_id)
+    real_order_id = order.order_id if order else issue.order_id
+
+    remaining_open = db.query(QCIssue).filter(
+        QCIssue.order_id == real_order_id,
+        QCIssue.unit_number == issue.unit_number,
+        QCIssue.status == "OPEN",
+        QCIssue.id != issue_id
+    ).count()
+
+    unit = db.query(QCPCUnit).filter(
+        QCPCUnit.order_id == real_order_id,
+        QCPCUnit.unit_number == issue.unit_number
+    ).first()
+
+    if unit and remaining_open == 0 and unit.overall_status == "FAILED":
+        if order and (unit.completed_at is not None or unit.current_station > order.total_stations):
+            unit.overall_status = "PASSED"
+        else:
+            unit.overall_status = "IN_PROGRESS"
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    user_name = body.get("user_name") or "Control de Calidad"
+    user_id = body.get("user_id") or "SUPERVISOR"
+    notes = body.get("notes") or f"Falla #{issue_id} ('{issue.issue_title}') subsanada."
+
+    resume_log = QCStepLog(
+        order_id=real_order_id,
+        unit_number=issue.unit_number,
+        step_number=issue.step_number or 0,
+        station_number=issue.station_number,
+        user_id=user_id,
+        user_name=user_name,
+        status="RESUME",
+        notes=notes,
+        timestamp=datetime.utcnow()
+    )
+    db.add(resume_log)
+    db.commit()
+
+    return {
+        "message": f"Falla #{issue_id} subsanada exitosamente.",
+        "issue_id": issue_id,
+        "remaining_open_issues": remaining_open,
+        "unit_overall_status": unit.overall_status if unit else None
+    }
 
 def get_station_effective_steps(
     db: Session, 
@@ -2849,6 +2976,12 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=400,
             detail=f"No se puede despachar: La PC #{unit_number} se encuentra en la Estación {unit.current_station}, no en la Estación {station_number}."
+        )
+
+    if unit.overall_status == "FAILED":
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede despachar: La PC #{unit_number} tiene una falla reportada pendiente de subsanar."
         )
 
     # Fuente única de verdad para pasos efectivos de la estación

@@ -62,7 +62,15 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
   const handleResumeUnit = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}/resume`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${unit.unit_number}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: currentUser?.id || "SUPERVISOR",
+          user_name: currentUser?.name || "Supervisor de Calidad",
+          notes: `Falla subsanada por ${currentUser?.name || 'Supervisor'}. PC #${unit.unit_number} reanudada en línea.`
+        })
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Error al reanudar PC");
       onSuccess(data.message || `PC #${unit.unit_number} reincorporada`);
@@ -226,7 +234,9 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                     <div key={idx} className="bg-rose-50 border border-rose-200 rounded-xl p-3 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-rose-900">{iss.issue_title}</span>
-                        <Badge variant="danger" size="sm">{iss.status || "OPEN"}</Badge>
+                        <Badge variant={iss.status === "RESOLVED" ? "success" : "danger"} size="sm">
+                          {iss.status === "RESOLVED" ? "SUBSANADA" : "ABIERTA"}
+                        </Badge>
                       </div>
                       {iss.description && (
                         <p className="text-[11px] text-rose-800 leading-relaxed">{iss.description}</p>
@@ -309,7 +319,7 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
             <div className="pt-2 border-t border-gray-200 space-y-2">
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Acciones de Control</p>
               
-              {unit.overall_status === "FAILED" && (
+              {(unit.overall_status === "FAILED" || unitIssues.some(i => i.status === "OPEN")) && (
                 <button
                   disabled={loading}
                   onClick={handleResumeUnit}

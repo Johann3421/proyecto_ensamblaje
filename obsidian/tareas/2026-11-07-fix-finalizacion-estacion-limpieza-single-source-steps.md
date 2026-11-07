@@ -50,3 +50,4 @@ En el último apartado del flujo (Estación de Limpieza / Fin de Línea, ej. Est
    - Estación 5 con rango 43..52 identificó efectivamente solo los pasos `[49, 50, 51, 52]`.
    - Con fotos adjuntas en 49..52, `finish_station` devolvió HTTP 200 con `is_finished=True`, `next_station=6` y la unidad marcada como `PASSED`.
 2. Compilación exitosa del frontend (`rtk npm --prefix frontend run build`) en 4.12s sin advertencias de sintaxis.
+

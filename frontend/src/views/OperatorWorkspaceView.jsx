@@ -479,6 +479,28 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
     }
   };
 
+  const handleResumeUnitFromWorkspace = async () => {
+    if (!active_unit) return;
+    try {
+      const res = await fetch(`${API_BASE}/orders/${order.order_id}/units/${active_unit.unit_number}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: currentUser?.id || "OPERATOR",
+          user_name: currentUser?.name || "Operario de Puesto",
+          notes: `Falla subsanada en puesto. PC #${active_unit.unit_number} reanudada en Estación ${assignment.station_number}.`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al subsanar falla");
+      notify?.(data.message || `✓ Falla subsanada. PC #${active_unit.unit_number} reanudada.`, "success");
+      onRefresh && onRefresh();
+    } catch (err) {
+      if (notify) notify(err.message || "Error al subsanar falla", "danger");
+      else console.error("Error:", err);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-4 fade-in pb-8">
       {/* Selector de Estaciones para Operadores con Múltiples Puestos Asignados */}
@@ -681,6 +703,30 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             </div>
           )}
 
+          {active_unit.overall_status === "FAILED" && (
+            <div className="bg-rose-50/95 border-b border-rose-300 p-3 space-y-2">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-xs font-bold text-rose-950 block leading-tight">
+                    PC #{active_unit.unit_number.toString().padStart(2, '0')} — Bloqueada por Falla Reportada
+                  </span>
+                  <span className="text-[10px] text-rose-800 block mt-0.5 leading-snug">
+                    Esta unidad tiene un reporte de falla pendiente de subsanar antes de continuar.
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleResumeUnitFromWorkspace}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition touch-target"
+              >
+                <CheckCircle className="w-4 h-4 text-white" />
+                <span>✓ Subsanar Falla y Reanudar PC en Línea</span>
+              </button>
+            </div>
+          )}
+
               <div className="bg-white text-stone-900 p-4 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -837,6 +883,24 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     No tienes más PCs en cola en este momento.
                   </span>
                 )}
+              </div>
+            ) : active_unit.overall_status === "FAILED" ? (
+              <div className="bg-rose-50 p-3.5 rounded-2xl text-center border border-rose-300 space-y-2">
+                <p className="text-xs font-bold text-rose-900 flex items-center justify-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  <span>PC Bloqueada por Falla</span>
+                </p>
+                <p className="text-[11px] text-rose-800 leading-snug">
+                  No se puede despachar la PC #{active_unit.unit_number.toString().padStart(2, '0')} mientras tenga una falla activa.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResumeUnitFromWorkspace}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition touch-target"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>✓ Subsanar Falla Ahora</span>
+                </button>
               </div>
             ) : isStationComplete ? (
               <button
@@ -1860,6 +1924,24 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     No tienes más PCs en cola en este momento.
                   </span>
                 )}
+              </div>
+            ) : active_unit.overall_status === "FAILED" ? (
+              <div className="bg-rose-50 p-3.5 rounded-2xl text-center border border-rose-300 space-y-2">
+                <p className="text-xs font-bold text-rose-900 flex items-center justify-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  <span>PC Bloqueada por Falla</span>
+                </p>
+                <p className="text-[11px] text-rose-800 leading-snug">
+                  No se puede despachar la PC #{active_unit.unit_number.toString().padStart(2, '0')} mientras tenga una falla activa.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResumeUnitFromWorkspace}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition touch-target"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>✓ Subsanar Falla Ahora</span>
+                </button>
               </div>
             ) : isStationComplete ? (
               <button

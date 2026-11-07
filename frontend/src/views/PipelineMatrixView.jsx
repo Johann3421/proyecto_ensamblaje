@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Check, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, RefreshCw, X, Columns, ShieldCheck, Trash2, RotateCcw, Trash, Camera, MoreHorizontal } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, RefreshCw, X, Columns, ShieldCheck, Trash2, RotateCcw, Trash, Camera, MoreHorizontal } from 'lucide-react';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
 
@@ -377,6 +377,25 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
                     {iss.status === 'OPEN' ? 'ABIERTO' : 'RESUELTO'}
                   </span>
                 </div>
+
+                {iss.status === 'OPEN' && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const targetUnit = (matrixData?.units || []).find(u => u.unit_number === iss.unit_number) || {
+                        unit_number: iss.unit_number,
+                        overall_status: "FAILED",
+                        current_station: iss.station_number
+                      };
+                      onSelectUnit && onSelectUnit(targetUnit);
+                    }}
+                    className="w-full py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-xs touch-target"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5 text-white" />
+                    <span>Subsanar Falla en PC #{iss.unit_number.toString().padStart(2, '0')}</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>

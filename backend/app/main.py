@@ -2545,6 +2545,13 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
                 raise HTTPException(status_code=403, detail="No estás asignado a esta estación de trabajo.")
 
     if req.status == "PASS":
+        # Validación de evidencia fotográfica obligatoria (Norma QC)
+        if not req.photo_url or not req.photo_url.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede aprobar el paso #{req.step_number} sin adjuntar la fotografía de evidencia obligatoria."
+            )
+
         # Limpiar únicamente logs del TÉCNICO previos para este paso (respetando certificaciones del supervisor)
         db.query(QCStepLog).filter(
             QCStepLog.order_id == real_order_id,
@@ -2724,13 +2731,15 @@ def finish_station(data: dict, db: Session = Depends(get_db)):
                 detail=f"No se puede avanzar: El técnico debe completar {len(missing)} paso(s) en la Estación {station_number} (Pasos: {', '.join(map(str, missing[:5]))})."
             )
 
-        # 2. VALIDACIÓN ESTRICTA: El último paso de la estación DEBE tener fotografía de evidencia tomada por el técnico
-        last_step = effective_steps[-1]
-        last_log = next((l for l in completed_logs if l.step_number == last_step), None)
-        if not last_log or not last_log.photo_url or not last_log.photo_url.strip():
+        # 2. VALIDACIÓN ESTRICTA: TODOS los pasos de la estación DEBEN tener fotografía de evidencia tomada por el técnico
+        steps_without_photo = [
+            s for s in effective_steps
+            if not any(l.step_number == s and l.photo_url and l.photo_url.strip() for l in completed_logs)
+        ]
+        if steps_without_photo:
             raise HTTPException(
                 status_code=400,
-                detail=f"No se puede avanzar de estación: El último paso de la estación (Paso #{last_step}) requiere fotografía de evidencia obligatoria del técnico antes de despachar."
+                detail=f"No se puede avanzar de estación: Faltan fotografías de evidencia obligatoria en {len(steps_without_photo)} paso(s) (Pasos: {', '.join(map(str, steps_without_photo[:5]))})."
             )
 
     next_station = station_number + 1

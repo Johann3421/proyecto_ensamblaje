@@ -140,9 +140,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
   const totalStationSteps = uniqueStationSteps.length;
   const lastStationStep = uniqueStationSteps[uniqueStationSteps.length - 1];
+  const stepsMissingPhotos = useMemo(() => {
+    return uniqueStationSteps.filter(s => !operatorStepLogsMap[s.step_number]?.photo_url);
+  }, [uniqueStationSteps, operatorStepLogsMap]);
   const hasLastStepPhoto = lastStationStep ? Boolean(operatorStepLogsMap[lastStationStep.step_number]?.photo_url) : false;
+  const allStepsHavePhoto = totalStationSteps > 0 && stepsMissingPhotos.length === 0;
   const allStepsDone = totalStationSteps > 0 && uniqueStationSteps.every(s => technicianDoneSteps.includes(s.step_number));
-  const isStationComplete = allStepsDone && hasLastStepPhoto;
+  const isStationComplete = allStepsDone && allStepsHavePhoto;
 
   // Pasos certificados oficialmente por el supervisor
   const supervisorVerifiedCount = useMemo(() => {
@@ -256,9 +260,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         setSubmittingStep(null);
       }
     } else {
-      // Exigencia técnica de foto: definida por ingeniería (step.requires_photo) o hito final de estación
+      // Exigencia técnica de foto: obligatoria para todo paso por Norma QC de Calidad
       const isLastStep = lastStationStep && step.step_number === lastStationStep.step_number;
-      const requiresPhotoForStep = Boolean(step.requires_photo || isLastStep);
+      const requiresPhotoForStep = requirePhotoVerification || isLastStep || step.requires_photo !== false;
       if (requiresPhotoForStep) {
         setPhotoStepModal(step);
       } else {
@@ -827,22 +831,22 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   <><ArrowRightCircle className="w-6 h-6" /><span>Despachar PC #{active_unit.unit_number.toString().padStart(2, '0')} a Estación {assignment.station_number + 1} →</span></>
                 )}
               </button>
-            ) : allStepsDone && !hasLastStepPhoto ? (
+            ) : allStepsDone && stepsMissingPhotos.length > 0 ? (
               <div className="bg-amber-50 p-3.5 rounded-2xl text-center border border-amber-300 space-y-2">
                 <p className="text-xs font-bold text-amber-900 flex items-center justify-center gap-1.5">
                   <Camera className="w-4 h-4 text-amber-700" />
-                  <span>Foto obligatoria requerida en Paso #{lastStationStep?.step_number}</span>
+                  <span>Fotos obligatorias requeridas ({stepsMissingPhotos.length} pendiente{stepsMissingPhotos.length > 1 ? 's' : ''})</span>
                 </p>
                 <p className="text-[11px] text-amber-800 leading-snug">
-                  Para despachar la PC a la siguiente estación debes tomar la foto de evidencia del último paso: <strong>{lastStationStep?.operation}</strong>.
+                  Para despachar la PC debes adjuntar la foto de evidencia de: <strong>Paso #{stepsMissingPhotos[0]?.step_number}: {stepsMissingPhotos[0]?.operation}</strong>.
                 </p>
                 <button
                   type="button"
-                  onClick={() => setPhotoStepModal(lastStationStep)}
+                  onClick={() => setPhotoStepModal(stepsMissingPhotos[0])}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition inline-flex items-center gap-1.5 shadow-xs touch-target"
                 >
                   <Camera className="w-3.5 h-3.5" />
-                  <span>Tomar Foto del Paso #{lastStationStep?.step_number} Ahora</span>
+                  <span>Tomar Foto de Paso #{stepsMissingPhotos[0]?.step_number} Ahora</span>
                 </button>
               </div>
             ) : (
@@ -1811,22 +1815,22 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   <><ArrowRightCircle className="w-6 h-6" /><span>Despachar PC #{active_unit.unit_number.toString().padStart(2, '0')} a Estación {assignment.station_number + 1} →</span></>
                 )}
               </button>
-            ) : allStepsDone && !hasLastStepPhoto ? (
+            ) : allStepsDone && stepsMissingPhotos.length > 0 ? (
               <div className="bg-amber-50 p-3.5 rounded-2xl text-center border border-amber-300 space-y-2">
                 <p className="text-xs font-bold text-amber-900 flex items-center justify-center gap-1.5">
                   <Camera className="w-4 h-4 text-amber-700" />
-                  <span>Foto obligatoria requerida en Paso #{lastStationStep?.step_number}</span>
+                  <span>Fotos obligatorias requeridas ({stepsMissingPhotos.length} pendiente{stepsMissingPhotos.length > 1 ? 's' : ''})</span>
                 </p>
                 <p className="text-[11px] text-amber-800 leading-snug">
-                  Para despachar la PC a la siguiente estación debes tomar la foto de evidencia del último paso: <strong>{lastStationStep?.operation}</strong>.
+                  Para despachar la PC debes adjuntar la foto de evidencia de: <strong>Paso #{stepsMissingPhotos[0]?.step_number}: {stepsMissingPhotos[0]?.operation}</strong>.
                 </p>
                 <button
                   type="button"
-                  onClick={() => setPhotoStepModal(lastStationStep)}
+                  onClick={() => setPhotoStepModal(stepsMissingPhotos[0])}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition inline-flex items-center gap-1.5 shadow-xs touch-target"
                 >
                   <Camera className="w-3.5 h-3.5" />
-                  <span>Tomar Foto del Paso #{lastStationStep?.step_number} Ahora</span>
+                  <span>Tomar Foto de Paso #{stepsMissingPhotos[0]?.step_number} Ahora</span>
                 </button>
               </div>
             ) : (

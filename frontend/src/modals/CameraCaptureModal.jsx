@@ -239,6 +239,57 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
     }
   };
 
+  // Disparo Rápido de 1-Toque (Captura, compresión y guardado inmediato sin pantalla intermedia)
+  const handleInstantCaptureAndUpload = async () => {
+    if (!videoRef.current || loading || compressing) return;
+    try {
+      setLoading(true);
+      setCompressing(true);
+      hapticTap();
+      const video = videoRef.current;
+      const vWidth = video.videoWidth || 1280;
+      const vHeight = video.videoHeight || 720;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = vWidth;
+      canvas.height = vHeight;
+      const ctx = canvas.getContext("2d");
+
+      if (hasHardwareZoom || zoom <= 1) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      } else {
+        const cropW = vWidth / zoom;
+        const cropH = vHeight / zoom;
+        const cropX = (vWidth - cropW) / 2;
+        const cropY = (vHeight - cropH) / 2;
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+      }
+
+      const rawDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      const optimizedDataUrl = await compressImageToOptimized(rawDataUrl, 1280, 0.75);
+
+      const res = await fetchWithRetry(`${API_BASE}/camera/capture-base64`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: optimizedDataUrl, prefix })
+      }, { retries: 2 });
+      if (!res.ok) throw new Error("Error al procesar fotografía en backend");
+      const data = await res.json();
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      hapticSuccess();
+      onCapture(data.url, data.type || "image");
+    } catch (err) {
+      console.error("Error en disparo rápido:", err);
+      setCameraError("Error en disparo rápido: " + err.message);
+      hapticError();
+      setLoading(false);
+      setCompressing(false);
+    }
+  };
+
   // Iniciar grabación de video de 8 segundos con auto-stop y sin audio
   const handleStartRecording = () => {
     if (!stream) return;
@@ -727,15 +778,40 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                     </button>
                   )
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleTakeSnapshot}
-                    disabled={!!cameraError || compressing}
-                    className="flex-1 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/40 touch-manipulation"
-                  >
-                    <Camera className="w-5 h-5" />
-                    <span>{compressing ? "Comprimiendo..." : "Capturar Foto"}</span>
-                  </button>
+                  <>
+                    {/* Botón de Disparo Rápido de 1-Toque */}
+                    <button
+                      type="button"
+                      onClick={handleInstantCaptureAndUpload}
+                      disabled={!!cameraError || compressing || loading}
+                      className="flex-1 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/40 touch-manipulation"
+                      title="Captura y verifica inmediatamente en un solo toque"
+                    >
+                      {loading || compressing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 text-amber-300 fill-amber-300 flex-shrink-0" />
+                          <span>Capturar y Guardar (1-Toque)</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Botón secundario para revisar encuadre */}
+                    <button
+                      type="button"
+                      onClick={handleTakeSnapshot}
+                      disabled={!!cameraError || compressing || loading}
+                      className="px-2.5 min-h-[48px] bg-slate-800 hover:bg-slate-750 active:scale-95 disabled:opacity-50 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5 touch-manipulation flex-shrink-0"
+                      title="Capturar y previsualizar antes de guardar"
+                    >
+                      <Camera className="w-4 h-4 text-slate-400" />
+                      <span className="hidden sm:inline">Revisar</span>
+                    </button>
+                  </>
                 )}
               </>
             ) : (

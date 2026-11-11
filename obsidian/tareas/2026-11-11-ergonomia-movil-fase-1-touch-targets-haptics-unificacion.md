@@ -75,3 +75,4 @@ El diagnóstico ergonómico identificó violaciones clave:
    - `rtk npm --prefix frontend run build` finalizado en 4.85s sin errores de bundle ni estilos.
 2. **Ergonomía Táctil**:
    - Todos los botones interactivos principales superan los 48px de altura con clase `touch-manipulation` y `active:scale-95`.
+

@@ -232,6 +232,26 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
     return uniqueStationSteps.find(st => !technicianDoneSteps.includes(st.step_number) && !operatorStepLogsMap[st.step_number]) || null;
   }, [uniqueStationSteps, technicianDoneSteps, supervisorDoneSteps, operatorStepLogsMap, supervisorStepLogsMap, isSupervisorMode]);
 
+  // Modo de visualización de Checklist (Fase 2: Enfoque 1 a 1 vs Lista Completa)
+  const [checklistMode, setChecklistMode] = useState(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 768 ? 'focus' : 'all';
+  });
+  const [focusedStepNumber, setFocusedStepNumber] = useState(null);
+
+  // Sincronizar el paso enfocado al cambiar de PC o si el activo cambia
+  useEffect(() => {
+    if (activePendingStep) {
+      setFocusedStepNumber(activePendingStep.step_number);
+    } else if (displayedStationSteps.length > 0) {
+      setFocusedStepNumber(displayedStationSteps[0].step_number);
+    }
+  }, [active_unit?.unit_number, activePendingStep?.step_number]);
+
+  const focusedStep = useMemo(() => {
+    if (!displayedStationSteps || displayedStationSteps.length === 0) return null;
+    return displayedStationSteps.find(s => s.step_number === focusedStepNumber) || activePendingStep || displayedStationSteps[0];
+  }, [displayedStationSteps, focusedStepNumber, activePendingStep]);
+
   const handleToggleStep = async (step) => {
     if (isHistorical) {
       notify?.("Esta PC ya completó tu estación y está en modo histórico (solo lectura).", "info");
@@ -424,7 +444,20 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
       }
 
-      // Auto-avance suave al siguiente paso pendiente
+      // Auto-avance ergonómico en Modo Continuo (Fase 2)
+      const nextPending = displayedStationSteps.find(st => 
+        st.step_number > step.step_number && 
+        !technicianDoneSteps.includes(st.step_number) && 
+        st.step_number !== step.step_number
+      ) || displayedStationSteps.find(st => 
+        !technicianDoneSteps.includes(st.step_number) && 
+        st.step_number !== step.step_number
+      );
+      if (nextPending) {
+        setFocusedStepNumber(nextPending.step_number);
+      }
+
+      // Auto-avance suave al siguiente paso pendiente en modo Lista
       setTimeout(() => {
         const nextStepCard = document.getElementById(`step-card-${step.step_number + 1}`);
         if (nextStepCard) {
@@ -481,6 +514,19 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       setSupervisorPhotoStepModal(null);
       hapticSuccess();
       notify(`📸 ✓ V°B° de cumplimiento Paso #${step.step_number} registrado`);
+
+      // Auto-avance del supervisor en Modo Continuo
+      const nextPendingSup = displayedStationSteps.find(st => 
+        st.step_number > step.step_number && 
+        !supervisorDoneSteps.includes(st.step_number) && 
+        st.step_number !== step.step_number
+      ) || displayedStationSteps.find(st => 
+        !supervisorDoneSteps.includes(st.step_number) && 
+        st.step_number !== step.step_number
+      );
+      if (nextPendingSup) {
+        setFocusedStepNumber(nextPendingSup.step_number);
+      }
     } catch (err) {
       hapticError();
       if (notify) notify(err.message || "Error al registrar foto de supervisión", "danger");
@@ -1482,7 +1528,51 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
             {/* Lista Principal de Pasos de la Estación */}
             <Card className="overflow-hidden border border-stone-200/90 shadow-sm bg-white rounded-3xl">
-          <div className="p-3 space-y-3">
+          <div className="p-3 sm:p-4 space-y-3">
+            {/* Cabecera Bento del Checklist con Selector de Modo (Fase 2) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-stone-100 gap-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/60 flex-shrink-0">
+                  <ClipboardList className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-stone-900">
+                    Operaciones de Estación {assignment.station_number}
+                  </h3>
+                  <p className="text-[11px] text-stone-500">
+                    {technicianVerifiedCount} de {totalStationSteps} pasos listos {isSupervisorMode && `· ${supervisorVerifiedCount} V°B°`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="bg-stone-100 p-0.5 rounded-xl border border-stone-200/80 flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => { hapticSelection(); setChecklistMode('focus'); }}
+                    className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 touch-manipulation active:scale-95 ${
+                      checklistMode === 'focus' ? 'bg-white text-blue-600 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    title="Modo enfoque continuo 1 a 1 para celular y pantalla táctil"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Paso a Paso</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { hapticSelection(); setChecklistMode('all'); }}
+                    className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 touch-manipulation active:scale-95 ${
+                      checklistMode === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                    title="Ver listado completo de todos los pasos"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Lista ({totalStationSteps})</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {totalStationSteps === 0 ? (
               <div className="p-6 text-center text-stone-500 bg-stone-50 border border-dashed border-stone-300 rounded-2xl text-xs">
                 <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
@@ -1491,7 +1581,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   La orden no cuenta con pasos configurados para esta estación. Contacta al supervisor o administrador de línea.
                 </p>
               </div>
-            ) : displayedStationSteps.length === 0 && (
+            ) : displayedStationSteps.length === 0 ? (
               <div className="p-6 text-center text-stone-500 bg-stone-50 border border-dashed border-stone-300 rounded-2xl text-xs">
                 <ShieldCheck className="w-8 h-8 text-blue-600 mx-auto mb-2" />
                 <p className="font-bold text-stone-900">No hay pasos con tu filtro de supervisión en esta estación</p>
@@ -1506,8 +1596,255 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   Ver todos los pasos de la estación
                 </button>
               </div>
-            )}
-            {displayedStationSteps.map((st) => {
+            ) : checklistMode === 'focus' && focusedStep ? (
+              /* MODO ENFOQUE PASO A PASO (Fase 2 - Bento Apple Focus Mode) */
+              isStationComplete ? (
+                <div className="p-6 text-center bg-gradient-to-b from-emerald-50/60 to-white rounded-2xl border border-emerald-200/80 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-sm">
+                    <CheckCircle className="w-9 h-9" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-black text-stone-900">
+                      🎉 ¡Estación {assignment.station_number} Completada al 100%!
+                    </h3>
+                    <p className="text-xs text-stone-600 max-w-sm mx-auto">
+                      Los {totalStationSteps} pasos de la <strong>PC #{active_unit.unit_number.toString().padStart(2, '0')}</strong> han sido ejecutados y validados con evidencia.
+                    </p>
+                  </div>
+
+                  <div className="pt-2 max-w-md mx-auto space-y-2">
+                    <button
+                      onClick={handleFinishStation}
+                      disabled={finishingUnit}
+                      className="w-full min-h-[54px] bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg flex items-center justify-center gap-2.5 transition touch-manipulation pulse-glow"
+                    >
+                      {finishingUnit ? (
+                        <><Loader2 className="w-5 h-5 animate-spin" /><span>Despachando...</span></>
+                      ) : assignment.station_number >= order.total_stations ? (
+                        <><CheckCircle className="w-5 h-5" /><span>🎉 Finalizar PC #{active_unit.unit_number.toString().padStart(2, '0')} (Fin de Línea)</span></>
+                      ) : (
+                        <><ArrowRightCircle className="w-5 h-5" /><span>Despachar PC #{active_unit.unit_number.toString().padStart(2, '0')} a Estación {assignment.station_number + 1} →</span></>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChecklistMode('all')}
+                      className="text-xs text-stone-500 hover:text-stone-800 font-semibold underline block mx-auto py-1"
+                    >
+                      Ver desglose de todos los pasos y fotos
+                    </button>
+                  </div>
+                </div>
+              ) : (() => {
+                const currentStepIndex = displayedStationSteps.findIndex(s => s.step_number === focusedStep.step_number);
+                const isTechnicianDone = technicianDoneSteps.includes(focusedStep.step_number);
+                const supLog = supervisorStepLogsMap[focusedStep.step_number];
+                const isSupervisorVerified = supervisorDoneSteps.includes(focusedStep.step_number) || Boolean(supLog);
+                const isStepComplete = isSupervisorMode ? isSupervisorVerified : isTechnicianDone;
+                const opLog = operatorStepLogsMap[focusedStep.step_number];
+
+                return (
+                  <div className="bg-white rounded-2xl border-2 border-blue-500/70 shadow-md p-4 space-y-4">
+                    {/* Barra superior del paso */}
+                    <div className="flex items-center justify-between gap-2 border-b border-stone-100 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-9 h-9 rounded-xl bg-blue-600 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                          #{focusedStep.step_number}
+                        </span>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                            Paso {currentStepIndex + 1} de {displayedStationSteps.length}
+                          </span>
+                          <span className="text-xs font-bold text-stone-800">
+                            {isStepComplete ? "✓ Validado con Evidencia" : "En Espera de Evidencia"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {isStepComplete ? (
+                          <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>OK</span>
+                          </span>
+                        ) : (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 animate-pulse">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Pendiente</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Nombre de la Operación */}
+                    <div>
+                      <h2 className="text-base sm:text-lg font-black text-stone-900 leading-snug">
+                        {focusedStep.operation}
+                      </h2>
+                      {focusedStep.description && (
+                        <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                          {focusedStep.description}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Criterio de Calidad QC */}
+                    <div className={`p-3.5 rounded-2xl border flex items-start gap-2.5 ${
+                      isStepComplete ? 'bg-emerald-50/70 border-emerald-300' : 'bg-stone-50 border-stone-200'
+                    }`}>
+                      <AlertCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                        isStepComplete ? 'text-emerald-700' : 'text-blue-600'
+                      }`} />
+                      <div className="text-xs text-stone-800">
+                        <strong className="block text-stone-900 font-bold mb-0.5">Criterio de Calidad:</strong>
+                        <span>{focusedStep.qc_criteria || "Verificación estándar de ensamblaje"}</span>
+                      </div>
+                    </div>
+
+                    {/* Guía Multimedia si existe */}
+                    {focusedStep.media_url && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenMedia(focusedStep)}
+                        className="w-full py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 flex items-center justify-center gap-2 transition touch-manipulation active:scale-98"
+                      >
+                        <PlayCircle className="w-4 h-4 text-blue-600" />
+                        <span>Ver Guía Visual / Video de Ensamblaje</span>
+                      </button>
+                    )}
+
+                    {/* Evidencia registrada */}
+                    {(opLog?.photo_url || supLog?.photo_url) && (
+                      <div className="pt-2 border-t border-stone-100 space-y-2">
+                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
+                          Evidencias Registradas:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {opLog?.photo_url && (
+                            <div 
+                              onClick={() => onPreviewPhoto && onPreviewPhoto({
+                                url: opLog.photo_url,
+                                title: `PC #${active_unit?.unit_number} · Paso #${focusedStep.step_number}`,
+                                subtitle: `Operario: ${opLog.user_name}`,
+                                timestamp: opLog.timestamp,
+                                peru_time: opLog.peru_time,
+                                duration_seconds: opLog.duration_seconds
+                              })}
+                              className="p-2 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center gap-2.5 cursor-pointer hover:bg-emerald-100 transition"
+                            >
+                              <img src={opLog.photo_url} alt="Foto" className="w-10 h-10 object-cover rounded-lg border border-emerald-400 flex-shrink-0" />
+                              <div className="text-[11px] min-w-0">
+                                <span className="font-bold text-emerald-900 block truncate">✓ Evidencia Técnico</span>
+                                <span className="text-[10px] text-emerald-700 font-mono block">
+                                  {opLog.peru_time || "Registrado"}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {supLog?.photo_url && (
+                            <div 
+                              onClick={() => onPreviewPhoto && onPreviewPhoto({
+                                url: supLog.photo_url,
+                                title: `PC #${active_unit?.unit_number} · V°B° Paso #${focusedStep.step_number}`,
+                                subtitle: `Supervisor: ${supLog.user_name}`,
+                                timestamp: supLog.timestamp,
+                                peru_time: supLog.peru_time
+                              })}
+                              className="p-2 rounded-xl bg-indigo-50 border border-indigo-300 flex items-center gap-2.5 cursor-pointer hover:bg-indigo-100 transition"
+                            >
+                              <img src={supLog.photo_url} alt="Foto Sup" className="w-10 h-10 object-cover rounded-lg border border-indigo-400 flex-shrink-0" />
+                              <div className="text-[11px] min-w-0">
+                                <span className="font-bold text-indigo-900 block truncate">🛡️ V°B° Supervisor</span>
+                                <span className="text-[10px] text-indigo-700 font-mono block">
+                                  {supLog.peru_time || "Auditado"}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* BOTÓN PRIMARIO GIGANTE DE ACCIÓN (Ley de Fitts >= 54px) */}
+                    <div className="pt-2">
+                      {isSupervisorMode ? (
+                        <button
+                          type="button"
+                          onClick={() => setSupervisorPhotoStepModal(focusedStep)}
+                          className="w-full min-h-[54px] px-4 py-3 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-black text-sm rounded-2xl shadow-md flex items-center justify-center gap-2 transition touch-manipulation"
+                        >
+                          <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                          <span>{isSupervisorVerified ? "Actualizar Foto y V°B° (Supervisor)" : `📸 Validar y Emitir V°B° Paso #${focusedStep.step_number}`}</span>
+                        </button>
+                      ) : isStepComplete ? (
+                        <button
+                          type="button"
+                          onClick={() => setPhotoStepModal(focusedStep)}
+                          className="w-full min-h-[52px] px-4 py-3 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-800 border-2 border-emerald-300 font-bold text-xs sm:text-sm rounded-2xl shadow-xs flex items-center justify-center gap-2 transition touch-manipulation"
+                        >
+                          <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                          <span>✓ Paso #{focusedStep.step_number} OK (Toca para cambiar foto)</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPhotoStepModal(focusedStep)}
+                          className="w-full min-h-[56px] px-4 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg flex items-center justify-center gap-2.5 transition touch-manipulation pulse-glow"
+                        >
+                          <Camera className="w-6 h-6 flex-shrink-0" />
+                          <span>📸 Tomar Evidencia Paso #{focusedStep.step_number}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Fila de Navegación Ergonómica (Anterior, Derivar, Siguiente) */}
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100">
+                      <button
+                        type="button"
+                        disabled={currentStepIndex <= 0}
+                        onClick={() => {
+                          if (currentStepIndex > 0) {
+                            hapticTap();
+                            setFocusedStepNumber(displayedStationSteps[currentStepIndex - 1].step_number);
+                          }
+                        }}
+                        className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 disabled:opacity-30 disabled:pointer-events-none transition touch-manipulation active:scale-95 flex items-center gap-1.5"
+                      >
+                        <span>← Anterior</span>
+                      </button>
+
+                      {!isStepComplete && (
+                        <button
+                          type="button"
+                          onClick={() => setReassignStepModalData(focusedStep)}
+                          className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition touch-manipulation active:scale-95 flex items-center gap-1"
+                          title="Derivar a otra estación"
+                        >
+                          <ArrowRightCircle className="w-4 h-4 text-sky-600" />
+                          <span className="hidden sm:inline">Derivar</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={currentStepIndex >= displayedStationSteps.length - 1}
+                        onClick={() => {
+                          if (currentStepIndex < displayedStationSteps.length - 1) {
+                            hapticTap();
+                            setFocusedStepNumber(displayedStationSteps[currentStepIndex + 1].step_number);
+                          }
+                        }}
+                        className="min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 disabled:opacity-30 disabled:pointer-events-none transition touch-manipulation active:scale-95 flex items-center gap-1.5"
+                      >
+                        <span>Siguiente →</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              /* MODO LISTA COMPLETA TRADICIONAL */
+              displayedStationSteps.map((st) => {
               const isTechnicianDone = technicianDoneSteps.includes(st.step_number);
               const isSubmitting = submittingStep === st.step_number;
               const opLog = operatorStepLogsMap[st.step_number];
@@ -1960,7 +2297,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   </div>
                 </div>
               );
-            })}
+            }))}
           </div>
 
             </Card>
@@ -2206,90 +2543,93 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       )}
 
       {/* Barra de Acción Rápida Móvil en Zona del Pulgar (Fase 2 - Bento Apple Thumb Zone) */}
-      {active_unit && !isHistorical && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-3.5 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3 safe-area-bottom">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-black text-stone-900 font-mono">
-                PC #{active_unit.unit_number.toString().padStart(2, '0')}
-              </span>
-              <span className="text-[10px] text-stone-500 font-medium truncate">
-                · {isSupervisorMode ? `Sup. E${assignment.station_number}` : `Estación ${assignment.station_number}`}
-              </span>
-            </div>
-            <p className="text-[11px] text-stone-600 font-medium truncate">
-              {active_unit.overall_status === "FAILED" ? (
-                <span className="text-rose-600 font-bold">Bloqueada por falla activa</span>
-              ) : isStationComplete ? (
-                <span className="text-emerald-700 font-bold">✓ Lista para despacho ({technicianVerifiedCount}/{totalStationSteps})</span>
-              ) : activePendingStep ? (
-                <span>Paso #{activePendingStep.step_number}: <strong>{activePendingStep.operation}</strong></span>
-              ) : (
-                <span>{technicianVerifiedCount}/{totalStationSteps} pasos listos</span>
-              )}
-            </p>
-          </div>
-
-          <div className="flex-shrink-0">
-            {active_unit.overall_status === "FAILED" ? (
-              <button
-                type="button"
-                onClick={handleResumeUnitFromWorkspace}
-                className="min-h-[48px] px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 touch-manipulation"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>Subsanar</span>
-              </button>
-            ) : isStationComplete ? (
-              <button
-                type="button"
-                onClick={handleFinishStation}
-                disabled={finishingUnit}
-                className="min-h-[48px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation pulse-glow"
-              >
-                {finishingUnit ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+      {active_unit && !isHistorical && (() => {
+        const targetStep = (checklistMode === 'focus' && focusedStep && (!technicianDoneSteps.includes(focusedStep.step_number))) ? focusedStep : activePendingStep;
+        return (
+          <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-3.5 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3 safe-area-bottom">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black text-stone-900 font-mono">
+                  PC #{active_unit.unit_number.toString().padStart(2, '0')}
+                </span>
+                <span className="text-[10px] text-stone-500 font-medium truncate">
+                  · {isSupervisorMode ? `Sup. E${assignment.station_number}` : `Estación ${assignment.station_number}`}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-600 font-medium truncate">
+                {active_unit.overall_status === "FAILED" ? (
+                  <span className="text-rose-600 font-bold">Bloqueada por falla activa</span>
+                ) : isStationComplete ? (
+                  <span className="text-emerald-700 font-bold">✓ Lista para despacho ({technicianVerifiedCount}/{totalStationSteps})</span>
+                ) : targetStep ? (
+                  <span>Paso #{targetStep.step_number}: <strong>{targetStep.operation}</strong></span>
                 ) : (
-                  <ArrowRightCircle className="w-5 h-5" />
+                  <span>{technicianVerifiedCount}/{totalStationSteps} pasos listos</span>
                 )}
-                <span>Despachar →</span>
-              </button>
-            ) : isSupervisorMode ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (activePendingStep) setSupervisorPhotoStepModal(activePendingStep);
-                  else setSupervisorAuditModalOpen(true);
-                }}
-                className="min-h-[48px] px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
-              >
-                <ShieldCheck className="w-5 h-5" />
-                <span>{activePendingStep ? `V°B° #${activePendingStep.step_number}` : "Emitir V°B°"}</span>
-              </button>
-            ) : activePendingStep ? (
-              <button
-                type="button"
-                onClick={() => setPhotoStepModal(activePendingStep)}
-                className="min-h-[48px] px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
-              >
-                <Camera className="w-5 h-5" />
-                <span>Foto #{activePendingStep.step_number}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  if (stepsMissingPhotos.length > 0) setPhotoStepModal(stepsMissingPhotos[0]);
-                }}
-                className="min-h-[48px] px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
-              >
-                <Camera className="w-5 h-5" />
-                <span>Subir Foto</span>
-              </button>
-            )}
+              </p>
+            </div>
+
+            <div className="flex-shrink-0">
+              {active_unit.overall_status === "FAILED" ? (
+                <button
+                  type="button"
+                  onClick={handleResumeUnitFromWorkspace}
+                  className="min-h-[48px] px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 touch-manipulation"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Subsanar</span>
+                </button>
+              ) : isStationComplete ? (
+                <button
+                  type="button"
+                  onClick={handleFinishStation}
+                  disabled={finishingUnit}
+                  className="min-h-[48px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation pulse-glow"
+                >
+                  {finishingUnit ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <ArrowRightCircle className="w-5 h-5" />
+                  )}
+                  <span>Despachar →</span>
+                </button>
+              ) : isSupervisorMode ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (targetStep) setSupervisorPhotoStepModal(targetStep);
+                    else setSupervisorAuditModalOpen(true);
+                  }}
+                  className="min-h-[48px] px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
+                >
+                  <ShieldCheck className="w-5 h-5" />
+                  <span>{targetStep ? `V°B° #${targetStep.step_number}` : "Emitir V°B°"}</span>
+                </button>
+              ) : targetStep ? (
+                <button
+                  type="button"
+                  onClick={() => setPhotoStepModal(targetStep)}
+                  className="min-h-[48px] px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
+                >
+                  <Camera className="w-5 h-5" />
+                  <span>Foto #{targetStep.step_number}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (stepsMissingPhotos.length > 0) setPhotoStepModal(stepsMissingPhotos[0]);
+                  }}
+                  className="min-h-[48px] px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
+                >
+                  <Camera className="w-5 h-5" />
+                  <span>Subir Foto</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );

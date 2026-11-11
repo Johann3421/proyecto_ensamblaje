@@ -30,3 +30,4 @@ export const hapticSelection = () => triggerHaptic(hapticPatterns.selection);
 export const hapticSuccess = () => triggerHaptic(hapticPatterns.success);
 export const hapticWarning = () => triggerHaptic(hapticPatterns.warning);
 export const hapticError = () => triggerHaptic(hapticPatterns.error);
+

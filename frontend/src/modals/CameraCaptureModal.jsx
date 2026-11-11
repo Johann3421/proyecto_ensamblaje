@@ -3,6 +3,8 @@ import { Check, AlertCircle, Upload, Loader2, X, RotateCcw, Camera, ZoomIn, Zoom
 import { API_BASE } from '../utils/api';
 import { compressImageToOptimized } from '../utils/imageCompressor';
 import { registerBackHandler } from '../utils/backHandler';
+import { hapticTap, hapticSuccess, hapticWarning, hapticError } from '../utils/haptics';
+import { fetchWithRetry } from '../utils/networkRetry';
 
 export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámara", subtitle = null, prefix = "step", onCapture, onClose }) {
   const videoRef = useRef(null);
@@ -227,9 +229,11 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
       const approxKb = Math.round((optimizedDataUrl.length * 0.75) / 1024);
       setImageSizeKb(approxKb);
       setCapturedImage(optimizedDataUrl);
+      hapticTap();
     } catch (err) {
       console.error("Error al capturar y comprimir:", err);
       setCameraError("Error procesando foto: " + err.message);
+      hapticError();
     } finally {
       setCompressing(false);
     }
@@ -281,6 +285,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
 
       recorder.start(250); // Muestreo cada 250ms
       setIsRecording(true);
+      hapticTap();
 
       const startTime = Date.now();
       recordingTimerRef.current = setInterval(() => {
@@ -301,6 +306,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
+      hapticTap();
     }
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
@@ -328,8 +334,10 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
         setMediaMode("photo");
       }
       setCameraError(null);
+      hapticTap();
     } catch (err) {
       setCameraError("Error procesando archivo: " + err.message);
+      hapticError();
     } finally {
       setCompressing(false);
     }
@@ -345,20 +353,22 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
         formData.append("file", capturedVideoBlob, `evidence_${Date.now()}.${ext}`);
         formData.append("prefix", prefix);
 
-        const res = await fetch(`${API_BASE}/camera/upload-video`, {
+        const res = await fetchWithRetry(`${API_BASE}/camera/upload-video`, {
           method: "POST",
           body: formData
-        });
+        }, { retries: 2 });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.detail || "Error al procesar video en backend");
         }
         const data = await res.json();
         if (stream) stream.getTracks().forEach(track => track.stop());
+        hapticSuccess();
         onCapture(data.url, data.type || "video");
       } catch (err) {
         setCameraError("Error al subir video: " + err.message);
         setLoading(false);
+        hapticError();
       }
       return;
     }
@@ -367,25 +377,28 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
     if (!capturedImage) return;
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/camera/capture-base64`, {
+      const res = await fetchWithRetry(`${API_BASE}/camera/capture-base64`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: capturedImage, prefix })
-      });
+      }, { retries: 2 });
       if (!res.ok) throw new Error("Error al procesar fotografía en backend");
       const data = await res.json();
 
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
+      hapticSuccess();
       onCapture(data.url, data.type || "image");
     } catch (err) {
       setCameraError("Error al subir foto: " + err.message);
       setLoading(false);
+      hapticError();
     }
   };
 
   const handleRetake = () => {
+    hapticWarning();
     setCapturedImage(null);
     setImageSizeKb(null);
     if (capturedVideoUrl) {
@@ -659,10 +672,10 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                 {/* Botón directo a Cámara Nativa del Teléfono */}
                 {!isRecording && (
                   <label
-                    className="px-3 py-2.5 bg-slate-800 hover:bg-slate-750 text-emerald-300 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+                    className="px-3 min-h-[48px] bg-slate-800 hover:bg-slate-750 active:scale-95 text-emerald-300 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0 touch-manipulation"
                     title="Abrir app de cámara original de tu celular"
                   >
-                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <Smartphone className="w-5 h-5 text-emerald-400" />
                     <span className="hidden sm:inline">Cámara Celular</span>
                     <input
                       type="file"
@@ -677,10 +690,10 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                 {/* Subir archivo de galería */}
                 {!isRecording && (
                   <label
-                    className="px-3 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl text-xs font-medium border border-slate-700 transition flex items-center gap-1.5 cursor-pointer flex-shrink-0"
+                    className="px-3 min-h-[48px] bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-300 rounded-xl text-xs font-medium border border-slate-700 transition flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0 touch-manipulation"
                     title="Cargar desde galería de imágenes o videos"
                   >
-                    <Upload className="w-4 h-4" />
+                    <Upload className="w-5 h-5" />
                     <span className="hidden sm:inline">Galería</span>
                     <input
                       type="file"
@@ -697,19 +710,19 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                     <button
                       type="button"
                       onClick={handleStopRecording}
-                      className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-rose-950/40 animate-pulse"
+                      className="flex-1 min-h-[48px] bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 shadow-md shadow-rose-950/40 animate-pulse touch-manipulation"
                     >
-                      <Square className="w-4 h-4 fill-white" />
-                      <span>Detener y Guardar ({(8 - recordingSeconds).toFixed(1)}s restantes)</span>
+                      <Square className="w-5 h-5 fill-white" />
+                      <span>Detener y Guardar ({(8 - recordingSeconds).toFixed(1)}s)</span>
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={handleStartRecording}
                       disabled={!!cameraError || compressing}
-                      className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-rose-950/40"
+                      className="flex-1 min-h-[48px] bg-rose-600 hover:bg-rose-500 active:scale-95 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 shadow-md shadow-rose-950/40 touch-manipulation"
                     >
-                      <div className="w-3.5 h-3.5 rounded-full bg-white animate-pulse" />
+                      <div className="w-4 h-4 rounded-full bg-white animate-pulse" />
                       <span>Grabar Video (8s)</span>
                     </button>
                   )
@@ -718,9 +731,9 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                     type="button"
                     onClick={handleTakeSnapshot}
                     disabled={!!cameraError || compressing}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/40"
+                    className="flex-1 min-h-[48px] bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/40 touch-manipulation"
                   >
-                    <Camera className="w-4 h-4" />
+                    <Camera className="w-5 h-5" />
                     <span>{compressing ? "Comprimiendo..." : "Capturar Foto"}</span>
                   </button>
                 )}
@@ -731,7 +744,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                   type="button"
                   onClick={handleRetake}
                   disabled={loading}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5"
+                  className="flex-1 min-h-[48px] bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 rounded-xl text-xs sm:text-sm font-semibold border border-slate-700 transition flex items-center justify-center gap-1.5 touch-manipulation"
                 >
                   <RotateCcw className="w-4 h-4" />
                   <span>Tomar Otra Vez</span>
@@ -740,7 +753,7 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
                   type="button"
                   onClick={handleConfirmAndUpload}
                   disabled={loading}
-                  className={`flex-1 py-2.5 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md ${
+                  className={`flex-1 min-h-[48px] disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 shadow-md active:scale-95 touch-manipulation ${
                     mediaMode === "video" 
                       ? "bg-rose-600 hover:bg-rose-500 shadow-rose-950/40" 
                       : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40"

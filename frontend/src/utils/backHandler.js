@@ -36,3 +36,4 @@ export function executeBackHandlers() {
   }
   return false;
 }
+

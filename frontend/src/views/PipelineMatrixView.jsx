@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, RefreshCw, X, Columns, ShieldCheck, Trash2, RotateCcw, Trash, Camera, MoreHorizontal } from 'lucide-react';
+import { Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Shield, Cpu, RefreshCw, X, Columns, ShieldCheck, Trash2, RotateCcw, Trash, Camera, MoreHorizontal, Layers, LayoutGrid } from 'lucide-react';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
+import { hapticSelection } from '../utils/haptics';
 
 export default function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder, onOpenEditOrder, onPreviewPhoto }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 768 ? 'cards' : 'table';
+  });
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -231,85 +235,185 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
         </div>
       </div>
 
-      {/* Matriz de Trazabilidad Bento Table */}
+      {/* Matriz de Trazabilidad Bento Table / Cards Móviles */}
       <div className="bg-white rounded-3xl border border-stone-200/80 shadow-bento overflow-hidden">
-        <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+        <div className="p-4 border-b border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Columns className="w-4 h-4 text-blue-600" />
             <h3 className="font-bold text-stone-900 text-sm">Matriz de Trazabilidad por Estación</h3>
           </div>
-          <div className="flex items-center gap-3 text-xs text-stone-500">
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span>OK</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>Activo</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500"></span>Falla</span>
+
+          <div className="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
+            {/* Toggle Ergonómico de Vista (Fase 3 - Optimización Móvil) */}
+            <div className="bg-stone-100 p-0.5 rounded-xl border border-stone-200/80 flex items-center">
+              <button
+                type="button"
+                onClick={() => { hapticSelection(); setViewMode('cards'); }}
+                className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 touch-manipulation active:scale-95 ${
+                  viewMode === 'cards' ? 'bg-white text-blue-600 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="Vista optimizada para pantallas táctiles y celular"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Puestos Móvil</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { hapticSelection(); setViewMode('table'); }}
+                className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 touch-manipulation active:scale-95 ${
+                  viewMode === 'table' ? 'bg-white text-blue-600 shadow-xs' : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="Vista Matriz Completa en tabla"
+              >
+                <Columns className="w-3.5 h-3.5" />
+                <span>Matriz Tabla</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2.5 text-xs text-stone-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span>OK</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>Activo</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span>Falla</span>
+            </div>
           </div>
         </div>
 
-        <div className="table-mobile-scroll overflow-x-auto w-full relative">
-          <table className="w-full text-left border-collapse text-xs min-w-[540px]">
-            <thead>
-              <tr className="bg-stone-50/70 text-stone-600 border-b border-stone-200/80">
-                <th className="py-3 px-4 font-semibold sticky left-0 bg-stone-50/90 z-10 w-24 border-r border-stone-200/80">PC</th>
-                {stations.map(st => (
-                  <th key={st.station_number} className="py-3 px-3 font-semibold border-l border-stone-200/50 whitespace-nowrap">
-                    <div className="text-stone-900 font-bold">Estación {st.station_number}</div>
-                    <div className="text-[11px] text-stone-400 font-normal hidden sm:block truncate max-w-[120px]">
-                      {st.user_name}
+        {viewMode === 'cards' ? (
+          /* Vista de Puestos Móvil (Bento Cards por Estación) */
+          <div className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-stone-50/50">
+            {stations.map(st => {
+              const unitsInStation = units.filter(u => u.current_station === st.station_number && u.overall_status !== "PASSED");
+              const unitsCompletedHere = units.filter(u => u.current_station > st.station_number || u.overall_status === "PASSED");
+              return (
+                <div key={st.station_number} className="bg-white rounded-2xl border border-stone-200/90 p-3.5 shadow-sm space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                        <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs border border-blue-200/60">
+                          E{st.station_number}
+                        </span>
+                        <span>Estación {st.station_number}</span>
+                      </span>
+                      <span className="text-[11px] text-stone-500 block mt-0.5 truncate max-w-[180px]">
+                        👤 {st.user_name || "Sin técnico"}
+                      </span>
                     </div>
-                  </th>
-                ))}
-                <th className="py-3 px-4 font-semibold border-l border-stone-200/50 text-center w-28">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {units.map((unit) => {
-                const isFinished = unit.overall_status === "PASSED";
-                const isFailed = unit.overall_status === "FAILED";
-                return (
-                  <tr
-                    key={unit.unit_number}
-                    onClick={() => onSelectUnit(unit)}
-                    className="hover:bg-blue-50/40 active:bg-blue-50/80 cursor-pointer transition"
-                  >
-                    <td className="py-3 px-4 font-bold text-stone-900 sticky left-0 bg-white z-10 border-r border-stone-200/80 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.05)]">
-                      #{unit.unit_number.toString().padStart(2, '0')}
-                    </td>
-                    {stations.map(st => {
-                      let state = "queue";
-                      if (isFailed && unit.current_station === st.station_number) state = "failed";
-                      else if (unit.current_station > st.station_number) state = "passed";
-                      else if (unit.current_station === st.station_number && !isFinished) state = "active";
+                    <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+                      {unitsInStation.length} activa{unitsInStation.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
 
-                      return (
-                        <td key={st.station_number} className="py-2.5 px-3 border-l border-stone-100 text-center">
-                          {state === "passed" && (
-                            <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 inline-flex items-center justify-center border border-emerald-200/60">
-                              <Check className="w-3 h-3 stroke-[3]" />
-                            </span>
-                          )}
-                          {state === "active" && (
-                            <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse mx-auto block shadow-xs"></span>
-                          )}
-                          {state === "failed" && (
-                            <span className="w-5 h-5 rounded-full bg-rose-50 text-rose-600 inline-flex items-center justify-center border border-rose-200/60">
-                              <X className="w-3 h-3 stroke-[3]" />
-                            </span>
-                          )}
-                          {state === "queue" && <span className="text-stone-300 text-xs">—</span>}
-                        </td>
-                      );
-                    })}
-                    <td className="py-2.5 px-3 border-l border-stone-100 text-center">
-                      {isFinished && <Badge variant="success">OK</Badge>}
-                      {isFailed && <Badge variant="danger">Falla</Badge>}
-                      {!isFinished && !isFailed && <Badge variant="warning">E{unit.current_station}</Badge>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  <div className="pt-2 border-t border-stone-100">
+                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block mb-1.5">
+                      PCs en este Puesto:
+                    </span>
+                    {unitsInStation.length === 0 ? (
+                      <p className="text-xs text-stone-400 italic py-1">Puesto libre / sin PCs en cola</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {unitsInStation.map(u => {
+                          const isFailed = u.overall_status === "FAILED";
+                          return (
+                            <button
+                              key={u.unit_number}
+                              type="button"
+                              onClick={() => { hapticSelection(); onSelectUnit(u); }}
+                              className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 touch-manipulation border ${
+                                isFailed
+                                  ? "bg-rose-50 border-rose-300 text-rose-800 shadow-xs"
+                                  : "bg-blue-50 border-blue-200 text-blue-900 hover:bg-blue-100 shadow-xs"
+                              }`}
+                              title="Toca para ver detalle o auditar"
+                            >
+                              {isFailed ? (
+                                <X className="w-3.5 h-3.5 text-rose-600 stroke-[3]" />
+                              ) : (
+                                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                              )}
+                              <span>PC #{u.unit_number.toString().padStart(2, '0')}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] text-stone-500 pt-1">
+                    <span>Despachadas: <strong className="text-emerald-700">{unitsCompletedHere.length}</strong></span>
+                    <span>Total Orden: {units.length}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Vista Matriz Tabla Clásica con scroll suave */
+          <div className="table-mobile-scroll overflow-x-auto w-full relative">
+            <table className="w-full text-left border-collapse text-xs min-w-[540px]">
+              <thead>
+                <tr className="bg-stone-50/70 text-stone-600 border-b border-stone-200/80">
+                  <th className="py-3 px-4 font-semibold sticky left-0 bg-stone-50/90 z-10 w-24 border-r border-stone-200/80">PC</th>
+                  {stations.map(st => (
+                    <th key={st.station_number} className="py-3 px-3 font-semibold border-l border-stone-200/50 whitespace-nowrap">
+                      <div className="text-stone-900 font-bold">Estación {st.station_number}</div>
+                      <div className="text-[11px] text-stone-400 font-normal hidden sm:block truncate max-w-[120px]">
+                        {st.user_name}
+                      </div>
+                    </th>
+                  ))}
+                  <th className="py-3 px-4 font-semibold border-l border-stone-200/50 text-center w-28">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {units.map((unit) => {
+                  const isFinished = unit.overall_status === "PASSED";
+                  const isFailed = unit.overall_status === "FAILED";
+                  return (
+                    <tr
+                      key={unit.unit_number}
+                      onClick={() => onSelectUnit(unit)}
+                      className="hover:bg-blue-50/40 active:bg-blue-50/80 cursor-pointer transition"
+                    >
+                      <td className="py-3 px-4 font-bold text-stone-900 sticky left-0 bg-white z-10 border-r border-stone-200/80 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.05)]">
+                        #{unit.unit_number.toString().padStart(2, '0')}
+                      </td>
+                      {stations.map(st => {
+                        let state = "queue";
+                        if (isFailed && unit.current_station === st.station_number) state = "failed";
+                        else if (unit.current_station > st.station_number) state = "passed";
+                        else if (unit.current_station === st.station_number && !isFinished) state = "active";
+
+                        return (
+                          <td key={st.station_number} className="py-2.5 px-3 border-l border-stone-100 text-center">
+                            {state === "passed" && (
+                              <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 inline-flex items-center justify-center border border-emerald-200/60">
+                                <Check className="w-3 h-3 stroke-[3]" />
+                              </span>
+                            )}
+                            {state === "active" && (
+                              <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse mx-auto block shadow-xs"></span>
+                            )}
+                            {state === "failed" && (
+                              <span className="w-5 h-5 rounded-full bg-rose-50 text-rose-600 inline-flex items-center justify-center border border-rose-200/60">
+                                <X className="w-3 h-3 stroke-[3]" />
+                              </span>
+                            )}
+                            {state === "queue" && <span className="text-stone-300 text-xs">—</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2.5 px-3 border-l border-stone-100 text-center">
+                        {isFinished && <Badge variant="success">OK</Badge>}
+                        {isFailed && <Badge variant="danger">Falla</Badge>}
+                        {!isFinished && !isFailed && <Badge variant="warning">E{unit.current_station}</Badge>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Panel de Fallas Bento Grid con Fotos de Evidencia */}

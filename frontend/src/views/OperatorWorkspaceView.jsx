@@ -10,6 +10,7 @@ import SupervisorAuditModal from '../modals/SupervisorAuditModal';
 import { formatStepNumbersRange } from '../utils/steps';
 import { formatPeruTime, formatDuration } from '../utils/timeFormat';
 import { registerBackHandler } from '../utils/backHandler';
+import { hapticTap, hapticSuccess, hapticWarning, hapticError, hapticSelection } from '../utils/haptics';
 
 export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onPreviewPhoto, onSelectUnit, onSelectOrder, onSelectStation, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
@@ -222,6 +223,15 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
     return uniqueStationSteps.filter(s => supervisedStepsSet.has(s.step_number));
   }, [uniqueStationSteps, filterSupervisorOnly, supervisedStepsSet, isSupervisorMode]);
 
+  // Primer paso pendiente para Hero Mode y Barra Rápida en Thumb Zone
+  const activePendingStep = useMemo(() => {
+    if (!uniqueStationSteps || uniqueStationSteps.length === 0) return null;
+    if (isSupervisorMode) {
+      return uniqueStationSteps.find(st => !supervisorDoneSteps.includes(st.step_number) && !supervisorStepLogsMap[st.step_number]) || null;
+    }
+    return uniqueStationSteps.find(st => !technicianDoneSteps.includes(st.step_number) && !operatorStepLogsMap[st.step_number]) || null;
+  }, [uniqueStationSteps, technicianDoneSteps, supervisorDoneSteps, operatorStepLogsMap, supervisorStepLogsMap, isSupervisorMode]);
+
   const handleToggleStep = async (step) => {
     if (isHistorical) {
       notify?.("Esta PC ya completó tu estación y está en modo histórico (solo lectura).", "info");
@@ -254,8 +264,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             delete updated[step.step_number];
             return updated;
           });
+          hapticWarning();
           notify(`↩ V°B° del Paso #${step.step_number} retirado`);
         } catch (err) {
+          hapticError();
           if (notify) notify(err.message || "Error al retirar supervisión", "danger");
         } finally {
           setSubmittingStep(null);
@@ -298,8 +310,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           }
           return updated;
         });
+        hapticWarning();
         notify(`↩ Paso #${step.step_number} desmarcado`);
       } catch (err) {
+        hapticError();
         if (notify) notify(err.message || "Error al desmarcar paso", "danger");
         else console.error("Error:", err);
       } finally {
@@ -346,11 +360,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             ...prev,
             [step.step_number]: newOpLog
           }));
+          hapticSuccess();
           notify(`✓ Paso #${step.step_number} verificado`);
           if (technicianDoneSteps.length + 1 >= totalStationSteps && confetti) {
             confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
           }
         } catch (err) {
+          hapticError();
           if (notify) notify(err.message || "Error registrando paso", "danger");
           else console.error("Error:", err);
         } finally {
@@ -402,11 +418,21 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         [step.step_number]: newOpLog
       }));
       setPhotoStepModal(null);
+      hapticSuccess();
       notify(`📸 ✓ Paso #${step.step_number} verificado con foto`);
       if (technicianDoneSteps.length + 1 >= totalStationSteps && confetti) {
         confetti({ particleCount: 60, spread: 60, origin: { y: 0.8 } });
       }
+
+      // Auto-avance suave al siguiente paso pendiente
+      setTimeout(() => {
+        const nextStepCard = document.getElementById(`step-card-${step.step_number + 1}`);
+        if (nextStepCard) {
+          nextStepCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
     } catch (err) {
+      hapticError();
       if (notify) notify(err.message || "Error subiendo evidencia", "danger");
       else console.error("Error:", err);
     } finally {
@@ -452,18 +478,12 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         ...prev,
         [step.step_number]: newSupLog
       }));
-      setStepLogsMap(prev => ({
-        ...prev,
-        [step.step_number]: newSupLog
-      }));
       setSupervisorPhotoStepModal(null);
-      notify(`🛡️ 📸 Cumplimiento del Paso #${step.step_number} verificado con foto por el supervisor`);
-      if (confetti) {
-        confetti({ particleCount: 70, spread: 70, origin: { y: 0.8 } });
-      }
+      hapticSuccess();
+      notify(`📸 ✓ V°B° de cumplimiento Paso #${step.step_number} registrado`);
     } catch (err) {
-      if (notify) notify(err.message || "Error registrando supervisión", "danger");
-      else console.error("Error:", err);
+      hapticError();
+      if (notify) notify(err.message || "Error al registrar foto de supervisión", "danger");
     } finally {
       setSubmittingStep(null);
     }
@@ -488,6 +508,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       }
       const data = await res.json();
       
+      hapticSuccess();
       if (data.is_finished && confetti) {
         confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
       }
@@ -510,6 +531,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         onRefresh && onRefresh();
       }
     } catch (err) {
+      hapticError();
       if (notify) notify(err.message || "Error al despachar estación", "danger");
       else console.error("Error:", err);
     } finally {
@@ -531,16 +553,18 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Error al subsanar falla");
+      hapticSuccess();
       notify?.(data.message || `✓ Falla subsanada. PC #${active_unit.unit_number} reanudada.`, "success");
       onRefresh && onRefresh();
     } catch (err) {
+      hapticError();
       if (notify) notify(err.message || "Error al subsanar falla", "danger");
       else console.error("Error:", err);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4 fade-in pb-8">
+    <div className="max-w-7xl mx-auto space-y-4 fade-in pb-28 lg:pb-8">
       {/* Selector de Estaciones para Operadores con Múltiples Puestos Asignados */}
       {/* Selector de Estaciones para Operadores con Múltiples Puestos Asignados */}
       {!isSupervisorMode && user_assigned_stations && user_assigned_stations.length > 1 && (
@@ -1168,12 +1192,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   type="button"
                   onClick={() => {
                     if (!isCurrent) {
+                      hapticSelection();
                       setCompletedSteps([]);
                       setStepLogsMap({});
                       onSelectUnit && onSelectUnit(u.unit_number);
                     }
                   }}
-                  className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-xs font-bold transition touch-target flex items-center gap-1.5 ${
+                  className={`flex-shrink-0 px-3.5 py-2 min-h-[44px] rounded-xl text-xs font-bold transition flex items-center gap-1.5 touch-manipulation active:scale-95 ${
                     isCurrent
                       ? "bg-blue-600 text-white shadow-md scale-105"
                       : "bg-white hover:bg-stone-200 text-gray-700 border border-gray-200"
@@ -1209,12 +1234,13 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                       type="button"
                       onClick={() => {
                         if (!isCurrent) {
+                          hapticSelection();
                           setCompletedSteps([]);
                           setStepLogsMap({});
                           onSelectUnit && onSelectUnit(u.unit_number);
                         }
                       }}
-                      className={`flex-shrink-0 px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 touch-target ${
+                      className={`flex-shrink-0 px-2.5 py-1.5 min-h-[38px] rounded-lg text-[11px] font-bold transition flex items-center gap-1 touch-manipulation active:scale-95 ${
                         isCurrent
                           ? "bg-emerald-700 text-white shadow-xs"
                           : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
@@ -1396,25 +1422,28 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                           );
                         })()}
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <button
                           type="button"
                           onClick={() => setPhotoStepModal(st)}
-                          className="p-1.5 bg-stone-200 hover:bg-stone-200 text-blue-600 rounded-lg text-xs"
-                          title="Tomar foto para este paso"
+                          className="min-h-[44px] px-3 bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-700 rounded-xl text-xs font-semibold border border-stone-300 flex items-center gap-1.5 touch-manipulation"
+                          title="Tomar o actualizar foto para este paso"
                         >
-                          <Camera className="w-3.5 h-3.5" />
+                          <Camera className="w-4 h-4 text-blue-600" />
+                          <span className="hidden sm:inline">Foto</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => handleToggleStep(st)}
                           disabled={isSubmitting}
-                          className={`px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 ${
-                            isDone ? "bg-emerald-500 text-white" : "bg-amber-100 text-amber-800"
+                          className={`min-h-[44px] px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 touch-manipulation shadow-xs ${
+                            isDone 
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+                              : "bg-blue-600 hover:bg-blue-700 text-white"
                           }`}
                         >
-                          {isDone ? <Check className="w-3 h-3" /> : null}
-                          <span>{isDone ? "Completado" : "Marcar"}</span>
+                          {isDone ? <Check className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                          <span>{isDone ? "Completado" : "Verificar"}</span>
                         </button>
                       </div>
                     </div>
@@ -1489,31 +1518,37 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
               const isStepComplete = isSupervisorMode ? isSupervisorVerified : isTechnicianDone;
               const isDone = isStepComplete;
               const isSupervisedByRole = isSupervisorUser && (!supervisedStepsSet || supervisedStepsSet.has(st.step_number));
+              const isHeroStep = activePendingStep && activePendingStep.step_number === st.step_number && !isStepComplete;
 
               return (
                 <div
                   key={st.step_number}
+                  id={`step-card-${st.step_number}`}
                   className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all duration-200 select-none ${
                     isStepComplete
                       ? 'bg-emerald-50/70 border-emerald-400 shadow-sm'
-                      : isSupervisorMode
-                        ? isTechnicianDone
-                          ? 'bg-emerald-50/30 border-emerald-300 hover:border-emerald-400 shadow-xs'
-                          : 'bg-stone-50/90 border-stone-300 hover:border-amber-400 shadow-xs'
-                        : isSubmitting
-                          ? 'bg-stone-100 border-stone-300 scale-[0.99] opacity-80'
-                          : 'bg-white border-stone-200 hover:border-stone-300 hover:shadow-md shadow-sm'
+                      : isHeroStep
+                        ? 'bg-blue-50/30 border-blue-500 ring-2 ring-blue-400/40 shadow-md'
+                        : isSupervisorMode
+                          ? isTechnicianDone
+                            ? 'bg-emerald-50/30 border-emerald-300 hover:border-emerald-400 shadow-xs'
+                            : 'bg-stone-50/90 border-stone-300 hover:border-amber-400 shadow-xs'
+                          : isSubmitting
+                            ? 'bg-stone-100 border-stone-300 scale-[0.99] opacity-80'
+                            : 'bg-white border-stone-200 hover:border-stone-300 hover:shadow-md shadow-sm'
                   }`}
                 >
                   <div className="flex items-stretch">
                     {/* Panel izquierdo — Checkbox visual grande interactivo */}
                     <div 
                       onClick={() => handleToggleStep(st)}
-                      className={`w-14 sm:w-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 py-4 transition-colors cursor-pointer ${
+                      className={`w-14 sm:w-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 py-4 transition-colors cursor-pointer touch-manipulation ${
                         isStepComplete
                           ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                          : isSupervisorMode
-                            ? isTechnicianDone
+                          : isHeroStep
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                            : isSupervisorMode
+                              ? isTechnicianDone
                               ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-r border-emerald-200'
                               : 'bg-stone-100 hover:bg-amber-50 text-stone-600 border-r border-stone-200'
                             : isSubmitting
@@ -1842,48 +1877,68 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                           )}
                         </div>
 
-                        {/* Botones de acción del paso */}
-                        <div className="flex flex-col gap-1.5 ml-1 flex-shrink-0">
-                          {/* Botón de Cámara para Supervisor */}
-                          {isSupervisedByRole && (
+                        {/* Bloque Ergonómico Unificado de Acción Industrial */}
+                        <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                          {/* Botón Primario Unificado (Touch Target >= 48px) */}
+                          {isSupervisorMode ? (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSupervisorPhotoStepModal(st);
                               }}
-                              className="w-8 h-8 rounded-xl bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center transition shadow-xs"
-                              title="Supervisor: Tomar foto de cumplimiento"
+                              className={`min-h-[48px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs touch-manipulation active:scale-95 ${
+                                isSupervisorVerified
+                                  ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300"
+                                  : "bg-amber-600 hover:bg-amber-700 text-white shadow-sm font-extrabold"
+                              }`}
+                              title="Supervisor: Tomar foto oficial evidenciando que ya se cumplió"
                             >
-                              <Camera className="w-4 h-4" />
+                              <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                              <span className="hidden sm:inline">{isSupervisorVerified ? "V°B° Aprobado" : "Emitir V°B°"}</span>
+                              <span className="sm:hidden">{isSupervisorVerified ? "V°B° OK" : "V°B°"}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPhotoStepModal(st);
+                              }}
+                              className={`min-h-[48px] px-3.5 sm:px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 touch-manipulation active:scale-95 ${
+                                isStepComplete
+                                  ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs"
+                                  : isHeroStep
+                                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md font-extrabold pulse-glow"
+                                    : "bg-blue-600 hover:bg-blue-700 text-white shadow-sm font-bold"
+                              }`}
+                              title={isStepComplete ? "Evidencia registrada. Toca para ver o re-tomar" : "Tomar foto y verificar paso"}
+                            >
+                              {isStepComplete ? (
+                                <>
+                                  <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                                  <span className="hidden sm:inline">Evidencia OK</span>
+                                  <span className="sm:hidden">OK</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Camera className="w-5 h-5 flex-shrink-0" />
+                                  <span className="hidden sm:inline">Tomar Evidencia</span>
+                                  <span className="sm:hidden">Foto</span>
+                                </>
+                              )}
                             </button>
                           )}
 
-                          {/* Botón de Cámara Directo para Operario */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPhotoStepModal(st);
-                            }}
-                            className={`w-8 h-8 rounded-xl flex items-center justify-center transition shadow-xs ${
-                              isStepComplete
-                                ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300"
-                                : "bg-stone-200 hover:bg-stone-200 text-blue-600 border border-stone-300"
-                            }`}
-                            title={isStepComplete ? "Volver a tomar / actualizar foto" : "Tomar foto y verificar paso"}
-                          >
-                            <Camera className="w-4 h-4" />
-                          </button>
-
+                          {/* Acciones complementarias (Touch Target >= 44px) */}
                           {st.media_url && (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); onOpenMedia(st); }}
-                              className="w-8 h-8 bg-stone-100 hover:bg-stone-200 text-blue-600 border border-stone-200 rounded-xl flex items-center justify-center transition"
+                              className="w-11 h-11 min-h-[44px] min-w-[44px] bg-stone-100 hover:bg-stone-200 text-blue-600 border border-stone-200 rounded-xl flex items-center justify-center transition active:scale-95 touch-manipulation"
                               title="Ver guía visual"
                             >
-                              <PlayCircle className="w-4 h-4" />
+                              <PlayCircle className="w-5 h-5" />
                             </button>
                           )}
                           {!isStepComplete && (
@@ -1893,10 +1948,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                 e.stopPropagation();
                                 setReassignStepModalData(st);
                               }}
-                              className="w-8 h-8 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl flex items-center justify-center transition shadow-xs"
+                              className="w-11 h-11 min-h-[44px] min-w-[44px] bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl flex items-center justify-center transition shadow-xs active:scale-95 touch-manipulation"
                               title="Derivar este proceso a otra estación"
                             >
-                              <ArrowRightCircle className="w-4 h-4 text-sky-600" />
+                              <ArrowRightCircle className="w-5 h-5 text-sky-600" />
                             </button>
                           )}
                         </div>
@@ -2150,6 +2205,91 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         />
       )}
 
+      {/* Barra de Acción Rápida Móvil en Zona del Pulgar (Fase 2 - Bento Apple Thumb Zone) */}
+      {active_unit && !isHistorical && (
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-3.5 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3 safe-area-bottom">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-stone-900 font-mono">
+                PC #{active_unit.unit_number.toString().padStart(2, '0')}
+              </span>
+              <span className="text-[10px] text-stone-500 font-medium truncate">
+                · {isSupervisorMode ? `Sup. E${assignment.station_number}` : `Estación ${assignment.station_number}`}
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-600 font-medium truncate">
+              {active_unit.overall_status === "FAILED" ? (
+                <span className="text-rose-600 font-bold">Bloqueada por falla activa</span>
+              ) : isStationComplete ? (
+                <span className="text-emerald-700 font-bold">✓ Lista para despacho ({technicianVerifiedCount}/{totalStationSteps})</span>
+              ) : activePendingStep ? (
+                <span>Paso #{activePendingStep.step_number}: <strong>{activePendingStep.operation}</strong></span>
+              ) : (
+                <span>{technicianVerifiedCount}/{totalStationSteps} pasos listos</span>
+              )}
+            </p>
+          </div>
+
+          <div className="flex-shrink-0">
+            {active_unit.overall_status === "FAILED" ? (
+              <button
+                type="button"
+                onClick={handleResumeUnitFromWorkspace}
+                className="min-h-[48px] px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 touch-manipulation"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Subsanar</span>
+              </button>
+            ) : isStationComplete ? (
+              <button
+                type="button"
+                onClick={handleFinishStation}
+                disabled={finishingUnit}
+                className="min-h-[48px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation pulse-glow"
+              >
+                {finishingUnit ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <ArrowRightCircle className="w-5 h-5" />
+                )}
+                <span>Despachar →</span>
+              </button>
+            ) : isSupervisorMode ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (activePendingStep) setSupervisorPhotoStepModal(activePendingStep);
+                  else setSupervisorAuditModalOpen(true);
+                }}
+                className="min-h-[48px] px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                <span>{activePendingStep ? `V°B° #${activePendingStep.step_number}` : "Emitir V°B°"}</span>
+              </button>
+            ) : activePendingStep ? (
+              <button
+                type="button"
+                onClick={() => setPhotoStepModal(activePendingStep)}
+                className="min-h-[48px] px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
+              >
+                <Camera className="w-5 h-5" />
+                <span>Foto #{activePendingStep.step_number}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (stepsMissingPhotos.length > 0) setPhotoStepModal(stepsMissingPhotos[0]);
+                }}
+                className="min-h-[48px] px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
+              >
+                <Camera className="w-5 h-5" />
+                <span>Subir Foto</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -64,3 +64,4 @@ tags: [mobile, popstate, back_button, navegacion, completed_units, workspace, te
    - Orden simulada con 30 unidades (25 completadas en estación 1). `get_operator_workspace` devolvió las 25 unidades completas sin límite de 15.
 2. **Build de Frontend**:
    - `rtk npm --prefix frontend run build` finalizado en 4.07s sin errores.
+

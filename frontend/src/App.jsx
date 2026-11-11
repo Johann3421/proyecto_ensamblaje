@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LoginPage from './LoginPage';
 import { API_BASE } from './utils/api';
 import { getCurrentRouteTab, updateBrowserRoute, getRouteParams } from './utils/router';
+import { executeBackHandlers } from './utils/backHandler';
 import Badge from './components/Badge';
 import Card from './components/Card';
 
@@ -60,19 +61,121 @@ export default function App() {
   const [deleteOrderModalOpen, setDeleteOrderModalOpen] = useState(false);
   const [editOrderModalOpen, setEditOrderModalOpen] = useState(false);
 
-  // Sincronizar ruta en cambios del historial del navegador (Atrás / Adelante)
+  // Manejo inteligente del botón Atrás (Android/iOS y Popstate de navegación móvil)
+  const lastBackPressRef = useRef(0);
+
+  // Inicializar historial base centinela para capturar el botón Atrás en móviles y PWAs
   useEffect(() => {
-    const handleLocationChange = () => {
+    if (isAuthenticated && typeof window !== 'undefined') {
+      window.history.replaceState({ app: 'qc_kenya', root: true }, '', window.location.href);
+      window.history.pushState({ app: 'qc_kenya', depth: 1 }, '', window.location.href);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handlePopState = (e) => {
+      // 1. Ejecutar manejadores registrados en componentes hijos (cámara, modales de operario, etc.)
+      const handledByComponent = executeBackHandlers();
+      if (handledByComponent) {
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+
+      // 2. Comprobar si hay modales abiertos de nivel superior en App.jsx
+      if (activePhotoPreview) {
+        setActivePhotoPreview(null);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (activeMediaModal) {
+        setActiveMediaModal(null);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (activeIssueModal) {
+        setActiveIssueModal(null);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (selectedUnitDetail) {
+        setSelectedUnitDetail(null);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (editOrderModalOpen) {
+        setEditOrderModalOpen(false);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (addUnitsModalOpen) {
+        setAddUnitsModalOpen(false);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (emergencyModalOpen) {
+        setEmergencyModalOpen(false);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (resetOrderModalOpen) {
+        setResetOrderModalOpen(false);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (deleteOrderModalOpen) {
+        setDeleteOrderModalOpen(false);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+      if (mobileMenuOpen) {
+        setMobileMenuOpen(false);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+
+      // 3. Si no hay modales, comprobar si el usuario está en una sub-pestaña y debe volver a la raíz de su rol
+      const homeTab = currentUser?.role === 'OPERATOR' ? 'operator' : 'matrix';
+      if (activeTab !== homeTab) {
+        setActiveTab(homeTab);
+        updateBrowserRoute(homeTab, {}, true);
+        window.history.pushState({ app: 'qc_kenya' }, '', window.location.href);
+        return;
+      }
+
+      // 4. Si ya está en la raíz de su espacio de trabajo: protección estándar de doble toque para salir
+      const now = Date.now();
+      if (now - lastBackPressRef.current < 2500) {
+        // Segundo toque en menos de 2.5s: permitir salida legítima del sistema
+        window.history.back();
+      } else {
+        lastBackPressRef.current = now;
+        window.history.pushState({ app: 'qc_kenya', root: true }, '', window.location.href);
+        setNotification({
+          id: Date.now(),
+          type: 'info',
+          message: 'Presiona atrás de nuevo para salir del sistema'
+        });
+      }
+    };
+
+    const handleHashChange = () => {
       const targetTab = getCurrentRouteTab(currentUser?.role || 'ADMIN');
       setActiveTab(targetTab);
     };
-    window.addEventListener('popstate', handleLocationChange);
-    window.addEventListener('hashchange', handleLocationChange);
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handleHashChange);
     return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handleHashChange);
     };
-  }, [currentUser]);
+  }, [
+    isAuthenticated, activePhotoPreview, activeMediaModal, activeIssueModal,
+    selectedUnitDetail, editOrderModalOpen, addUnitsModalOpen, emergencyModalOpen,
+    resetOrderModalOpen, deleteOrderModalOpen, mobileMenuOpen, activeTab, currentUser
+  ]);
 
   // Auth: Check saved token
   useEffect(() => {

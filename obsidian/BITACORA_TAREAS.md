@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-11** | Fix: Soporte al botón Atrás en móvil (prevención de salida abrupta) y total de PCs resueltas | `fix` / `mobile` / `ux` / `backend` | ✅ Completado | [[2026-11-11-fix-navegacion-atras-movil-y-total-pcs-resueltas]] |
 | **2026-11-07** | Fix: Implementación de endpoints y flujo completo para subsanar fallas y reanudar PCs | `fix` / `arquitectura` / `tesler` | ✅ Completado | [[2026-11-07-fix-subsanar-falla-reanudar-unidad]] |
 | **2026-11-07** | Fix: Desatasco de finalización en estación de limpieza y Single Source of Truth de pasos | `fix` / `arquitectura` / `tesler` | ✅ Completado | [[2026-11-07-fix-finalizacion-estacion-limpieza-single-source-steps]] |
 | **2026-11-07** | Verificador de tiempo entre pasos con Hora Perú (UTC-5) y duración en puesto y evidencias internas | `feat` / `auditoria` / `backend` / `frontend` | ✅ Completado | [[2026-11-07-verificador-tiempo-entre-pasos-hora-peru]] |

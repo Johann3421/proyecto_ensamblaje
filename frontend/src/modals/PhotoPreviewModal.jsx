@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Download, X, Camera, Video, Wrench, Clock, Timer } from 'lucide-react';
 import AdminPhotoCorrectionModal from './AdminPhotoCorrectionModal';
 import { formatPeruTime, formatDuration } from '../utils/timeFormat';
+import { registerBackHandler } from '../utils/backHandler';
 
 export default function PhotoPreviewModal({ photo, currentUser, onClose, onPhotoCorrected }) {
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+
+  useEffect(() => {
+    return registerBackHandler(() => {
+      if (showCorrectionModal) {
+        setShowCorrectionModal(false);
+        return true;
+      }
+      onClose();
+      return true;
+    });
+  }, [showCorrectionModal, onClose]);
+
   if (!photo) return null;
   const { url, title, subtitle, operation, user_name, timestamp, order_id, unit_number, step_number } = photo;
 

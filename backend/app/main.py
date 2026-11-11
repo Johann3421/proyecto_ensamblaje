@@ -2546,18 +2546,11 @@ def get_operator_workspace(
                     seen_prior_step_nums.add(s.step_number)
 
     queue_units = [u for u in units_in_station if active_unit and u.unit_number != active_unit.unit_number]
-    # Priorizar unidades despachadas que tengan actividad real de pasos registrada en QCStepLog
-    completed_units_all = db.query(QCPCUnit).filter(
+    # Todas las unidades despachadas que ya pasaron por esta estación en orden correlativo
+    completed_units = db.query(QCPCUnit).filter(
         QCPCUnit.order_id == order.order_id,
         QCPCUnit.current_station > assignment.station_number
     ).order_by(QCPCUnit.unit_number.asc()).all()
-    units_with_logs_set = set(
-        r[0] for r in db.query(QCStepLog.unit_number).filter(QCStepLog.order_id == order.order_id).distinct().all()
-    )
-    completed_units = sorted(
-        completed_units_all,
-        key=lambda u: (0 if u.unit_number in units_with_logs_set else 1, u.unit_number)
-    )[:15]
 
     # Consultar último visto bueno de auditoría de supervisión para la unidad activa
     supervisor_audit = None

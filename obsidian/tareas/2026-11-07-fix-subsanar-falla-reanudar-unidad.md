@@ -58,3 +58,4 @@ Al reportarse una falla en una unidad (`overall_status = "FAILED"`), el usuario 
    - Subsanación individual mediante `resolve_issue` probada y validada.
 2. **Build de Producción**:
    - `rtk npm --prefix frontend run build` finalizado en 4.17s sin errores.
+

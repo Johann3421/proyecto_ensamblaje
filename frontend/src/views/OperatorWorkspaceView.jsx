@@ -9,6 +9,7 @@ import TransferUnitModal from '../modals/TransferUnitModal';
 import SupervisorAuditModal from '../modals/SupervisorAuditModal';
 import { formatStepNumbersRange } from '../utils/steps';
 import { formatPeruTime, formatDuration } from '../utils/timeFormat';
+import { registerBackHandler } from '../utils/backHandler';
 
 export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMedia, onOpenIssue, onPreviewPhoto, onSelectUnit, onSelectOrder, onSelectStation, onRefresh, notify }) {
   if (!workspace || !workspace.active) {
@@ -84,6 +85,43 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
   useEffect(() => {
     setActiveSupervisorAudit(supervisor_audit || null);
   }, [supervisor_audit, active_unit?.unit_number]);
+
+  // Interceptar botón Atrás (Android/Móvil) para cerrar modales o volver a la PC activa
+  useEffect(() => {
+    return registerBackHandler(() => {
+      if (photoStepModal) {
+        setPhotoStepModal(null);
+        return true;
+      }
+      if (supervisorPhotoStepModal) {
+        setSupervisorPhotoStepModal(null);
+        return true;
+      }
+      if (transferModalOpen) {
+        setTransferModalOpen(false);
+        return true;
+      }
+      if (reassignStepModalData) {
+        setReassignStepModalData(null);
+        return true;
+      }
+      if (supervisorAuditModalOpen) {
+        setSupervisorAuditModalOpen(false);
+        return true;
+      }
+      // Si el operario está consultando una PC histórica despachada, volver a la PC activa de su estación
+      if (isHistorical && units_in_station && units_in_station.length > 0) {
+        localStorage.setItem('qc_active_unit', units_in_station[0].unit_number);
+        onSelectUnit && onSelectUnit(units_in_station[0].unit_number);
+        return true;
+      }
+      return false;
+    });
+  }, [
+    photoStepModal, supervisorPhotoStepModal, transferModalOpen,
+    reassignStepModalData, supervisorAuditModalOpen, isHistorical,
+    units_in_station, onSelectUnit
+  ]);
 
   useEffect(() => {
     // Si estamos en modo supervisor, completedSteps refleja los pasos certificados por el supervisor.
@@ -757,7 +795,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                         ))}
                       </optgroup>
                       {!isSupervisorMode && completed_units && completed_units.length > 0 && (
-                        <optgroup label="PCs ya despachadas">
+                        <optgroup label={`PCs ya despachadas (${completed_units.length})`}>
                           {completed_units.map(u => (
                             <option key={u.unit_number} value={u.unit_number} className="text-emerald-900 font-semibold">
                               ✓ PC #{u.unit_number.toString().padStart(2, '0')} (Enviada a E{u.current_station})
@@ -1157,36 +1195,38 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
           {/* Fila de acceso a PCs ya completadas y despachadas de la estación */}
           {completed_units && completed_units.length > 0 && !isSupervisorMode && (
-            <div className="mt-2 pt-2 border-t border-indigo-100 flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-bold text-stone-600 flex items-center gap-1 mr-1">
+            <div className="mt-2 pt-2 border-t border-indigo-100 flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold text-stone-600 flex items-center gap-1">
                 <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Despachadas a siguiente estación:</span>
+                <span>Despachadas a siguiente estación ({completed_units.length}):</span>
               </span>
-              {completed_units.map(u => {
-                const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
-                return (
-                  <button
-                    key={u.unit_number}
-                    type="button"
-                    onClick={() => {
-                      if (!isCurrent) {
-                        setCompletedSteps([]);
-                        setStepLogsMap({});
-                        onSelectUnit && onSelectUnit(u.unit_number);
-                      }
-                    }}
-                    className={`flex-shrink-0 px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 touch-target ${
-                      isCurrent
-                        ? "bg-emerald-700 text-white shadow-xs"
-                        : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
-                    }`}
-                    title={`Ver historial de PC #${u.unit_number} (enviada a Estación ${u.current_station})`}
-                  >
-                    <span>✓ PC #{u.unit_number.toString().padStart(2, '0')}</span>
-                    <span className="text-[8px] opacity-80">(E{u.current_station})</span>
-                  </button>
-                );
-              })}
+              <div className="flex items-center gap-1.5 flex-wrap max-h-32 overflow-y-auto pr-1">
+                {completed_units.map(u => {
+                  const isCurrent = active_unit && active_unit.unit_number === u.unit_number;
+                  return (
+                    <button
+                      key={u.unit_number}
+                      type="button"
+                      onClick={() => {
+                        if (!isCurrent) {
+                          setCompletedSteps([]);
+                          setStepLogsMap({});
+                          onSelectUnit && onSelectUnit(u.unit_number);
+                        }
+                      }}
+                      className={`flex-shrink-0 px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 touch-target ${
+                        isCurrent
+                          ? "bg-emerald-700 text-white shadow-xs"
+                          : "bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100"
+                      }`}
+                      title={`Ver historial de PC #${u.unit_number} (enviada a Estación ${u.current_station})`}
+                    >
+                      <span>✓ PC #{u.unit_number.toString().padStart(2, '0')}</span>
+                      <span className="text-[8px] opacity-80">(E{u.current_station})</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </Card>
@@ -2002,10 +2042,10 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
           {completed_units && completed_units.length > 0 && (
             <div className="mt-4 pt-3 border-t border-stone-100">
               <span className="text-[11px] font-bold text-stone-600 block mb-2">
-                Consultar historial de PCs que ya pasaron por tu estación:
+                Consultar historial de PCs que ya pasaron por tu estación ({completed_units.length}):
               </span>
-              <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                {completed_units.slice(0, 8).map(u => (
+              <div className="flex items-center justify-center gap-1.5 flex-wrap max-h-48 overflow-y-auto p-1">
+                {completed_units.map(u => (
                   <button
                     key={u.unit_number}
                     type="button"

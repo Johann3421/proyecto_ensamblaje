@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Check, AlertCircle, Upload, Loader2, X, RotateCcw, Camera, ZoomIn, ZoomOut, Smartphone, RefreshCw, Zap, ZapOff, Video, Square, Play } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import { compressImageToOptimized } from '../utils/imageCompressor';
+import { registerBackHandler } from '../utils/backHandler';
 
 export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámara", subtitle = null, prefix = "step", onCapture, onClose }) {
   const videoRef = useRef(null);
@@ -34,6 +35,23 @@ export default function CameraCaptureModal({ title = "Tomar Evidencia con Cámar
 
   // Control de Flash / Linterna
   const [torchOn, setTorchOn] = useState(false);
+
+  // Interceptar botón Atrás en Android/Móvil
+  useEffect(() => {
+    return registerBackHandler(() => {
+      if (capturedImage || capturedVideoBlob) {
+        setCapturedImage(null);
+        setCapturedVideoBlob(null);
+        if (capturedVideoUrl) {
+          URL.revokeObjectURL(capturedVideoUrl);
+          setCapturedVideoUrl(null);
+        }
+        return true;
+      }
+      onClose();
+      return true;
+    });
+  }, [capturedImage, capturedVideoBlob, capturedVideoUrl, onClose]);
 
   // Enumerar cámaras físicas disponibles
   const enumerateCameras = async () => {

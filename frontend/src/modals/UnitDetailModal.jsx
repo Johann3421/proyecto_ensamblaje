@@ -5,6 +5,7 @@ import Badge from '../components/Badge';
 import TransferUnitModal from '../modals/TransferUnitModal';
 import SupervisorAuditModal from '../modals/SupervisorAuditModal';
 import { formatPeruTime, formatDuration } from '../utils/timeFormat';
+import { registerBackHandler } from '../utils/backHandler';
 
 export default function UnitDetailModal({ unit, order, stations, issues = [], currentUser, onPreviewPhoto, onClose, onSuccess, notify }) {
   const [loading, setLoading] = useState(false);
@@ -33,6 +34,25 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
         .catch(() => {});
     }
   }, [order?.order_id, unit.unit_number]);
+
+  useEffect(() => {
+    return registerBackHandler(() => {
+      if (pendingConfirm) {
+        setPendingConfirm(null);
+        return true;
+      }
+      if (transferModalOpen) {
+        setTransferModalOpen(false);
+        return true;
+      }
+      if (supervisorModalOpen) {
+        setSupervisorModalOpen(false);
+        return true;
+      }
+      onClose();
+      return true;
+    });
+  }, [pendingConfirm, transferModalOpen, supervisorModalOpen, onClose]);
 
   const unitPhotos = unitLogs.filter(l => l.photo_url);
 

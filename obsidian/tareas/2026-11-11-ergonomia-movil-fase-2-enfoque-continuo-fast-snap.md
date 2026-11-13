@@ -68,3 +68,4 @@ La Fase 2 resuelve esta sobrecarga aplicando la **Ley de Tesler** (el sistema au
    - Selector `checklistMode` conmuta instantáneamente entre `Paso a Paso` y `Lista`.
    - Navegación `← Anterior` y `Siguiente →` respeta límites de la lista.
    - Disparo rápido guarda y avanza al siguiente paso sin recargas ni saltos bruscos.
+

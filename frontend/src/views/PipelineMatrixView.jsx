@@ -3,6 +3,7 @@ import { Check, CheckCircle, AlertTriangle, AlertCircle, Plus, Edit, Loader2, Sh
 import Badge from '../components/Badge';
 import Card from '../components/Card';
 import { hapticSelection } from '../utils/haptics';
+import { formatPeruDate, formatPeruTime, formatPeruDateTime } from '../utils/timeFormat';
 
 export default function PipelineMatrixView({ matrixData, orders, selectedOrder, setSelectedOrder, onOpenEmergency, onSelectUnit, onRefresh, onOpenAddUnits, onOpenResetOrder, onOpenDeleteOrder, onOpenEditOrder, onPreviewPhoto }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -459,7 +460,11 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
                       url: iss.photo_url,
                       title: `PC #${iss.unit_number.toString().padStart(2, '0')} · Falla: ${iss.issue_title}`,
                       subtitle: `Estación ${iss.station_number} · Reportado por ${iss.reported_by}`,
-                      user_name: iss.reported_by
+                      user_name: iss.reported_by,
+                      timestamp: iss.created_at,
+                      peru_date: formatPeruDate(iss.created_at),
+                      peru_time: formatPeruTime(iss.created_at),
+                      peru_datetime: formatPeruDateTime(iss.created_at)
                     })}
                     className="block relative rounded-xl overflow-hidden border border-rose-200 group cursor-pointer"
                   >

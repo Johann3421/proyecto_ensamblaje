@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Shield, FileText, Camera, Filter, Layers, CheckCircle2, AlertTriangle, ChevronRight, Clock, Timer } from 'lucide-react';
+import { Shield, FileText, Camera, Filter, Layers, CheckCircle2, AlertTriangle, ChevronRight, Clock, Timer, Calendar } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
-import { formatPeruTime, formatDuration } from '../utils/timeFormat';
+import { formatPeruTime, formatPeruDate, formatPeruDateTime, formatDuration } from '../utils/timeFormat';
 
 export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrder, onPreviewPhoto }) {
   const [logs, setLogs] = useState([]);
@@ -42,22 +42,34 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
     });
   }, [logs, filterUser, filterUnit]);
 
-  // Agrupación de fotos estrictamente por PC
+  // Agrupación y deduplicación canónica de fotos por PC (Ley de Tesler y Jakob)
   const photosByUnit = useMemo(() => {
-    const groups = {};
+    const rawGroups = {};
     logs.forEach(l => {
-      if (!l.photo_url) return;
+      if (!l.photo_url || ['sin foto', 'none', 'null', ''].includes(String(l.photo_url).trim().toLowerCase())) return;
       if (filterUnit && Number(l.unit_number) !== Number(filterUnit)) return;
       if (filterUser && !(l.user_name || "").toLowerCase().includes(filterUser.toLowerCase())) return;
 
       const uNum = l.unit_number;
-      if (!groups[uNum]) groups[uNum] = [];
-      groups[uNum].push(l);
+      if (!rawGroups[uNum]) rawGroups[uNum] = [];
+      rawGroups[uNum].push(l);
     });
 
-    // Ordenar fotos de cada PC por número de paso
-    Object.keys(groups).forEach(u => {
-      groups[u].sort((a, b) => a.step_number - b.step_number);
+    // Deduplicar por paso dentro de cada PC conservando la más reciente, y ordenar de 1 a N
+    const groups = {};
+    Object.keys(rawGroups).forEach(u => {
+      const stepMap = new Map();
+      rawGroups[u].forEach(l => {
+        const key = `${l.step_number}_${Boolean(l.is_supervisor_verified)}`;
+        const existing = stepMap.get(key);
+        if (!existing || (l.id && existing.id && l.id > existing.id) || (new Date(l.timestamp || 0) > new Date(existing.timestamp || 0))) {
+          stepMap.set(key, l);
+        }
+      });
+      groups[u] = Array.from(stepMap.values()).sort((a, b) => {
+        if (a.step_number !== b.step_number) return a.step_number - b.step_number;
+        return (a.is_supervisor_verified ? 1 : 0) - (b.is_supervisor_verified ? 1 : 0);
+      });
     });
 
     return groups;
@@ -182,7 +194,7 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {unitPhotos.map((l, idx) => (
                       <div
-                        key={idx}
+                        key={`${l.step_number}_${l.is_supervisor_verified ? 'sup' : 'op'}_${l.id || idx}`}
                         onClick={() => onPreviewPhoto && onPreviewPhoto({
                           url: l.photo_url,
                           order_id: l.order_id || activeOrderId,
@@ -190,15 +202,18 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                           step_number: l.step_number,
                           station_number: l.station_number,
                           title: `PC #${l.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
-                          subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
+                          subtitle: `Estación ${l.station_number} · ${l.is_supervisor_verified ? '🛡️ V°B° ' : ''}${l.user_name}`,
                           operation: l.operation,
                           user_name: l.user_name,
+                          is_supervisor_verified: l.is_supervisor_verified,
                           timestamp: l.timestamp,
+                          peru_date: l.peru_date || formatPeruDate(l.timestamp),
                           peru_time: l.peru_time || formatPeruTime(l.timestamp),
+                          peru_datetime: l.peru_datetime || formatPeruDateTime(l.timestamp),
                           duration_seconds: l.duration_seconds,
                           duration_formatted: l.duration_formatted || formatDuration(l.duration_seconds)
                         })}
-                        className="group relative rounded-xl overflow-hidden border border-stone-200 bg-slate-950 cursor-pointer shadow-xs hover:shadow-md transition flex flex-col aspect-square"
+                        className="group relative rounded-xl overflow-hidden border border-stone-200 bg-slate-950 cursor-pointer shadow-xs hover:shadow-md transition flex flex-col aspect-square touch-manipulation"
                       >
                         <img
                           src={l.photo_url}
@@ -206,24 +221,25 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                           loading="lazy"
                         />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/75 to-transparent p-2 text-white">
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-2 text-white">
                           <span className="text-[11px] font-bold block leading-tight truncate">
                             #{l.step_number} {l.operation || `Paso ${l.step_number}`}
                           </span>
                           <div className="flex items-center justify-between text-[9px] text-slate-300 mt-0.5">
-                            <span>E{l.station_number} · {l.user_name}</span>
-                            <span className="font-mono text-amber-300">{l.peru_time || formatPeruTime(l.timestamp, false)}</span>
+                            <span className="truncate max-w-[55%]">E{l.station_number} · {l.user_name}</span>
+                            <span className="font-mono text-amber-300 whitespace-nowrap">{l.peru_time || formatPeruTime(l.timestamp, false)}</span>
                           </div>
-                          <div className="flex items-center justify-between mt-1 text-[8px]">
-                            {(l.duration_seconds !== null && l.duration_seconds !== undefined) ? (
-                              <span className="font-bold text-sky-200 bg-sky-950/90 border border-sky-600/60 px-1.5 py-0.2 rounded">
-                                ⏱️ {l.duration_formatted || formatDuration(l.duration_seconds)}
-                              </span>
-                            ) : <span></span>}
+                          <div className="flex items-center justify-between mt-0.5 text-[8px]">
+                            <span className="text-sky-300 font-mono">{l.peru_date || formatPeruDate(l.timestamp)}</span>
                             {l.is_supervisor_verified && (
                               <span className="text-amber-300 font-bold bg-amber-950/80 px-1 rounded border border-amber-500/40">SUP</span>
                             )}
                           </div>
+                          {(l.duration_seconds !== null && l.duration_seconds !== undefined) && (
+                            <div className="mt-0.5 inline-block text-[8px] font-bold text-sky-200 bg-sky-950/90 border border-sky-600/60 px-1.5 py-0.2 rounded">
+                              ⏱️ {l.duration_formatted || formatDuration(l.duration_seconds)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -296,18 +312,21 @@ export default function AuditLogsView({ selectedOrder, orders = [], onSelectOrde
                           step_number: l.step_number,
                           station_number: l.station_number,
                           title: `PC #${l.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
-                          subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
+                          subtitle: `Estación ${l.station_number} · ${l.is_supervisor_verified ? '🛡️ V°B° ' : ''}${l.user_name}`,
                           operation: l.operation,
                           user_name: l.user_name,
+                          is_supervisor_verified: l.is_supervisor_verified,
                           timestamp: l.timestamp,
+                          peru_date: l.peru_date || formatPeruDate(l.timestamp),
                           peru_time: l.peru_time || formatPeruTime(l.timestamp),
+                          peru_datetime: l.peru_datetime || formatPeruDateTime(l.timestamp),
                           duration_seconds: l.duration_seconds,
                           duration_formatted: l.duration_formatted || formatDuration(l.duration_seconds)
                         })}
-                        className="inline-flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg text-[10px] font-bold text-emerald-800 transition group"
+                        className="min-h-[44px] inline-flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-800 transition group touch-manipulation"
                       >
-                        <img src={l.photo_url} alt="Evidencia" className="w-6 h-6 object-cover rounded border border-emerald-300 group-hover:scale-105 transition" />
-                        <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                        <img src={l.photo_url} alt="Evidencia" className="w-7 h-7 object-cover rounded-lg border border-emerald-300 group-hover:scale-105 transition" />
+                        <Camera className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                         <span>Ver Foto: #{l.step_number} {l.operation || ''}</span>
                       </button>
                     </div>

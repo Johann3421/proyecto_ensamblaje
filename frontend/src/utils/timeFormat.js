@@ -1,7 +1,24 @@
 /**
- * Utilidades para formateo de Hora Perú (America/Lima / UTC-5)
+ * Utilidades para formateo de Fecha y Hora Perú (America/Lima / UTC-5)
  * y cálculo/formateo de duraciones de tiempo tomadas entre pasos.
+ * Cumple con Ley de Jakob (formatos estándar y familiares) y Ley de Tesler.
  */
+
+export function formatPeruDate(isoString) {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat('es-PE', {
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(d);
+  } catch {
+    return "";
+  }
+}
 
 export function formatPeruTime(isoString, includeSeconds = true) {
   if (!isoString) return "";
@@ -10,6 +27,26 @@ export function formatPeruTime(isoString, includeSeconds = true) {
     if (isNaN(d.getTime())) return "";
     return new Intl.DateTimeFormat('es-PE', {
       timeZone: 'America/Lima',
+      hour: '2-digit',
+      minute: '2-digit',
+      ...(includeSeconds ? { second: '2-digit' } : {}),
+      hour12: true
+    }).format(d);
+  } catch {
+    return "";
+  }
+}
+
+export function formatPeruDateTime(isoString, includeSeconds = true) {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat('es-PE', {
+      timeZone: 'America/Lima',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
       ...(includeSeconds ? { second: '2-digit' } : {}),
@@ -31,4 +68,5 @@ export function formatDuration(seconds) {
   const rem_m = m % 60;
   return `${h}h ${rem_m.toString().padStart(2, '0')}m`;
 }
+
 

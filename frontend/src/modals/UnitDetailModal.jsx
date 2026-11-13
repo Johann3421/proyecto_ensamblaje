@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Check, CheckCircle, AlertTriangle, Shield, Cpu, X, ShieldCheck, ArrowRightCircle, Trash2, RotateCcw, Trash, Camera, Play, Video, Clock, Timer } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Check, CheckCircle, AlertTriangle, Shield, Cpu, X, ShieldCheck, ArrowRightCircle, Trash2, RotateCcw, Trash, Camera, Play, Video, Clock, Timer, Calendar } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import TransferUnitModal from '../modals/TransferUnitModal';
 import SupervisorAuditModal from '../modals/SupervisorAuditModal';
-import { formatPeruTime, formatDuration } from '../utils/timeFormat';
+import { formatPeruTime, formatPeruDate, formatPeruDateTime, formatDuration } from '../utils/timeFormat';
 import { registerBackHandler } from '../utils/backHandler';
 
 export default function UnitDetailModal({ unit, order, stations, issues = [], currentUser, onPreviewPhoto, onClose, onSuccess, notify }) {
@@ -54,7 +54,27 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
     });
   }, [pendingConfirm, transferModalOpen, supervisorModalOpen, onClose]);
 
-  const unitPhotos = unitLogs.filter(l => l.photo_url);
+  // Deduplicación canónica y ordenamiento estricto por número de paso (Ley de Tesler y Jakob)
+  const unitPhotos = useMemo(() => {
+    // 1. Filtrar solo fotos válidas
+    const valid = (unitLogs || []).filter(l => l.photo_url && !['sin foto', 'null', 'none', ''].includes(String(l.photo_url).trim().toLowerCase()));
+    
+    // 2. Deduplicar por (step_number, is_supervisor_verified) conservando la más reciente
+    const map = new Map();
+    valid.forEach(l => {
+      const key = `${l.step_number}_${Boolean(l.is_supervisor_verified)}`;
+      const existing = map.get(key);
+      if (!existing || (l.id && existing.id && l.id > existing.id) || (new Date(l.timestamp || 0) > new Date(existing.timestamp || 0))) {
+        map.set(key, l);
+      }
+    });
+
+    // 3. Ordenar secuencialmente por número de paso (Paso 1, Paso 2, ...)
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.step_number !== b.step_number) return a.step_number - b.step_number;
+      return (a.is_supervisor_verified ? 1 : 0) - (b.is_supervisor_verified ? 1 : 0);
+    });
+  }, [unitLogs]);
 
   const handleResetUnit = () => {
     setPendingConfirm({
@@ -187,7 +207,7 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                     const isVid = l.photo_url && (l.photo_url.toLowerCase().endsWith('.mp4') || l.photo_url.toLowerCase().endsWith('.webm'));
                     return (
                       <div
-                        key={idx}
+                        key={`${l.step_number}_${l.is_supervisor_verified ? 'sup' : 'op'}_${l.id || idx}`}
                         onClick={() => onPreviewPhoto && onPreviewPhoto({
                           url: l.photo_url,
                           order_id: order.order_id,
@@ -195,15 +215,18 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                           step_number: l.step_number,
                           station_number: l.station_number,
                           title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Paso #${l.step_number}: ${l.operation || 'Paso ' + l.step_number}`,
-                          subtitle: `Estación ${l.station_number} · Verificado por ${l.user_name}`,
+                          subtitle: `Estación ${l.station_number} · ${l.is_supervisor_verified ? '🛡️ V°B° ' : ''}${l.user_name}`,
                           operation: l.operation,
                           user_name: l.user_name,
+                          is_supervisor_verified: l.is_supervisor_verified,
                           timestamp: l.timestamp,
+                          peru_date: l.peru_date || formatPeruDate(l.timestamp),
                           peru_time: l.peru_time || formatPeruTime(l.timestamp),
+                          peru_datetime: l.peru_datetime || formatPeruDateTime(l.timestamp),
                           duration_seconds: l.duration_seconds,
                           duration_formatted: l.duration_formatted || formatDuration(l.duration_seconds)
                         })}
-                        className="group relative rounded-xl overflow-hidden border border-emerald-200 bg-slate-900 cursor-pointer shadow-xs aspect-square"
+                        className="group relative rounded-xl overflow-hidden border border-emerald-200 bg-slate-900 cursor-pointer shadow-xs aspect-square touch-manipulation hover:border-emerald-400 transition"
                       >
                         {isVid ? (
                           <div className="w-full h-full relative flex items-center justify-center bg-black">
@@ -220,13 +243,19 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                             loading="lazy"
                           />
                         )}
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/75 to-transparent p-1.5 text-white">
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-1.5 text-white">
                           <span className="text-[10px] font-bold block leading-tight truncate">
                             #{l.step_number} {l.operation || `Paso ${l.step_number}`}
                           </span>
                           <div className="flex items-center justify-between text-[8px] text-slate-300 mt-0.5">
-                            <span>E{l.station_number} · {l.user_name}</span>
-                            <span className="font-mono text-amber-300">{l.peru_time || formatPeruTime(l.timestamp, false)}</span>
+                            <span className="truncate max-w-[55%]">E{l.station_number} · {l.user_name}</span>
+                            <span className="font-mono text-amber-300 whitespace-nowrap">{l.peru_time || formatPeruTime(l.timestamp, false)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[7px] text-slate-400 mt-0.5">
+                            <span className="text-sky-300 font-mono">{l.peru_date || formatPeruDate(l.timestamp)}</span>
+                            {l.is_supervisor_verified && (
+                              <span className="text-indigo-300 font-bold bg-indigo-950/80 px-1 rounded border border-indigo-500/40">SUP</span>
+                            )}
                           </div>
                           {(l.duration_seconds !== null && l.duration_seconds !== undefined) && (
                             <div className="mt-0.5 inline-block text-[8px] font-bold text-sky-200 bg-sky-950/80 border border-sky-600/60 px-1 rounded">
@@ -273,9 +302,16 @@ export default function UnitDetailModal({ unit, order, stations, issues = [], cu
                           <div 
                             onClick={() => onPreviewPhoto && onPreviewPhoto({
                               url: iss.photo_url,
+                              order_id: order.order_id,
+                              unit_number: unit.unit_number,
+                              station_number: iss.station_number,
                               title: `PC #${unit.unit_number.toString().padStart(2, '0')} · Falla: ${iss.issue_title}`,
                               subtitle: `Estación ${iss.station_number} · Reportado por ${iss.reported_by}`,
-                              user_name: iss.reported_by
+                              user_name: iss.reported_by,
+                              timestamp: iss.created_at,
+                              peru_date: formatPeruDate(iss.created_at),
+                              peru_time: formatPeruTime(iss.created_at),
+                              peru_datetime: formatPeruDateTime(iss.created_at)
                             })}
                             className="block relative group overflow-hidden rounded-lg border border-rose-300 cursor-pointer bg-black"
                           >

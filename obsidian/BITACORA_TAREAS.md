@@ -15,6 +15,7 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-13** | Fix: Mapeo de Fotos de Evidencia a sus Pasos Exactos y Fecha + Hora Perú (Leyes de Interacción) | `fix` / `ux` / `tesler` / `arquitectura` | ✅ Completado | [[2026-11-13-fix-evidencia-fotos-mapeo-pasos-y-fecha-hora-peru]] |
 | **2026-11-11** | Ergonomía Móvil Fase 2: Ensamble Continuo, Modo Enfoque 1 a 1, Disparo Rápido (Fast Snap) y Auto-Avance | `ux` / `mobile` / `arquitectura` / `tesler` | ✅ Completado | [[2026-11-11-ergonomia-movil-fase-2-enfoque-continuo-fast-snap]] |
 | **2026-11-11** | Ergonomía Móvil Fase 1: Touch Targets Industriales (>=48px), Fusión de Acciones, Feedback Háptico y Arquitectura Fase 2/3 | `ux` / `mobile` / `arquitectura` / `tesler` | ✅ Completado | [[2026-11-11-ergonomia-movil-fase-1-touch-targets-haptics-unificacion]] |
 | **2026-11-11** | Fix: Soporte al botón Atrás en móvil (prevención de salida abrupta) y total de PCs resueltas | `fix` / `mobile` / `ux` / `backend` | ✅ Completado | [[2026-11-11-fix-navegacion-atras-movil-y-total-pcs-resueltas]] |

@@ -146,6 +146,13 @@ def auto_migrate_schema():
 # Utilidades de Zona Horaria (Hora Perú UTC-5) y Medición de Tiempos entre Pasos
 PERU_TZ = timezone(timedelta(hours=-5))
 
+def format_peru_date(dt: Optional[datetime]) -> Optional[str]:
+    """Convierte una fecha UTC a formato Fecha Perú (America/Lima / UTC-5): ej. '13/11/2026'"""
+    if not dt:
+        return None
+    dt_utc = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt_utc.astimezone(PERU_TZ).strftime("%d/%m/%Y")
+
 def format_peru_time(dt: Optional[datetime]) -> Optional[str]:
     """Convierte una fecha UTC a formato Hora Perú (America/Lima / UTC-5) en formato 12h: ej. '10:34:12 a. m.'"""
     if not dt:
@@ -155,6 +162,26 @@ def format_peru_time(dt: Optional[datetime]) -> Optional[str]:
     hour = peru_dt.strftime("%I:%M:%S")
     am_pm = "a. m." if peru_dt.hour < 12 else "p. m."
     return f"{hour} {am_pm}"
+
+def format_peru_datetime(dt: Optional[datetime]) -> Optional[str]:
+    """Convierte una fecha UTC a formato Fecha y Hora Perú (America/Lima / UTC-5): ej. '13/11/2026, 10:34:12 a. m.'"""
+    if not dt:
+        return None
+    dt_utc = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    peru_dt = dt_utc.astimezone(PERU_TZ)
+    date_part = peru_dt.strftime("%d/%m/%Y")
+    hour = peru_dt.strftime("%I:%M:%S")
+    am_pm = "a. m." if peru_dt.hour < 12 else "p. m."
+    return f"{date_part}, {hour} {am_pm}"
+
+def sanitize_photo_url(url: Optional[str]) -> Optional[str]:
+    """Sanea URLs de fotos eliminando placeholders falsos como 'Sin foto' o cadenas vacías"""
+    if not url:
+        return None
+    clean = str(url).strip()
+    if clean.lower() in ("sin foto", "none", "null", "undefined", ""):
+        return None
+    return clean
 
 def format_duration(seconds: Optional[int]) -> Optional[str]:
     """Formatea segundos a formato amigable: ej. '45s', '2m 15s', '1h 05m'"""
@@ -186,12 +213,14 @@ def compute_log_dict(l: QCStepLog, prev_log: Optional[QCStepLog] = None, unit_st
     return {
         "id": getattr(l, "id", None),
         "step_number": l.step_number,
-        "photo_url": l.photo_url,
+        "photo_url": sanitize_photo_url(l.photo_url),
         "user_name": l.user_name,
         "user_id": getattr(l, "user_id", None),
         "is_supervisor_verified": bool(l.is_supervisor_verified),
         "timestamp": l.timestamp.isoformat() if l.timestamp else None,
         "peru_time": format_peru_time(l.timestamp),
+        "peru_date": format_peru_date(l.timestamp),
+        "peru_datetime": format_peru_datetime(l.timestamp),
         "duration_seconds": dur,
         "duration_formatted": format_duration(dur)
     }
@@ -242,6 +271,13 @@ def auto_heal_checklist_sequence(db: Optional[Session] = None):
                   OR LOWER(operation) LIKE '%retirar pelicula de tapa frontal%'
                   OR model_name IN ('ALL IN ONE', 'ENSAMBLAJE')
               );
+        """))
+        # Sanear registros con falsos placeholders de foto como 'Sin foto'
+        db.execute(text("""
+            UPDATE qc_step_logs
+            SET photo_url = NULL
+            WHERE photo_url IS NOT NULL
+              AND LOWER(TRIM(photo_url)) IN ('sin foto', 'none', 'null', 'undefined', '');
         """))
         db.commit()
 
@@ -2125,14 +2161,14 @@ def get_operator_workspace(
             op_by_step = {}
             for l in op_logs:
                 existing = op_by_step.get(l.step_number)
-                if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+                if not existing or (l.photo_url and not existing.photo_url) or (l.id > existing.id and (not existing.photo_url or l.photo_url)):
                     op_by_step[l.step_number] = l
             deduped_op_logs = sorted(op_by_step.values(), key=lambda x: x.step_number)
 
             sup_by_step = {}
             for l in sup_logs:
                 existing = sup_by_step.get(l.step_number)
-                if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+                if not existing or (l.photo_url and not existing.photo_url) or (l.id > existing.id and (not existing.photo_url or l.photo_url)):
                     sup_by_step[l.step_number] = l
             deduped_sup_logs = sorted(sup_by_step.values(), key=lambda x: x.step_number)
 
@@ -2487,14 +2523,14 @@ def get_operator_workspace(
         op_by_step = {}
         for l in op_logs:
             existing = op_by_step.get(l.step_number)
-            if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+            if not existing or (l.photo_url and not existing.photo_url) or (l.id > existing.id and (not existing.photo_url or l.photo_url)):
                 op_by_step[l.step_number] = l
         deduped_op_logs = sorted(op_by_step.values(), key=lambda x: x.step_number)
 
         sup_by_step = {}
         for l in sup_logs:
             existing = sup_by_step.get(l.step_number)
-            if not existing or (l.photo_url and not existing.photo_url) or l.id > existing.id:
+            if not existing or (l.photo_url and not existing.photo_url) or (l.id > existing.id and (not existing.photo_url or l.photo_url)):
                 sup_by_step[l.step_number] = l
         deduped_sup_logs = sorted(sup_by_step.values(), key=lambda x: x.step_number)
 
@@ -2658,15 +2694,19 @@ def supervisor_verify_step_photo(req: SupervisorStepPhotoVerify, db: Session = D
     db.commit()
     db.refresh(supervisor_log)
 
+    clean_photo = sanitize_photo_url(supervisor_log.photo_url)
     return {
         "message": f"Paso {req.step_number} verificado con foto por el supervisor {req.supervisor_name}",
         "log": {
             "id": supervisor_log.id,
             "step_number": supervisor_log.step_number,
-            "photo_url": supervisor_log.photo_url,
+            "photo_url": clean_photo,
             "user_name": supervisor_log.user_name,
             "is_supervisor_verified": True,
-            "timestamp": supervisor_log.timestamp.isoformat()
+            "timestamp": supervisor_log.timestamp.isoformat(),
+            "peru_time": format_peru_time(supervisor_log.timestamp),
+            "peru_date": format_peru_date(supervisor_log.timestamp),
+            "peru_datetime": format_peru_datetime(supervisor_log.timestamp)
         }
     }
 
@@ -2870,6 +2910,8 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
         "log_id": new_log.id,
         "timestamp": new_log.timestamp.isoformat(),
         "peru_time": format_peru_time(new_log.timestamp),
+        "peru_date": format_peru_date(new_log.timestamp),
+        "peru_datetime": format_peru_datetime(new_log.timestamp),
         "duration_seconds": new_log.duration_seconds,
         "duration_formatted": format_duration(new_log.duration_seconds)
     }
@@ -3475,7 +3517,10 @@ def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
     order = db.query(QCOrder).filter(QCOrder.order_id == order_id).first()
     step_ops = {}
     if order:
-        items = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == order.model_name).all()
+        clean_model = (order.model_name or "").strip().upper()
+        items = db.query(QCChecklistItem).filter(
+            func.upper(func.trim(QCChecklistItem.model_name)) == clean_model
+        ).order_by(QCChecklistItem.step_number.asc()).all()
         step_ops = {item.step_number: item.operation for item in items}
 
     logs = db.query(QCStepLog).filter(QCStepLog.order_id == order_id).order_by(QCStepLog.timestamp.desc()).all()
@@ -3516,6 +3561,7 @@ def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
             else:
                 op_name = f"Paso {l.step_number}"
         dur = duration_map.get(l.id, l.duration_seconds)
+        clean_photo = sanitize_photo_url(l.photo_url)
         result.append({
             "id": l.id,
             "order_id": l.order_id,
@@ -3525,11 +3571,13 @@ def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
             "user_id": l.user_id,
             "user_name": l.user_name,
             "status": l.status,
-            "photo_url": l.photo_url,
+            "photo_url": clean_photo,
             "is_supervisor_verified": bool(l.is_supervisor_verified),
             "notes": l.notes,
             "timestamp": l.timestamp.isoformat() if l.timestamp else None,
             "peru_time": format_peru_time(l.timestamp),
+            "peru_date": format_peru_date(l.timestamp),
+            "peru_datetime": format_peru_datetime(l.timestamp),
             "duration_seconds": dur,
             "duration_formatted": format_duration(dur),
             "operation": op_name

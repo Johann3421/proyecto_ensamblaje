@@ -8,7 +8,7 @@ import ReassignStepModal from '../modals/ReassignStepModal';
 import TransferUnitModal from '../modals/TransferUnitModal';
 import SupervisorAuditModal from '../modals/SupervisorAuditModal';
 import { formatStepNumbersRange } from '../utils/steps';
-import { formatPeruTime, formatDuration } from '../utils/timeFormat';
+import { formatPeruTime, formatPeruDate, formatPeruDateTime, formatDuration } from '../utils/timeFormat';
 import { registerBackHandler } from '../utils/backHandler';
 import { hapticTap, hapticSuccess, hapticWarning, hapticError, hapticSelection } from '../utils/haptics';
 
@@ -426,6 +426,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         is_supervisor_verified: false,
         timestamp: data.timestamp || new Date().toISOString(),
         peru_time: data.peru_time || formatPeruTime(data.timestamp || new Date().toISOString()),
+        peru_date: data.peru_date || formatPeruDate(data.timestamp || new Date().toISOString()),
+        peru_datetime: data.peru_datetime || formatPeruDateTime(data.timestamp || new Date().toISOString()),
         duration_seconds: data.duration_seconds,
         duration_formatted: data.duration_formatted || formatDuration(data.duration_seconds)
       };
@@ -494,6 +496,8 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         const err = await res.json();
         throw new Error(err.detail || "Error registrando foto de cumplimiento por supervisor");
       }
+      const data = await res.json().catch(() => ({}));
+      const serverLog = data.log || {};
       setSupervisorDoneSteps(prev => [...new Set([...prev, step.step_number])]);
       if (isSupervisorMode) {
         setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
@@ -502,10 +506,12 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
       const newSupLog = {
         step_number: step.step_number,
         photo_url: photoUrl,
-        user_name: `${currentUser.name} (Supervisor)`,
+        user_name: serverLog.user_name || `${currentUser.name} (Supervisor)`,
         is_supervisor_verified: true,
-        timestamp: nowIso,
-        peru_time: formatPeruTime(nowIso)
+        timestamp: serverLog.timestamp || nowIso,
+        peru_time: serverLog.peru_time || formatPeruTime(nowIso),
+        peru_date: serverLog.peru_date || formatPeruDate(nowIso),
+        peru_datetime: serverLog.peru_datetime || formatPeruDateTime(nowIso)
       };
       setSupervisorStepLogsMap(prev => ({
         ...prev,
@@ -1240,7 +1246,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     if (!isCurrent) {
                       hapticSelection();
                       setCompletedSteps([]);
+                      setTechnicianDoneSteps([]);
+                      setSupervisorDoneSteps([]);
                       setStepLogsMap({});
+                      setOperatorStepLogsMap({});
+                      setSupervisorStepLogsMap({});
                       onSelectUnit && onSelectUnit(u.unit_number);
                     }
                   }}
@@ -1282,7 +1292,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                         if (!isCurrent) {
                           hapticSelection();
                           setCompletedSteps([]);
+                          setTechnicianDoneSteps([]);
+                          setSupervisorDoneSteps([]);
                           setStepLogsMap({});
+                          setOperatorStepLogsMap({});
+                          setSupervisorStepLogsMap({});
                           onSelectUnit && onSelectUnit(u.unit_number);
                         }
                       }}
@@ -1319,7 +1333,16 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             {queue_units.map(u => (
               <div
                 key={u.unit_number}
-                onClick={() => onSelectUnit && onSelectUnit(u.unit_number)}
+                onClick={() => {
+                  hapticSelection();
+                  setCompletedSteps([]);
+                  setTechnicianDoneSteps([]);
+                  setSupervisorDoneSteps([]);
+                  setStepLogsMap({});
+                  setOperatorStepLogsMap({});
+                  setSupervisorStepLogsMap({});
+                  onSelectUnit && onSelectUnit(u.unit_number);
+                }}
                 className="flex justify-between items-center p-2.5 bg-gray-50 hover:bg-stone-100 active:bg-stone-200 rounded-xl border border-gray-200 cursor-pointer transition touch-target"
               >
                 <div className="flex items-center gap-2">
@@ -1430,7 +1453,9 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                   operation: st.operation,
                                   user_name: stepLog.user_name,
                                   timestamp: stepLog.timestamp,
+                                  peru_date: stepLog.peru_date || formatPeruDate(stepLog.timestamp),
                                   peru_time: stepLog.peru_time || formatPeruTime(stepLog.timestamp),
+                                  peru_datetime: stepLog.peru_datetime || formatPeruDateTime(stepLog.timestamp),
                                   duration_seconds: stepLog.duration_seconds,
                                   duration_formatted: stepLog.duration_formatted || formatDuration(stepLog.duration_seconds),
                                   order_id: order?.order_id,
@@ -1724,20 +1749,31 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                             <div 
                               onClick={() => onPreviewPhoto && onPreviewPhoto({
                                 url: opLog.photo_url,
-                                title: `PC #${active_unit?.unit_number} · Paso #${focusedStep.step_number}`,
-                                subtitle: `Operario: ${opLog.user_name}`,
+                                order_id: order?.order_id,
+                                unit_number: active_unit?.unit_number,
+                                step_number: focusedStep.step_number,
+                                station_number: assignment?.station_number,
+                                title: `PC #${active_unit?.unit_number ? active_unit.unit_number.toString().padStart(2, '0') : '??'} · Paso #${focusedStep.step_number}: ${focusedStep.operation}`,
+                                subtitle: `Estación ${assignment?.station_number ?? 0} · Técnico: ${opLog.user_name}`,
+                                operation: focusedStep.operation,
+                                user_name: opLog.user_name,
+                                is_supervisor_verified: false,
                                 timestamp: opLog.timestamp,
-                                peru_time: opLog.peru_time,
-                                duration_seconds: opLog.duration_seconds
+                                peru_date: opLog.peru_date || formatPeruDate(opLog.timestamp),
+                                peru_time: opLog.peru_time || formatPeruTime(opLog.timestamp),
+                                peru_datetime: opLog.peru_datetime || formatPeruDateTime(opLog.timestamp),
+                                duration_seconds: opLog.duration_seconds,
+                                duration_formatted: opLog.duration_formatted || formatDuration(opLog.duration_seconds)
                               })}
-                              className="p-2 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center gap-2.5 cursor-pointer hover:bg-emerald-100 transition"
+                              className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center gap-2.5 cursor-pointer hover:bg-emerald-100 transition touch-manipulation"
                             >
-                              <img src={opLog.photo_url} alt="Foto" className="w-10 h-10 object-cover rounded-lg border border-emerald-400 flex-shrink-0" />
-                              <div className="text-[11px] min-w-0">
+                              <img src={opLog.photo_url} alt="Foto" className="w-11 h-11 object-cover rounded-lg border border-emerald-400 flex-shrink-0" />
+                              <div className="text-[11px] min-w-0 flex-1">
                                 <span className="font-bold text-emerald-900 block truncate">✓ Evidencia Técnico</span>
-                                <span className="text-[10px] text-emerald-700 font-mono block">
-                                  {opLog.peru_time || "Registrado"}
-                                </span>
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-emerald-700 font-mono flex-wrap">
+                                  <span>{opLog.peru_date || formatPeruDate(opLog.timestamp)}</span>
+                                  <span>{opLog.peru_time || "Registrado"}</span>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1745,19 +1781,31 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                             <div 
                               onClick={() => onPreviewPhoto && onPreviewPhoto({
                                 url: supLog.photo_url,
-                                title: `PC #${active_unit?.unit_number} · V°B° Paso #${focusedStep.step_number}`,
-                                subtitle: `Supervisor: ${supLog.user_name}`,
+                                order_id: order?.order_id,
+                                unit_number: active_unit?.unit_number,
+                                step_number: focusedStep.step_number,
+                                station_number: assignment?.station_number,
+                                title: `PC #${active_unit?.unit_number ? active_unit.unit_number.toString().padStart(2, '0') : '??'} · V°B° Paso #${focusedStep.step_number}: ${focusedStep.operation}`,
+                                subtitle: `Supervisión de Calidad · ${supLog.user_name}`,
+                                operation: focusedStep.operation,
+                                user_name: supLog.user_name,
+                                is_supervisor_verified: true,
                                 timestamp: supLog.timestamp,
-                                peru_time: supLog.peru_time
+                                peru_date: supLog.peru_date || formatPeruDate(supLog.timestamp),
+                                peru_time: supLog.peru_time || formatPeruTime(supLog.timestamp),
+                                peru_datetime: supLog.peru_datetime || formatPeruDateTime(supLog.timestamp),
+                                duration_seconds: supLog.duration_seconds,
+                                duration_formatted: supLog.duration_formatted || formatDuration(supLog.duration_seconds)
                               })}
-                              className="p-2 rounded-xl bg-indigo-50 border border-indigo-300 flex items-center gap-2.5 cursor-pointer hover:bg-indigo-100 transition"
+                              className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-300 flex items-center gap-2.5 cursor-pointer hover:bg-indigo-100 transition touch-manipulation"
                             >
-                              <img src={supLog.photo_url} alt="Foto Sup" className="w-10 h-10 object-cover rounded-lg border border-indigo-400 flex-shrink-0" />
-                              <div className="text-[11px] min-w-0">
+                              <img src={supLog.photo_url} alt="Foto Sup" className="w-11 h-11 object-cover rounded-lg border border-indigo-400 flex-shrink-0" />
+                              <div className="text-[11px] min-w-0 flex-1">
                                 <span className="font-bold text-indigo-900 block truncate">🛡️ V°B° Supervisor</span>
-                                <span className="text-[10px] text-indigo-700 font-mono block">
-                                  {supLog.peru_time || "Auditado"}
-                                </span>
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-indigo-700 font-mono flex-wrap">
+                                  <span>{supLog.peru_date || formatPeruDate(supLog.timestamp)}</span>
+                                  <span>{supLog.peru_time || "Auditado"}</span>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -2067,8 +2115,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                         subtitle: `Estación ${assignment?.station_number ?? 0} · Técnico: ${opLog?.user_name || 'Operario'}`,
                                         operation: st.operation,
                                         user_name: opLog?.user_name || 'Operario',
+                                        is_supervisor_verified: false,
                                         timestamp: opLog?.timestamp,
+                                        peru_date: opLog?.peru_date || formatPeruDate(opLog?.timestamp),
                                         peru_time: opLog?.peru_time || formatPeruTime(opLog?.timestamp),
+                                        peru_datetime: opLog?.peru_datetime || formatPeruDateTime(opLog?.timestamp),
                                         duration_seconds: opLog?.duration_seconds,
                                         duration_formatted: opLog?.duration_formatted || formatDuration(opLog?.duration_seconds),
                                         order_id: order?.order_id,
@@ -2101,7 +2152,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                       {opLog?.timestamp && (
                                         <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-emerald-900 bg-emerald-100/90 px-1.5 py-0.5 rounded border border-emerald-300">
                                           <Clock className="w-2.5 h-2.5 text-emerald-700" />
-                                          <span>{opLog.peru_time || formatPeruTime(opLog.timestamp)}</span>
+                                          <span>{opLog.peru_date ? `${opLog.peru_date} ` : ''}{opLog.peru_time || formatPeruTime(opLog.timestamp)}</span>
                                         </span>
                                       )}
                                       {(opLog?.duration_seconds !== null && opLog?.duration_seconds !== undefined) && (
@@ -2132,8 +2183,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                         subtitle: `Supervisión de Calidad · ${st.operation}`,
                                         operation: st.operation,
                                         user_name: supLog?.user_name || 'Supervisor',
+                                        is_supervisor_verified: true,
                                         timestamp: supLog?.timestamp,
+                                        peru_date: supLog?.peru_date || formatPeruDate(supLog?.timestamp),
                                         peru_time: supLog?.peru_time || formatPeruTime(supLog?.timestamp),
+                                        peru_datetime: supLog?.peru_datetime || formatPeruDateTime(supLog?.timestamp),
                                         order_id: order?.order_id,
                                         unit_number: active_unit?.unit_number,
                                         step_number: st.step_number,
@@ -2163,7 +2217,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                                     {supLog?.timestamp && (
                                       <span className="inline-flex items-center gap-0.5 text-[9px] font-mono text-indigo-900 bg-indigo-100/90 px-1.5 py-0.5 rounded border border-indigo-300 mt-0.5">
                                         <Clock className="w-2.5 h-2.5 text-indigo-700" />
-                                        <span>{supLog.peru_time || formatPeruTime(supLog.timestamp)}</span>
+                                        <span>{supLog.peru_date ? `${supLog.peru_date} ` : ''}{supLog.peru_time || formatPeruTime(supLog.timestamp)}</span>
                                       </span>
                                     )}
                                   </div>
@@ -2544,7 +2598,12 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
 
       {/* Barra de Acción Rápida Móvil en Zona del Pulgar (Fase 2 - Bento Apple Thumb Zone) */}
       {active_unit && !isHistorical && (() => {
-        const targetStep = (checklistMode === 'focus' && focusedStep && (!technicianDoneSteps.includes(focusedStep.step_number))) ? focusedStep : activePendingStep;
+        // En Modo Focus, el paso objetivo es estrictamente el paso actualmente enfocado por el operario (Ley de Tesler)
+        const targetStep = checklistMode === 'focus' && focusedStep
+          ? focusedStep
+          : (isSupervisorMode ? activePendingStep : (activePendingStep || stepsMissingPhotos[0] || displayedStationSteps[0]));
+        const isTargetStepDone = targetStep ? (isSupervisorMode ? supervisorDoneSteps.includes(targetStep.step_number) : technicianDoneSteps.includes(targetStep.step_number)) : false;
+
         return (
           <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/90 px-3.5 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3 safe-area-bottom">
             <div className="min-w-0 flex-1">
@@ -2603,16 +2662,18 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   className="min-h-[48px] px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
                 >
                   <ShieldCheck className="w-5 h-5" />
-                  <span>{targetStep ? `V°B° #${targetStep.step_number}` : "Emitir V°B°"}</span>
+                  <span>{targetStep ? (isTargetStepDone ? `Re-V°B° #${targetStep.step_number}` : `V°B° #${targetStep.step_number}`) : "Emitir V°B°"}</span>
                 </button>
               ) : targetStep ? (
                 <button
                   type="button"
                   onClick={() => setPhotoStepModal(targetStep)}
-                  className="min-h-[48px] px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation"
+                  className={`min-h-[48px] px-4 py-2 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md flex items-center gap-2 touch-manipulation ${
+                    isTargetStepDone ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
+                  }`}
                 >
                   <Camera className="w-5 h-5" />
-                  <span>Foto #{targetStep.step_number}</span>
+                  <span>{isTargetStepDone ? `Cambiar #${targetStep.step_number}` : `Foto #${targetStep.step_number}`}</span>
                 </button>
               ) : (
                 <button

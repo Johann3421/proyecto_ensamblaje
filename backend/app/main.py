@@ -146,6 +146,13 @@ def auto_migrate_schema():
 # Utilidades de Zona Horaria (Hora Perú UTC-5) y Medición de Tiempos entre Pasos
 PERU_TZ = timezone(timedelta(hours=-5))
 
+def to_utc_iso(dt: Optional[datetime]) -> Optional[str]:
+    """Serializa un datetime UTC a formato ISO-8601 canónico con 'Z' explícito (UTC)."""
+    if not dt:
+        return None
+    dt_utc = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
 def format_peru_date(dt: Optional[datetime]) -> Optional[str]:
     """Convierte una fecha UTC a formato Fecha Perú (America/Lima / UTC-5): ej. '13/11/2026'"""
     if not dt:
@@ -217,7 +224,7 @@ def compute_log_dict(l: QCStepLog, prev_log: Optional[QCStepLog] = None, unit_st
         "user_name": l.user_name,
         "user_id": getattr(l, "user_id", None),
         "is_supervisor_verified": bool(l.is_supervisor_verified),
-        "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+        "timestamp": to_utc_iso(l.timestamp),
         "peru_time": format_peru_time(l.timestamp),
         "peru_date": format_peru_date(l.timestamp),
         "peru_datetime": format_peru_datetime(l.timestamp),
@@ -383,7 +390,7 @@ api_router = APIRouter()
 
 @api_router.get("/health")
 def health_check():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "service": "QC-KENYA-API"}
+    return {"status": "ok", "timestamp": to_utc_iso(datetime.utcnow()), "service": "QC-KENYA-API"}
 
 # =============================================
 # AUTH ENDPOINTS
@@ -2214,7 +2221,10 @@ def get_operator_workspace(
                     "checks": checks,
                     "photo_url": aud.photo_url,
                     "notes": aud.notes or "",
-                    "created_at": aud.created_at.isoformat() if aud.created_at else None
+                    "created_at": to_utc_iso(aud.created_at),
+                    "peru_time": format_peru_time(aud.created_at),
+                    "peru_date": format_peru_date(aud.created_at),
+                    "peru_datetime": format_peru_datetime(aud.created_at)
                 }
 
         virtual_assignment = {
@@ -2613,7 +2623,10 @@ def get_operator_workspace(
                 "checks": checks,
                 "photo_url": aud.photo_url,
                 "notes": aud.notes or "",
-                "created_at": aud.created_at.isoformat() if aud.created_at else None
+                "created_at": to_utc_iso(aud.created_at),
+                "peru_time": format_peru_time(aud.created_at),
+                "peru_date": format_peru_date(aud.created_at),
+                "peru_datetime": format_peru_datetime(aud.created_at)
             }
 
     return {
@@ -2703,7 +2716,7 @@ def supervisor_verify_step_photo(req: SupervisorStepPhotoVerify, db: Session = D
             "photo_url": clean_photo,
             "user_name": supervisor_log.user_name,
             "is_supervisor_verified": True,
-            "timestamp": supervisor_log.timestamp.isoformat(),
+            "timestamp": to_utc_iso(supervisor_log.timestamp),
             "peru_time": format_peru_time(supervisor_log.timestamp),
             "peru_date": format_peru_date(supervisor_log.timestamp),
             "peru_datetime": format_peru_datetime(supervisor_log.timestamp)
@@ -2770,7 +2783,10 @@ def approve_unit_supervisor(req: SupervisorAuditCreate, db: Session = Depends(ge
             "checks": req.checks or [],
             "photo_url": audit_record.photo_url,
             "notes": audit_record.notes,
-            "created_at": audit_record.created_at.isoformat() if audit_record.created_at else None
+            "created_at": to_utc_iso(audit_record.created_at),
+            "peru_time": format_peru_time(audit_record.created_at),
+            "peru_date": format_peru_date(audit_record.created_at),
+            "peru_datetime": format_peru_datetime(audit_record.created_at)
         }
     }
 
@@ -2801,7 +2817,10 @@ def get_unit_supervisor_audit(order_id: str, unit_number: int, db: Session = Dep
             "checks": checks,
             "photo_url": a.photo_url,
             "notes": a.notes,
-            "created_at": a.created_at.isoformat() if a.created_at else None
+            "created_at": to_utc_iso(a.created_at),
+            "peru_time": format_peru_time(a.created_at),
+            "peru_date": format_peru_date(a.created_at),
+            "peru_datetime": format_peru_datetime(a.created_at)
         })
     return {"order_id": order_id, "unit_number": unit_number, "audits": result, "latest": result[0] if result else None}
 
@@ -2908,7 +2927,7 @@ def submit_step_check(req: StepLogCreate, db: Session = Depends(get_db)):
     return {
         "message": "Paso registrado con trazabilidad completa",
         "log_id": new_log.id,
-        "timestamp": new_log.timestamp.isoformat(),
+        "timestamp": to_utc_iso(new_log.timestamp),
         "peru_time": format_peru_time(new_log.timestamp),
         "peru_date": format_peru_date(new_log.timestamp),
         "peru_datetime": format_peru_datetime(new_log.timestamp),
@@ -3574,7 +3593,7 @@ def get_order_audit_logs(order_id: str, db: Session = Depends(get_db)):
             "photo_url": clean_photo,
             "is_supervisor_verified": bool(l.is_supervisor_verified),
             "notes": l.notes,
-            "timestamp": l.timestamp.isoformat() if l.timestamp else None,
+            "timestamp": to_utc_iso(l.timestamp),
             "peru_time": format_peru_time(l.timestamp),
             "peru_date": format_peru_date(l.timestamp),
             "peru_datetime": format_peru_datetime(l.timestamp),

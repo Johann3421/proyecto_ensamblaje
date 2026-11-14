@@ -364,13 +364,19 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
             })
           });
           if (!res.ok) throw new Error("Error registrando el paso");
+          const data = await res.json().catch(() => ({}));
           setTechnicianDoneSteps(prev => [...new Set([...prev, step.step_number])]);
           setCompletedSteps(prev => [...new Set([...prev, step.step_number])]);
           const newOpLog = {
             step_number: step.step_number,
             user_name: currentUser.name,
             is_supervisor_verified: false,
-            timestamp: new Date().toISOString()
+            timestamp: data.timestamp || new Date().toISOString(),
+            peru_time: data.peru_time || formatPeruTime(data.timestamp || new Date().toISOString()),
+            peru_date: data.peru_date || formatPeruDate(data.timestamp || new Date().toISOString()),
+            peru_datetime: data.peru_datetime || formatPeruDateTime(data.timestamp || new Date().toISOString()),
+            duration_seconds: data.duration_seconds,
+            duration_formatted: data.duration_formatted || formatDuration(data.duration_seconds)
           };
           setOperatorStepLogsMap(prev => ({
             ...prev,
@@ -1088,7 +1094,7 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     </span>
                   </div>
                   <span className="text-[10px] text-emerald-800 block">
-                    Auditado por <strong>{activeSupervisorAudit.supervisor_name}</strong> {activeSupervisorAudit.created_at ? `· ${new Date(activeSupervisorAudit.created_at).toLocaleDateString()} ${new Date(activeSupervisorAudit.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                    Auditado por <strong>{activeSupervisorAudit.supervisor_name}</strong> {activeSupervisorAudit.created_at ? `· ${formatPeruDate(activeSupervisorAudit.created_at)} ${formatPeruTime(activeSupervisorAudit.created_at, false)}` : ''}
                   </span>
                 </div>
               </div>

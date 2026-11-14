@@ -4,11 +4,27 @@
  * Cumple con Ley de Jakob (formatos estándar y familiares) y Ley de Tesler.
  */
 
+export function parseAsUtcDate(input) {
+  if (!input) return null;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+  let str = String(input).trim();
+  if (!str) return null;
+  // Reemplazar espacio por T para formato ISO
+  str = str.replace(' ', 'T');
+  // Si no tiene indicador de zona horaria (Z o +HH:MM o -HH:MM), agregar 'Z'
+  // ya que la base de datos almacena marcas de tiempo en UTC (datetime.utcnow)
+  if (!str.endsWith('Z') && !/[+-]\d{2}(:\d{2})?$/.test(str)) {
+    str += 'Z';
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export function formatPeruDate(isoString) {
   if (!isoString) return "";
   try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return "";
+    const d = parseAsUtcDate(isoString);
+    if (!d) return "";
     return new Intl.DateTimeFormat('es-PE', {
       timeZone: 'America/Lima',
       day: '2-digit',
@@ -23,8 +39,8 @@ export function formatPeruDate(isoString) {
 export function formatPeruTime(isoString, includeSeconds = true) {
   if (!isoString) return "";
   try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return "";
+    const d = parseAsUtcDate(isoString);
+    if (!d) return "";
     return new Intl.DateTimeFormat('es-PE', {
       timeZone: 'America/Lima',
       hour: '2-digit',
@@ -40,8 +56,8 @@ export function formatPeruTime(isoString, includeSeconds = true) {
 export function formatPeruDateTime(isoString, includeSeconds = true) {
   if (!isoString) return "";
   try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return "";
+    const d = parseAsUtcDate(isoString);
+    if (!d) return "";
     return new Intl.DateTimeFormat('es-PE', {
       timeZone: 'America/Lima',
       day: '2-digit',

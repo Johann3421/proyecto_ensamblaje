@@ -17,6 +17,7 @@ import {
 } from '../utils/steps';
 
 const DEFAULT_ASSEMBLY_NAMES = [
+  "Pre-ensamblado y Banco de Pruebas",
   "Chasis y Montaje de Fuente",
   "Placa Base, CPU y Memoria",
   "Tarjeta Gráfica y Cableado",

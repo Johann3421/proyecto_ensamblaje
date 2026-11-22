@@ -15,6 +15,8 @@ Este documento es la **fuente de verdad permanente** del proyecto. Cada tarea co
 
 | Fecha | Tarea / Requerimiento | Tipo | Estado | Nota Técnica |
 | :--- | :--- | :---: | :---: | :--- |
+| **2026-11-22** | Incorporación de Estación de Pre-ensamblado (5 Pasos Técnicos: MemTest, SO, OCCT, Drivers, Temp) en EZENT | `feat` / `checklist` / `calidad` / `tesler` | ✅ Completado | [[2026-11-22-incorporacion-estacion-pre-ensamblado-ezent]] |
+| **2026-11-14** | Evaluación Técnica Neutral: Inspección de Calidad por IA (Gemini Flash vs Frontera vs Arquitectura Híbrida) | `evaluacion` / `ia` / `calidad` / `arquitectura` | ✅ Completado | [[2026-11-14-evaluacion-ia-inspeccion-visual-calidad]] |
 | **2026-11-13** | Fix: Corrección de Desfase Horario UTC a Hora Perú (America/Lima) en Evidencias y Registros | `fix` / `backend` / `frontend` / `tesler` | ✅ Completado | [[2026-11-13-fix-desfase-horario-utc-hora-peru]] |
 | **2026-11-13** | Fix: Mapeo de Fotos de Evidencia a sus Pasos Exactos y Fecha + Hora Perú (Leyes de Interacción) | `fix` / `ux` / `tesler` / `arquitectura` | ✅ Completado | [[2026-11-13-fix-evidencia-fotos-mapeo-pasos-y-fecha-hora-peru]] |
 | **2026-11-11** | Ergonomía Móvil Fase 2: Ensamble Continuo, Modo Enfoque 1 a 1, Disparo Rápido (Fast Snap) y Auto-Avance | `ux` / `mobile` / `arquitectura` / `tesler` | ✅ Completado | [[2026-11-11-ergonomia-movil-fase-2-enfoque-continuo-fast-snap]] |

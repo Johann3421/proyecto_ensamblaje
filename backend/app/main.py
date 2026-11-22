@@ -363,6 +363,95 @@ def reorder_ezent_checklist(db: Optional[Session] = None):
         if own_session and db:
             db.close()
 
+def add_pre_assembly_steps_to_ezent(db: Optional[Session] = None):
+    """
+    Añade la estación de pre-ensamblado (5 pasos: MemTest, Instalar SO, OCCT, Drivers, Temperatura)
+    al inicio de la secuencia de EZENT (CYBERTEL) y EZENT de forma idempotente y canónica.
+    """
+    own_session = False
+    if db is None:
+        db = SessionLocal()
+        own_session = True
+    try:
+        target_models = ["EZENT (CYBERTEL)", "EZENT"]
+        for target_model in target_models:
+            count = db.query(QCChecklistItem).filter(QCChecklistItem.model_name == target_model).count()
+            if count == 0:
+                continue
+
+            # Verificar si ya tiene el paso de MemTest (idempotente)
+            existing_memtest = db.query(QCChecklistItem).filter(
+                QCChecklistItem.model_name == target_model,
+                func.lower(QCChecklistItem.operation).like("%memtest%")
+            ).first()
+            if existing_memtest:
+                continue
+
+            # Desplazar todos los pasos existentes 5 posiciones hacia adelante en orden descendente
+            existing_steps = db.query(QCChecklistItem).filter(
+                QCChecklistItem.model_name == target_model
+            ).order_by(QCChecklistItem.step_number.desc()).all()
+
+            for s in existing_steps:
+                s.step_number += 5
+            db.flush()
+
+            # Insertar los 5 nuevos pasos de Pre-ensamblado
+            pre_assembly_steps = [
+                (
+                    1,
+                    "Prueba de Memoria RAM (MemTest)",
+                    "Realizar prueba de diagnóstico y estrés a los módulos de memoria RAM con MemTest en banco de pruebas para verificar integridad y ausencia de errores de direccionamiento.",
+                    "Fotografía clara de la pantalla de MemTest mostrando la prueba finalizada con 0 errores (Pass complete, no errors)."
+                ),
+                (
+                    2,
+                    "Instalación de Sistema Operativo",
+                    "Realizar la instalación limpia del Sistema Operativo Windows 11 Pro desde la unidad de despliegue en el almacenamiento principal (SSD / NVMe).",
+                    "Fotografía de la pantalla de bienvenida o primer inicio en el escritorio de Windows 11 Pro con el asistente completado."
+                ),
+                (
+                    3,
+                    "Prueba de Estrés y Rendimiento (OCCT)",
+                    "Ejecutar la herramienta OCCT para someter a prueba de carga y estabilidad la CPU, memoria y componentes principales bajo estrés continuo.",
+                    "Fotografía de la pantalla del software OCCT mostrando la prueba de estabilidad completada sin caídas de voltaje ni errores detectados."
+                ),
+                (
+                    4,
+                    "Instalación y Verificación de Drivers",
+                    "Instalar la totalidad de controladores oficiales (Chipset, Gráficos, Red LAN/Wi-Fi, Audio) y comprobar su correcto reconocimiento.",
+                    "Fotografía de la ventana del Administrador de Dispositivos con todos los componentes reconocidos sin símbolos de advertencia amarillos ni dispositivos desconocidos."
+                ),
+                (
+                    5,
+                    "Verificación de Temperatura bajo Carga",
+                    "Monitorear las temperaturas operativas de CPU y componentes bajo carga de trabajo para validar el correcto anclaje térmico del disipador y ventilación.",
+                    "Fotografía del software de telemetría térmica (HWMonitor / OCCT / CoreTemp) con temperaturas estables dentro del rango operativo normal (< 75°C - 80°C bajo carga)."
+                )
+            ]
+
+            for step_num, op, desc, qc in pre_assembly_steps:
+                db.add(QCChecklistItem(
+                    model_name=target_model,
+                    step_number=step_num,
+                    operation=op,
+                    description=desc,
+                    qc_criteria=qc,
+                    media_url="",
+                    media_type="image",
+                    is_cleaning=False
+                ))
+            db.commit()
+
+            canonical_resequence_model(db, target_model)
+            print(f"[DB Migration] Pre-ensamblado (5 pasos) agregado exitosamente a {target_model}.")
+    except Exception as e:
+        db.rollback()
+        print(f"[DB Migration Warning] Error agregando pre-ensamblado a EZENT: {e}")
+    finally:
+        if own_session and db:
+            db.close()
+
 # Inicialización de base de datos en startup
 @app.on_event("startup")
 def startup_db_init():
@@ -376,6 +465,7 @@ def startup_db_init():
             seed_database(db_session)
             auto_heal_checklist_sequence(db_session)
             reorder_ezent_checklist(db_session)
+            add_pre_assembly_steps_to_ezent(db_session)
             print(f"[DB] Base de datos y orden inicial sembrada correctamente.")
             break
         except Exception as e:

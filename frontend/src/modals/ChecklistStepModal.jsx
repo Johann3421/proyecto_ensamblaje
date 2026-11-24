@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Upload, X, Wrench, Trash2, Trash, Camera, ShieldCheck } from 'lucide-react';
+import { Upload, X, Wrench, Trash2, Trash, Camera, ShieldCheck, Cpu } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import CameraCaptureModal from '../modals/CameraCaptureModal';
-import { isStepCleaning } from '../utils/steps';
+import { isStepCleaning, isStepPreAssembly } from '../utils/steps';
 
 export default function ChecklistStepModal({
   item, onClose, onSave, onDelete }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [formData, setFormData] = useState({
     ...item,
-    is_cleaning: Boolean(item?.is_cleaning !== undefined ? item.is_cleaning : isStepCleaning(item))
+    is_cleaning: Boolean(item?.is_cleaning !== undefined ? item.is_cleaning : isStepCleaning(item)),
+    is_pre_assembly: Boolean(item?.is_pre_assembly !== undefined ? item.is_pre_assembly : isStepPreAssembly(item))
   });
   const [uploading, setUploading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -92,32 +93,59 @@ export default function ChecklistStepModal({
               ></textarea>
             </div>
 
-            {/* Campo Exclusivo: Clasificación del Paso (Ensamblaje vs Limpieza QC) */}
+            {/* Campo Exclusivo: Clasificación del Paso (Pre-ensamblaje vs Ensamblaje vs Limpieza QC) */}
             <div className={`p-3.5 rounded-xl border transition space-y-2.5 ${
               formData.is_cleaning
                 ? "bg-emerald-50/80 border-emerald-300 shadow-2xs"
+                : formData.is_pre_assembly
+                ? "bg-purple-50/80 border-purple-300 shadow-2xs"
                 : "bg-stone-50 border-stone-200 shadow-2xs"
             }`}>
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                  {formData.is_cleaning ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-blue-600" />}
-                  <span>Clasificación del Paso (Asignación)</span>
+                  {formData.is_cleaning ? (
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  ) : formData.is_pre_assembly ? (
+                    <Cpu className="w-4 h-4 text-purple-600" />
+                  ) : (
+                    <Wrench className="w-4 h-4 text-blue-600" />
+                  )}
+                  <span>Módulo / Clasificación del Paso</span>
                 </label>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                   formData.is_cleaning
                     ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                    : formData.is_pre_assembly
+                    ? "bg-purple-100 text-purple-800 border-purple-300"
                     : "bg-stone-200 text-stone-800 border-stone-300"
                 }`}>
-                  {formData.is_cleaning ? "🧼 Paso de Limpieza QC" : "⚙️ Paso de Ensamblaje"}
+                  {formData.is_cleaning ? "🧼 Paso de Limpieza QC" : formData.is_pre_assembly ? "🔬 Pre-ensamblaje (Banco)" : "⚙️ Paso de Ensamblaje"}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, is_cleaning: false }))}
+                  onClick={() => setFormData(prev => ({ ...prev, is_pre_assembly: true, is_cleaning: false }))}
                   className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
-                    !formData.is_cleaning
+                    formData.is_pre_assembly && !formData.is_cleaning
+                      ? "bg-white border-purple-600 shadow-xs ring-2 ring-purple-500/20"
+                      : "bg-white/60 border-gray-200 hover:bg-white text-gray-600"
+                  }`}
+                >
+                  <span className="text-xs font-bold text-purple-950 flex items-center gap-1">
+                    🔬 Pre-ensamblaje
+                  </span>
+                  <span className="text-[10px] text-purple-700 leading-tight">
+                    Banco de pruebas técnicas: MemTest, SO, OCCT, Drivers, Temp.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, is_pre_assembly: false, is_cleaning: false }))}
+                  className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
+                    !formData.is_pre_assembly && !formData.is_cleaning
                       ? "bg-white border-blue-600 shadow-xs ring-2 ring-blue-500/20"
                       : "bg-white/60 border-gray-200 hover:bg-white text-gray-600"
                   }`}
@@ -126,13 +154,13 @@ export default function ChecklistStepModal({
                     ⚙️ Ensamblaje
                   </span>
                   <span className="text-[10px] text-gray-500 leading-tight">
-                    Para estaciones de armado físico, componentes, cableado y configuración.
+                    Armado físico en chasis, componentes, cableado y configuración.
                   </span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, is_cleaning: true }))}
+                  onClick={() => setFormData(prev => ({ ...prev, is_pre_assembly: false, is_cleaning: true }))}
                   className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
                     formData.is_cleaning
                       ? "bg-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/20"
@@ -143,14 +171,16 @@ export default function ChecklistStepModal({
                     🧼 Limpieza QC
                   </span>
                   <span className="text-[10px] text-emerald-700 leading-tight">
-                    Para estaciones de limpieza, retiro de películas, polvo y microfibra.
+                    Limpieza, retiro de películas, polvo, base Cybertel y embalaje.
                   </span>
                 </button>
               </div>
 
               <p className="text-[10px] text-gray-500">
                 {formData.is_cleaning
-                  ? "✨ Los pasos marcados como Limpieza se asignan automáticamente de forma exclusiva a las estaciones de limpieza (aislados de ensamble)."
+                  ? "✨ Los pasos de Limpieza se asignan exclusivamente a las estaciones de limpieza final (aislados de ensamble)."
+                  : formData.is_pre_assembly
+                  ? "🔬 Los pasos de Pre-ensamblado se asignan al técnico de pruebas de banco previo al montaje en chasis."
                   : "ℹ️ Los pasos de ensamblaje se distribuyen equitativamente entre los puestos de armado general."}
               </p>
             </div>

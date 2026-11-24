@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Check, CheckCircle, AlertTriangle, Plus, Loader2, Play, 
   ShieldCheck, PlusCircle, Wrench, Trash2, RotateCcw, 
-  Layers, UserPlus, X 
+  Layers, UserPlus, X, Cpu 
 } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Card from '../components/Card';
@@ -13,11 +13,11 @@ import {
   formatStepNumbersRange, 
   parseStepNumbersInput, 
   isStepCleaning, 
+  isStepPreAssembly,
   distributeStepsEqually 
 } from '../utils/steps';
 
 const DEFAULT_ASSEMBLY_NAMES = [
-  "Pre-ensamblado y Banco de Pruebas",
   "Chasis y Montaje de Fuente",
   "Placa Base, CPU y Memoria",
   "Tarjeta Gráfica y Cableado",
@@ -81,11 +81,27 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
     loadModelSteps(modelName);
   }, [modelName, loadModelSteps]);
 
-  // Pasos divididos estrictamente por isStepCleaning
-  const assemblySteps = useMemo(() => (modelSteps || []).filter(s => !isStepCleaning(s)), [modelSteps]);
+  // Pasos divididos estrictamente por categorías (Pre-ensamblaje, Ensamblaje y Limpieza)
+  const preAssemblySteps = useMemo(() => (modelSteps || []).filter(s => isStepPreAssembly(s) && !isStepCleaning(s)), [modelSteps]);
+  const assemblySteps = useMemo(() => (modelSteps || []).filter(s => !isStepCleaning(s) && !isStepPreAssembly(s)), [modelSteps]);
   const cleaningSteps = useMemo(() => (modelSteps || []).filter(s => isStepCleaning(s)), [modelSteps]);
 
+  const hasPreAssemblySteps = preAssemblySteps.length > 0;
   const hasCleaningSteps = cleaningSteps.length > 0;
+
+  // Módulo de Pre-ensamblaje
+  const [hasPreAssemblyStation, setHasPreAssemblyStation] = useState(true);
+  const [preAssemblyStationName, setPreAssemblyStationName] = useState('Estación Pre-ensamblado (Banco de Pruebas)');
+  const [preAssemblyUserId, setPreAssemblyUserId] = useState('');
+  const [secondaryPreAssemblyUserId, setSecondaryPreAssemblyUserId] = useState('');
+
+  // Auto-seleccionar técnico para pre-ensamblado si aún no está asignado
+  useEffect(() => {
+    if (!preAssemblyUserId && users.length > 0) {
+      const defaultTech = users.find(u => u.role !== 'SUPERVISOR') || users[0];
+      if (defaultTech) setPreAssemblyUserId(defaultTech.id);
+    }
+  }, [users, preAssemblyUserId]);
 
   // Cargar pasos estándar si el modelo no tiene pasos
   const handlePopulateStandardSteps = async (targetModel) => {
@@ -462,7 +478,10 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
     };
   }, [cleaningStations, cleaningSteps]);
 
-  const isGlobalComplete = assemblyCoverage.isComplete && (!hasCleaningSteps || cleaningCoverage.isComplete);
+  const isGlobalComplete = 
+    (!hasPreAssemblySteps || !hasPreAssemblyStation || !!preAssemblyUserId) &&
+    assemblyCoverage.isComplete && 
+    (!hasCleaningSteps || cleaningCoverage.isComplete);
 
   // Manejadores para pasos del Supervisor
   const handleToggleSupervisorStep = (stepNumber) => {
@@ -505,6 +524,11 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (hasPreAssemblySteps && hasPreAssemblyStation && !preAssemblyUserId) {
+      if (notify) notify("Debes asignar un técnico responsable para el Módulo de Pre-ensamblaje.", "warning");
+      return;
+    }
+
     if (hasCleaningSteps && cleaningStations.length < 1) {
       if (notify) notify("Regla de Calidad Obligatoria: El modelo contiene pasos de limpieza. Debes asignar al menos 1 estación en el Bloque de Limpieza.", "warning");
       return;
@@ -520,17 +544,36 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
       return;
     }
 
+    // Estación de Pre-ensamblado si está habilitada
+    const preAssemblyUser = users.find(u => u.id === preAssemblyUserId);
+    const secondaryPreUser = users.find(u => u.id === secondaryPreAssemblyUserId);
+
+    const preStationList = (hasPreAssemblySteps && hasPreAssemblyStation) ? [{
+      station_number: 1,
+      station_name: preAssemblyStationName || "Estación Pre-ensamblado (Banco de Pruebas)",
+      user_id: preAssemblyUser?.id || users[0]?.id || "OP-PRE",
+      user_name: preAssemblyUser?.name || users[0]?.name || "Técnico Pre-ensamblado",
+      secondary_user_id: secondaryPreUser?.id || null,
+      secondary_user_name: secondaryPreUser?.name || null,
+      is_cleaning_station: false,
+      station_type: "PRE_ASSEMBLY",
+      step_numbers: preAssemblySteps.map(s => s.step_number)
+    }] : [];
+
+    const offset = preStationList.length;
+
     // Unificar estaciones en secuencia estricta
     const combinedStations = [
+      ...preStationList,
       ...assemblyStations.map((st, idx) => ({
         ...st,
-        station_number: idx + 1,
+        station_number: offset + idx + 1,
         is_cleaning_station: false,
         station_type: "ASSEMBLY"
       })),
       ...cleaningStations.map((st, idx) => ({
         ...st,
-        station_number: assemblyStations.length + idx + 1,
+        station_number: offset + assemblyStations.length + idx + 1,
         is_cleaning_station: true,
         station_type: "CLEANING"
       }))
@@ -550,7 +593,7 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
           secondary_user_name: st.secondary_user_name || null,
           station_name: st.station_name,
           is_cleaning_station: !!st.is_cleaning_station,
-          station_type: st.is_cleaning_station ? "CLEANING" : "ASSEMBLY",
+          station_type: st.station_type || (st.is_cleaning_station ? "CLEANING" : "ASSEMBLY"),
           start_step: sStart,
           end_step: sEnd,
           step_numbers: nums.join(",")
@@ -1137,6 +1180,101 @@ export default function CreateOrderView({ models = [], users = [], onSuccess, on
               </button>
             </div>
           </div>
+
+          {/* ========================================================= */}
+          {/* MÓDULO EXTRA: PRE-ENSAMBLAJE (BANCO DE PRUEBAS TÉCNICAS) */}
+          {/* ========================================================= */}
+          {hasPreAssemblySteps && (
+            <div className="bg-white p-4 rounded-2xl border-2 border-purple-200 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-purple-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                    <Cpu className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-extrabold text-stone-900">
+                        Módulo de Pre-ensamblaje
+                      </h3>
+                      <span className="text-[10px] bg-purple-100 text-purple-900 font-bold px-2 py-0.5 rounded-full border border-purple-200">
+                        {preAssemblySteps.length} pasos de banco
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-500">
+                      Estación técnica previa para diagnóstico de RAM (MemTest), SO, estabilidad (OCCT), drivers y temperaturas.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-stone-700 cursor-pointer bg-purple-50 hover:bg-purple-100/80 px-3 py-1.5 rounded-xl border border-purple-200 transition">
+                    <input
+                      type="checkbox"
+                      checked={hasPreAssemblyStation}
+                      onChange={(e) => setHasPreAssemblyStation(e.target.checked)}
+                      className="w-4 h-4 text-purple-600 rounded"
+                    />
+                    <span>Habilitar Estación Pre-ensamblado</span>
+                  </label>
+                </div>
+              </div>
+
+              {hasPreAssemblyStation && (
+                <div className="bg-purple-50/40 rounded-xl p-3.5 border border-purple-200/80 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-stone-800 mb-1">
+                        Nombre de la Estación
+                      </label>
+                      <input
+                        type="text"
+                        value={preAssemblyStationName}
+                        onChange={(e) => setPreAssemblyStationName(e.target.value)}
+                        className="w-full text-xs border border-purple-300 rounded-lg p-2 bg-white font-medium text-stone-900 shadow-2xs focus:border-purple-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-stone-800 mb-1 flex items-center gap-1.5">
+                        <span>Técnico Responsable Asignado</span>
+                        <span className="text-[10px] text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded font-mono font-bold">Requerido</span>
+                      </label>
+                      <select
+                        value={preAssemblyUserId}
+                        onChange={(e) => setPreAssemblyUserId(e.target.value)}
+                        className="w-full text-xs border border-purple-300 rounded-lg p-2 bg-white font-semibold text-stone-900 shadow-2xs focus:border-purple-600 focus:outline-none"
+                      >
+                        <option value="">-- Seleccionar técnico de pre-ensamblado --</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>
+                            [{u.role}] {u.name} ({u.id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-purple-200/60 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-purple-900">Pasos asignados al técnico:</span>
+                      {preAssemblySteps.map(s => (
+                        <span
+                          key={s.step_number}
+                          className="text-[11px] font-bold bg-white text-purple-900 px-2 py-0.5 rounded-md border border-purple-200 shadow-2xs"
+                          title={s.description || s.operation}
+                        >
+                          P{s.step_number}: {s.operation}
+                        </span>
+                      ))}
+                    </div>
+                    <span className="text-[11px] font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full border border-purple-200">
+                      Estación 1 (PRE_ASSEMBLY)
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ========================================================= */}
           {/* BLOQUE 1: ESTACIONES DE ENSAMBLAJE (EXCLUSIVAMENTE ENSAMBLE) */}

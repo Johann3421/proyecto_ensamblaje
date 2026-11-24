@@ -61,6 +61,7 @@ class ChecklistItemSchema(BaseModel):
     media_url: Optional[str] = ""
     media_type: Optional[str] = "gif"
     is_cleaning: Optional[bool] = False
+    is_pre_assembly: Optional[bool] = False
 
     class Config:
         from_attributes = True

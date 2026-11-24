@@ -77,6 +77,19 @@ def auto_migrate_schema():
         "ALTER TABLE qc_orders ADD COLUMN IF NOT EXISTS supervisor_steps TEXT;",
         "ALTER TABLE qc_supervisor_audits ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);",
         "ALTER TABLE qc_checklist_items ADD COLUMN IF NOT EXISTS is_cleaning BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE qc_checklist_items ADD COLUMN IF NOT EXISTS is_pre_assembly BOOLEAN DEFAULT FALSE;",
+        """UPDATE qc_checklist_items
+           SET is_pre_assembly = TRUE
+           WHERE (is_cleaning IS NULL OR is_cleaning = FALSE)
+             AND (
+                 LOWER(operation) LIKE '%memtest%'
+                 OR LOWER(operation) = 'instalación de sistema operativo'
+                 OR LOWER(operation) LIKE '%occt%'
+                 OR LOWER(operation) = 'instalación y verificación de drivers'
+                 OR LOWER(operation) LIKE '%temperatura bajo carga%'
+                 OR LOWER(operation) LIKE '%pre-ensambl%'
+                 OR LOWER(operation) LIKE '%pre ensambl%'
+             );""",
         """UPDATE qc_checklist_items
            SET is_cleaning = FALSE
            WHERE is_cleaning = TRUE
@@ -236,15 +249,17 @@ def compute_log_dict(l: QCStepLog, prev_log: Optional[QCStepLog] = None, unit_st
 def canonical_resequence_model(db: Session, model_name: str) -> List[QCChecklistItem]:
     """
     Garantiza que la secuencia de pasos de un modelo sea estrictamente canónica y ordenada (Ley de Tesler):
-    1. Pasos de Ensamblaje (is_cleaning=False) ordenados y numerados consecutivamente de 1 a K.
-    2. Pasos de Limpieza y Empaque final (is_cleaning=True) ordenados y numerados de K+1 a Total.
-    3. Cero duplicados, cero huecos y partición estricta sin saltos numéricos en interfaz ni estaciones.
+    1. Pasos de Pre-ensamblado (is_pre_assembly=True, is_cleaning=False) ordenados de 1 a P.
+    2. Pasos de Ensamblaje físico (is_pre_assembly=False, is_cleaning=False) ordenados de P+1 a K.
+    3. Pasos de Limpieza y Empaque final (is_cleaning=True) ordenados y numerados de K+1 a Total.
+    4. Cero duplicados, cero huecos y partición estricta sin saltos numéricos en interfaz ni estaciones.
     """
     clean_name = model_name.strip().upper()
     items = db.query(QCChecklistItem).filter(
         QCChecklistItem.model_name == clean_name
     ).order_by(
         QCChecklistItem.is_cleaning.asc(),
+        QCChecklistItem.is_pre_assembly.desc(),
         QCChecklistItem.step_number.asc(),
         QCChecklistItem.id.asc()
     ).all()
@@ -439,7 +454,8 @@ def add_pre_assembly_steps_to_ezent(db: Optional[Session] = None):
                     qc_criteria=qc,
                     media_url="",
                     media_type="image",
-                    is_cleaning=False
+                    is_cleaning=False,
+                    is_pre_assembly=True
                 ))
             db.commit()
 
@@ -901,6 +917,14 @@ def get_model_diagnostics(model_name: str, db: Session = Depends(get_db)):
         "is_healthy": len(missing_in_sequence) == 0 and len(duplicates) == 0 and total_steps > 0
     }
 
+def infer_step_is_pre_assembly(operation: str, description: str, qc_criteria: str) -> bool:
+    """Infiere si un paso pertenece al módulo técnico de Pre-ensamblado (MemTest, SO, OCCT, Drivers, Temp)"""
+    combined = f"{(operation or '').lower()} {(description or '').lower()} {(qc_criteria or '').lower()}"
+    return any(k in combined for k in [
+        "memtest", "instalar so", "instalación de sistema operativo",
+        "occt", "temperatura bajo carga", "pre-ensambl", "pre ensambl"
+    ]) or "instalación y verificación de drivers" in combined
+
 def infer_step_is_cleaning(operation: str, description: str, qc_criteria: str) -> bool:
     """Infiere automáticamente si un paso pertenece al bloque de limpieza QC o empaque (Ley de Tesler)"""
     combined = f"{(operation or '').lower()} {(description or '').lower()} {(qc_criteria or '').lower()}"
@@ -933,10 +957,18 @@ def get_model_checklist(model_name: str, db: Session = Depends(get_db)):
 def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session = Depends(get_db)):
     clean_name = model_name.strip().upper()
     # Respetar la clasificación explícita del usuario sin sobrescrituras forzadas
+    if item.is_pre_assembly is not None:
+        pre_val = bool(item.is_pre_assembly)
+    else:
+        pre_val = infer_step_is_pre_assembly(item.operation, item.description, item.qc_criteria)
+
     if item.is_cleaning is not None:
         clean_val = bool(item.is_cleaning)
     else:
         clean_val = infer_step_is_cleaning(item.operation, item.description, item.qc_criteria)
+
+    if pre_val:
+        clean_val = False
 
     target_item = None
     if item.id:
@@ -949,6 +981,7 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
             existing.media_url = item.media_url
             existing.media_type = item.media_type
             existing.is_cleaning = clean_val
+            existing.is_pre_assembly = pre_val
             target_item = existing
 
     if not target_item:
@@ -961,17 +994,41 @@ def save_checklist_item(model_name: str, item: ChecklistItemSchema, db: Session 
             qc_criteria=item.qc_criteria,
             media_url=item.media_url,
             media_type=item.media_type,
-            is_cleaning=clean_val
+            is_cleaning=clean_val,
+            is_pre_assembly=pre_val
         )
         db.add(target_item)
 
     db.commit()
     db.refresh(target_item)
     
-    # Auto-resecuenciación canónica garantizada: Ensamblaje 1..N y Limpieza N+1..Total
+    # Auto-resecuenciación canónica garantizada: Pre-ensamblado 1..P, Ensamblaje P+1..K y Limpieza K+1..Total
     canonical_resequence_model(db, clean_name)
     db.refresh(target_item)
     return target_item
+
+@api_router.post("/models/{model_name}/checklist/{step_id}/set-category", response_model=ChecklistItemSchema)
+def set_step_category(model_name: str, step_id: int, category: str = Query("ASSEMBLY", description="PRE_ASSEMBLY, ASSEMBLY, or CLEANING"), db: Session = Depends(get_db)):
+    clean_name = model_name.strip().upper()
+    item = db.query(QCChecklistItem).filter(QCChecklistItem.id == step_id, QCChecklistItem.model_name == clean_name).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Paso no encontrado")
+    
+    cat_upper = category.upper()
+    if cat_upper == "PRE_ASSEMBLY":
+        item.is_pre_assembly = True
+        item.is_cleaning = False
+    elif cat_upper == "CLEANING":
+        item.is_pre_assembly = False
+        item.is_cleaning = True
+    else:  # ASSEMBLY
+        item.is_pre_assembly = False
+        item.is_cleaning = False
+
+    db.commit()
+    canonical_resequence_model(db, clean_name)
+    db.refresh(item)
+    return item
 
 @api_router.delete("/models/{model_name}/checklist/{step_id}")
 def delete_checklist_item(model_name: str, step_id: int, db: Session = Depends(get_db)):

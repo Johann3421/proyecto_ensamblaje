@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Check, AlertTriangle, Plus, Edit, Download, Upload, Loader2, Shield, ShieldCheck, FileText, PlusCircle, Image as ImageIcon, Search, ChevronDown, ChevronUp, ClipboardList, Wrench, Trash2, RotateCcw, Trash, Layers, Settings, MoreVertical, CheckCircle2 } from 'lucide-react';
+import { Check, AlertTriangle, Plus, Edit, Download, Upload, Loader2, Shield, ShieldCheck, FileText, PlusCircle, Image as ImageIcon, Search, ChevronDown, ChevronUp, ClipboardList, Wrench, Trash2, RotateCcw, Trash, Layers, Settings, MoreVertical, CheckCircle2, Cpu } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 import Badge from '../components/Badge';
 import Card from '../components/Card';
 import ImportChecklistModal from '../modals/ImportChecklistModal';
 import CreateModelModal from '../modals/CreateModelModal';
 import ChecklistStepModal from '../modals/ChecklistStepModal';
-import { isStepCleaning } from '../utils/steps';
+import { isStepCleaning, isStepPreAssembly } from '../utils/steps';
 import { getRouteParams, updateBrowserRoute } from '../utils/router';
 
 export default function ChecklistEditorView({ models = [], notify, onRefreshModels }) {
@@ -253,8 +253,28 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
     }
   };
 
+  const handleSetStepCategory = async (st, targetCat) => {
+    if (!st || !st.id) return;
+    try {
+      const res = await fetch(`${API_BASE}/models/${selectedModel}/checklist/${st.id}/set-category?category=${targetCat}`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error al clasificar paso");
+      const label = targetCat === "PRE_ASSEMBLY" ? "Pre-ensamblaje" : targetCat === "CLEANING" ? "Limpieza QC" : "Ensamblaje";
+      notify?.(`Paso clasificado como ${label}`, "success");
+      loadSteps();
+      onRefreshModels?.();
+    } catch (err) {
+      notify?.("Error: " + err.message, "danger");
+    }
+  };
+
   const isCleaning = (s) => isStepCleaning(s);
-  const assemblySteps = steps.filter(s => !isCleaning(s));
+  const isPreAssembly = (s) => isStepPreAssembly(s);
+
+  const preAssemblySteps = steps.filter(s => isPreAssembly(s) && !isCleaning(s));
+  const assemblySteps = steps.filter(s => !isCleaning(s) && !isPreAssembly(s));
   const cleaningSteps = steps.filter(s => isCleaning(s));
 
   const filterBySearch = (list) => list.filter(s =>
@@ -264,50 +284,55 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
   );
 
   const filteredSteps = filterBySearch(steps);
+  const filteredPreAssembly = filterBySearch(preAssemblySteps);
   const filteredAssembly = filterBySearch(assemblySteps);
   const filteredCleaning = filterBySearch(cleaningSteps);
 
   const filteredStepsToRender =
+    filterType === "PRE_ASSEMBLY" ? filteredPreAssembly :
     filterType === "ASSEMBLY" ? filteredAssembly :
     filterType === "CLEANING" ? filteredCleaning :
     filteredSteps;
 
   const renderStepCard = (st, idx, listContext = "default") => {
     const isClean = isCleaning(st);
+    const isPre = isPreAssembly(st);
     const isExpanded = expandedStep === st.step_number;
 
     return (
       <Card key={st.step_number || st.id || idx} className={`overflow-hidden transition border ${
-        isClean ? "border-emerald-200 bg-emerald-50/20" : "border-gray-200"
+        isPre ? "border-purple-200 bg-purple-50/20" : isClean ? "border-emerald-200 bg-emerald-50/20" : "border-gray-200"
       }`}>
         <div
           onClick={() => setExpandedStep(isExpanded ? null : st.step_number)}
           className="w-full flex items-center gap-3 p-3 text-left touch-target cursor-pointer hover:bg-gray-50/80 transition"
         >
           <span className={`w-7 h-7 rounded-full text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-xs ${
-            isClean ? "bg-emerald-600 ring-2 ring-emerald-400/30" : "bg-blue-600 ring-2 ring-blue-400/20"
+            isPre ? "bg-purple-600 ring-2 ring-purple-400/30" : isClean ? "bg-emerald-600 ring-2 ring-emerald-400/30" : "bg-blue-600 ring-2 ring-blue-400/20"
           }`}>
             {st.step_number}
           </span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-xs font-semibold text-gray-900 truncate">{st.operation}</p>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleStepCleaning(st);
-                }}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition flex items-center gap-1 touch-target ${
-                  isClean
-                    ? "bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-emerald-300"
-                    : "bg-stone-100 hover:bg-stone-200 text-stone-800 border-stone-200"
-                }`}
-                title="Clic para alternar entre Ensamblaje y Limpieza QC"
-              >
-                {isClean ? <ShieldCheck className="w-3 h-3 text-emerald-600" /> : <Wrench className="w-3 h-3 text-blue-600" />}
-                <span>{isClean ? "Limpieza QC" : "Ensamblaje"}</span>
-              </button>
+              <div className="flex items-center gap-1">
+                {isPre ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-purple-100 text-purple-800 border-purple-300 flex items-center gap-1">
+                    <Cpu className="w-3 h-3 text-purple-600" />
+                    <span>Pre-ensamblaje</span>
+                  </span>
+                ) : isClean ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-800 border-emerald-300 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                    <span>Limpieza QC</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-stone-100 text-stone-800 border-stone-200 flex items-center gap-1">
+                    <Wrench className="w-3 h-3 text-blue-600" />
+                    <span>Ensamblaje</span>
+                  </span>
+                )}
+              </div>
             </div>
             {st.qc_criteria && <p className="text-[10px] text-gray-500 truncate mt-0.5">{st.qc_criteria}</p>}
           </div>
@@ -320,24 +345,51 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
         {isExpanded && (
           <div className="px-3 pb-3 pt-2 border-t border-gray-100 space-y-2.5 fade-in bg-white/80">
             <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 flex-wrap text-xs ${
-              isClean ? "bg-emerald-50 border-emerald-200 text-emerald-900" : "bg-stone-50 border-stone-200 text-stone-900"
+              isPre
+                ? "bg-purple-50 border-purple-200 text-purple-900"
+                : isClean
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                  : "bg-stone-50 border-stone-200 text-stone-900"
             }`}>
               <div className="flex items-center gap-1.5">
-                {isClean ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-blue-600" />}
+                {isPre ? <Cpu className="w-4 h-4 text-purple-600" /> : isClean ? <ShieldCheck className="w-4 h-4 text-emerald-600" /> : <Wrench className="w-4 h-4 text-blue-600" />}
                 <span className="font-bold">
-                  {isClean ? "Paso Exclusivo de Limpieza QC" : "Paso de Ensamblaje General"}
+                  {isPre ? "Módulo Exclusivo de Pre-ensamblaje" : isClean ? "Paso Exclusivo de Limpieza QC" : "Paso de Ensamblaje General"}
                 </span>
                 <span className="text-[10px] opacity-75">
-                  ({isClean ? "Aislado de estaciones de ensamble" : "Asignable a puestos de armado"})
+                  ({isPre ? "Banco de pruebas / Pruebas iniciales" : isClean ? "Aislado de estaciones de ensamble" : "Asignable a puestos de armado"})
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => handleToggleStepCleaning(st)}
-                className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-white border shadow-2xs hover:bg-gray-50 transition"
-              >
-                {isClean ? "Mover a Ensamblaje" : "Mover a Limpieza QC"}
-              </button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-gray-500 font-semibold">Mover a:</span>
+                {!isPre && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetStepCategory(st, "PRE_ASSEMBLY")}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white border border-purple-300 text-purple-800 shadow-2xs hover:bg-purple-50 transition"
+                  >
+                    🔬 Pre-ensamblaje
+                  </button>
+                )}
+                {(isPre || isClean) && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetStepCategory(st, "ASSEMBLY")}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white border border-stone-300 text-stone-800 shadow-2xs hover:bg-stone-50 transition"
+                  >
+                    ⚙️ Ensamblaje
+                  </button>
+                )}
+                {!isClean && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetStepCategory(st, "CLEANING")}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white border border-emerald-300 text-emerald-800 shadow-2xs hover:bg-emerald-50 transition"
+                  >
+                    🧼 Limpieza QC
+                  </button>
+                )}
+              </div>
             </div>
 
             {st.description && <p className="text-xs text-gray-700 leading-relaxed">{st.description}</p>}
@@ -390,6 +442,8 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
 
             <div className="flex items-center gap-1.5 text-xs bg-stone-100 border border-stone-200 px-2.5 py-1.5 rounded-lg text-stone-700">
               <span className="font-bold text-gray-900">{steps.length} pasos</span>
+              <span className="text-gray-400">·</span>
+              <span className="text-purple-700 font-semibold">{preAssemblySteps.length} pre-ensamblaje</span>
               <span className="text-gray-400">·</span>
               <span className="text-stone-700 font-medium">{assemblySteps.length} ensamblaje</span>
               <span className="text-gray-400">·</span>
@@ -514,6 +568,18 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
             </button>
             <button
               type="button"
+              onClick={() => handleSelectFilterType("PRE_ASSEMBLY")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 whitespace-nowrap ${
+                filterType === "PRE_ASSEMBLY"
+                  ? "bg-white text-purple-900 shadow-2xs font-bold"
+                  : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5 text-purple-600" />
+              <span>Pre-ensamblaje ({preAssemblySteps.length})</span>
+            </button>
+            <button
+              type="button"
               onClick={() => handleSelectFilterType("ASSEMBLY")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 whitespace-nowrap ${
                 filterType === "ASSEMBLY"
@@ -619,14 +685,16 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
               type="button"
               onClick={() => {
                 const isClean = filterType === "CLEANING";
+                const isPre = filterType === "PRE_ASSEMBLY";
                 setEditingItem({
                   model_name: selectedModel,
-                  step_number: isClean ? (steps.length + 1) : (assemblySteps.length + 1),
+                  step_number: isPre ? (preAssemblySteps.length + 1) : isClean ? (steps.length + 1) : (assemblySteps.length + 1),
                   operation: "",
                   description: "",
                   qc_criteria: "",
                   media_url: "",
-                  is_cleaning: isClean
+                  is_cleaning: isClean,
+                  is_pre_assembly: isPre
                 });
               }}
               className="text-xs bg-[#0071E3] hover:bg-[#0077ED] text-white font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-sm transition touch-target"
@@ -818,6 +886,92 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
         </Card>
       ) : filterType === "GROUPED" ? (
         <div className="space-y-6">
+          {/* BLOQUE PRE-ENSAMBLAJE (BANCO DE PRUEBAS) */}
+          <div className="space-y-3">
+            <div className="bg-purple-50/40 border border-purple-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                      <span>Módulo Exclusivo de Pre-ensamblaje (Banco de Pruebas)</span>
+                      <span className="text-[10px] font-bold text-purple-700 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full">
+                        Exclusivo
+                      </span>
+                    </h3>
+                    <Badge variant="warning">{filteredPreAssembly.length} pasos de pre-ensamblado</Badge>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectFilterType("PRE_ASSEMBLY")}
+                      className="text-[11px] font-semibold text-purple-800 hover:underline ml-1"
+                      title="Abrir vista exclusiva de Pre-ensamblaje"
+                    >
+                      Aislar apartado →
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-purple-800 mt-0.5">
+                    Pasos técnicos iniciales (MemTest, Instalación de SO, OCCT, Drivers, Temperatura). <strong>Asignable al puesto de pre-ensamble</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem({
+                    model_name: selectedModel,
+                    step_number: preAssemblySteps.length + 1,
+                    operation: "",
+                    description: "",
+                    qc_criteria: "",
+                    media_url: "",
+                    is_cleaning: false,
+                    is_pre_assembly: true
+                  })}
+                  className="text-xs bg-purple-700 hover:bg-purple-800 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Nuevo Paso de Pre-ensamblaje</span>
+                </button>
+              </div>
+            </div>
+
+            {filteredPreAssembly.length === 0 ? (
+              <Card className="p-6 text-center border-dashed border-purple-200 bg-purple-50/20">
+                <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mx-auto mb-2">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <p className="text-xs font-bold text-gray-800">Aún no hay pasos de pre-ensamblaje en este modelo</p>
+                <p className="text-[11px] text-gray-500 max-w-sm mx-auto mt-1 mb-3">
+                  Puedes agregar pasos de banco de pruebas (MemTest, Instalación SO, OCCT, Drivers, Temperatura).
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setEditingItem({
+                    model_name: selectedModel,
+                    step_number: 1,
+                    operation: "Prueba de Memoria RAM (MemTest)",
+                    description: "Realizar prueba de diagnóstico con MemTest en banco de pruebas.",
+                    qc_criteria: "Fotografía de pantalla mostrando prueba finalizada con 0 errores.",
+                    media_url: "",
+                    is_cleaning: false,
+                    is_pre_assembly: true
+                  })}
+                  className="text-xs bg-purple-700 hover:bg-purple-800 text-white font-bold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow-xs transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Crear Primer Paso de Pre-ensamblaje</span>
+                </button>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {filteredPreAssembly.map((st, idx) => renderStepCard(st, idx, "pre_assembly"))}
+              </div>
+            )}
+          </div>
+
           {/* BLOQUE 1: PASOS NORMALES DE ENSAMBLAJE */}
           <div className="space-y-3">
             <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
@@ -974,6 +1128,23 @@ export default function ChecklistEditorView({ models = [], notify, onRefreshMode
         </div>
       ) : (
         <div className="space-y-2">
+          {filterType === "PRE_ASSEMBLY" && (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-purple-600" />
+                <span className="font-bold text-purple-950">Módulo de Pre-ensamblaje (Banco de Pruebas)</span>
+                <span className="text-purple-700 font-normal">({filteredPreAssembly.length} pasos)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilterType("GROUPED")}
+                className="text-xs font-semibold text-purple-800 hover:text-purple-950 flex items-center gap-1 transition"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Ver vista por secciones</span>
+              </button>
+            </div>
+          )}
           {filterType === "ASSEMBLY" && (
             <div className="p-3 bg-stone-100 border border-stone-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">

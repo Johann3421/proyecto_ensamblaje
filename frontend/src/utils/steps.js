@@ -59,6 +59,31 @@ export function isStepCleaning(step) {
   return false;
 }
 
+export function isStepPreAssembly(step) {
+  if (!step) return false;
+  if (isStepCleaning(step)) return false;
+  // Respetar flag explícito si existe
+  if (step.is_pre_assembly === true || step.is_pre_assembly === 1 || step.is_pre_assembly === "1" || step.is_pre_assembly === "true") {
+    return true;
+  }
+  if (step.is_pre_assembly === false || step.is_pre_assembly === 0 || step.is_pre_assembly === "0" || step.is_pre_assembly === "false") {
+    return false;
+  }
+  // Heurística de fallback por operación / descripción técnica
+  const op = (step.operation || "").toLowerCase();
+  const desc = (step.description || "").toLowerCase();
+  const combined = `${op} ${desc}`;
+  return (
+    combined.includes("memtest") ||
+    op === "instalación de sistema operativo" ||
+    combined.includes("occt") ||
+    op === "instalación y verificación de drivers" ||
+    combined.includes("temperatura bajo carga") ||
+    combined.includes("pre-ensambl") ||
+    combined.includes("pre ensambl")
+  );
+}
+
 export function distributeStepsEqually(stepNumbers = [], stationCount = 1) {
   if (!stepNumbers || stepNumbers.length === 0 || stationCount <= 0) return [];
   const baseCount = Math.floor(stepNumbers.length / stationCount);

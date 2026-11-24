@@ -660,7 +660,11 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                     }`}
                   >
                     <span>E{st.station_number}: {st.station_name}</span>
-                    {st.is_cleaning_station && <span className="text-[9px] opacity-80">[Limpieza]</span>}
+                    {st.is_cleaning_station ? (
+                      <span className="text-[9px] opacity-80">[Limpieza]</span>
+                    ) : (st.station_type === 'PRE_ASSEMBLY' || st.is_pre_assembly_station || (st.station_name && st.station_name.toLowerCase().includes('pre'))) ? (
+                      <span className="text-[9px] opacity-80">[Pre-ensamblaje]</span>
+                    ) : null}
                     {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>}
                   </button>
                 );
@@ -715,11 +719,14 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
                   className="text-xs font-bold border border-amber-400 bg-white text-gray-900 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-amber-500 shadow-xs touch-target"
                 >
                   <option value={0}>⭐ Mi Estación: Pasos de Supervisión {isSupervisorMode ? `(${uniqueStationSteps.length} pasos)` : ''}</option>
-                  {all_stations.map(st => (
-                    <option key={st.station_number} value={st.station_number}>
-                      Auditar E{st.station_number}: {st.station_name} (Titular: {st.user_name}) {st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
-                    </option>
-                  ))}
+                  {all_stations.map(st => {
+                    const isPreSt = st.station_type === 'PRE_ASSEMBLY' || st.is_pre_assembly_station || (st.station_name && st.station_name.toLowerCase().includes('pre'));
+                    return (
+                      <option key={st.station_number} value={st.station_number}>
+                        Auditar E{st.station_number}: {st.station_name} (Titular: {st.user_name}) {isPreSt ? '🔬 [Pre-ensamblaje]' : st.is_cleaning_station ? '🧼 [Limpieza]' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>
@@ -754,21 +761,36 @@ export default function OperatorWorkspaceView({ workspace, currentUser, onOpenMe
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-xs font-bold text-white px-2 py-0.5 rounded shadow-xs ${
-                assignment.station_number === 0 ? 'bg-amber-600' : (assignment.is_cleaning_station ? 'bg-emerald-600' : 'bg-blue-600')
-              }`}>
-                {assignment.station_number === 0 ? 'SUPERVISIÓN' : `E${assignment.station_number}`}
-              </span>
-              <h2 className="text-sm font-bold text-gray-900 truncate">{assignment.station_name}</h2>
-              {assignment.station_number === 0 ? (
-                <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
-                  <ShieldCheck className="w-3 h-3 text-amber-700" /> Pasos Oficiales del Supervisor
-                </span>
-              ) : assignment.is_cleaning_station && (
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
-                  🧼 Estación de Limpieza Obligatoria
-                </span>
-              )}
+              {(() => {
+                const isPreCurrent = assignment.station_type === 'PRE_ASSEMBLY' || assignment.is_pre_assembly_station || (assignment.station_name && assignment.station_name.toLowerCase().includes('pre'));
+                return (
+                  <>
+                    <span className={`text-xs font-bold text-white px-2 py-0.5 rounded shadow-xs ${
+                      assignment.station_number === 0
+                        ? 'bg-amber-600'
+                        : isPreCurrent
+                          ? 'bg-purple-600'
+                          : (assignment.is_cleaning_station ? 'bg-emerald-600' : 'bg-blue-600')
+                    }`}>
+                      {assignment.station_number === 0 ? 'SUPERVISIÓN' : `E${assignment.station_number}`}
+                    </span>
+                    <h2 className="text-sm font-bold text-gray-900 truncate">{assignment.station_name}</h2>
+                    {assignment.station_number === 0 ? (
+                      <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                        <ShieldCheck className="w-3 h-3 text-amber-700" /> Pasos Oficiales del Supervisor
+                      </span>
+                    ) : isPreCurrent ? (
+                      <span className="text-[10px] font-bold text-purple-900 bg-purple-100 border border-purple-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                        🔬 Banco de Pruebas & Pre-ensamblaje
+                      </span>
+                    ) : assignment.is_cleaning_station && (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                        🧼 Estación de Limpieza Obligatoria
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             <p className="text-xs text-gray-500 mt-1">
               Orden: <strong className="text-blue-600 font-mono">{order.order_id}</strong> · Modelo: <strong>{order.model_name}</strong> ({order.total_units} PCs)

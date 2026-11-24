@@ -285,15 +285,23 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
             {stations.map(st => {
               const unitsInStation = units.filter(u => u.current_station === st.station_number && u.overall_status !== "PASSED");
               const unitsCompletedHere = units.filter(u => u.current_station > st.station_number || u.overall_status === "PASSED");
+              const isPre = st.station_type === "PRE_ASSEMBLY" || (st.station_name && st.station_name.toLowerCase().includes("pre"));
+              const isClean = st.station_type === "CLEANING" || st.is_cleaning_station || (st.station_name && st.station_name.toLowerCase().includes("limpieza"));
               return (
                 <div key={st.station_number} className="bg-white rounded-2xl border border-stone-200/90 p-3.5 shadow-sm space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
-                        <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs border border-blue-200/60">
+                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs border ${
+                          isPre
+                            ? "bg-purple-50 text-purple-700 border-purple-200/60"
+                            : isClean
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
+                              : "bg-blue-50 text-blue-700 border-blue-200/60"
+                        }`}>
                           E{st.station_number}
                         </span>
-                        <span>Estación {st.station_number}</span>
+                        <span>{isPre ? (st.station_name || "Pre-ensamblaje") : isClean ? (st.station_name || "Limpieza") : `Estación ${st.station_number}`}</span>
                       </span>
                       <span className="text-[11px] text-stone-500 block mt-0.5 truncate max-w-[180px]">
                         👤 {st.user_name || "Sin técnico"}
@@ -354,14 +362,27 @@ export default function PipelineMatrixView({ matrixData, orders, selectedOrder, 
               <thead>
                 <tr className="bg-stone-50/70 text-stone-600 border-b border-stone-200/80">
                   <th className="py-3 px-4 font-semibold sticky left-0 bg-stone-50/90 z-10 w-24 border-r border-stone-200/80">PC</th>
-                  {stations.map(st => (
-                    <th key={st.station_number} className="py-3 px-3 font-semibold border-l border-stone-200/50 whitespace-nowrap">
-                      <div className="text-stone-900 font-bold">Estación {st.station_number}</div>
-                      <div className="text-[11px] text-stone-400 font-normal hidden sm:block truncate max-w-[120px]">
-                        {st.user_name}
-                      </div>
-                    </th>
-                  ))}
+                  {stations.map(st => {
+                    const isPre = st.station_type === "PRE_ASSEMBLY" || (st.station_name && st.station_name.toLowerCase().includes("pre"));
+                    const isClean = st.station_type === "CLEANING" || st.is_cleaning_station || (st.station_name && st.station_name.toLowerCase().includes("limpieza"));
+                    return (
+                      <th key={st.station_number} className="py-3 px-3 font-semibold border-l border-stone-200/50 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center ${
+                            isPre ? 'bg-purple-100 text-purple-800' : isClean ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            E{st.station_number}
+                          </span>
+                          <span className="text-stone-900 font-bold">
+                            {isPre ? (st.station_name || 'Pre-ensamblaje') : isClean ? (st.station_name || 'Limpieza') : `Estación ${st.station_number}`}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-stone-400 font-normal hidden sm:block truncate max-w-[120px]">
+                          {st.user_name}
+                        </div>
+                      </th>
+                    );
+                  })}
                   <th className="py-3 px-4 font-semibold border-l border-stone-200/50 text-center w-28">Estado</th>
                 </tr>
               </thead>
